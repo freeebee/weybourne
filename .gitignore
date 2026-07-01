@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.env
+
+data/pdfs/*.pdf
+data/dashboard.db
+data/flagged/
+
+.DS_Store
