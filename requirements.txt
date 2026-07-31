@@ -5,3 +5,8 @@ streamlit>=1.38
 pandas>=2.2
 python-dotenv>=1.0
 pytest>=8.0
+
+# Connector layer
+requests>=2.31        # Microsoft Graph + Notion REST calls
+msal>=1.28            # Entra ID auth; only needed for live Outlook
+openpyxl>=3.1         # reading .xlsx track records

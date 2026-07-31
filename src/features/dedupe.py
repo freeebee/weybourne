@@ -53,6 +53,17 @@ def normalize_name(name: str) -> str:
     return " ".join(tokens).strip()
 
 
+def vintage_of(name: str) -> str | None:
+    """The vintage/series number in a fund name, if it has one.
+
+    'Capitala SBIC Fund VI' -> '6'. Successive vintages of the same franchise
+    are separate funds, so a differing number rules out a duplicate however
+    similar the rest of the name is.
+    """
+    numbers = [t for t in normalize_name(name).split() if t.isdigit()]
+    return numbers[-1] if numbers else None
+
+
 def domain_of(email: str) -> str:
     email = (email or "").strip().lower()
     return email.split("@", 1)[1] if "@" in email else ""
@@ -83,8 +94,13 @@ def match_contact(email: str, name: str, contacts: list[ContactRecord]) -> Dedup
             continue
         score = _similarity(name_n, normalize_name(c.name))
         if score >= REVIEW_THRESHOLD:
+            # Name alone never proves identity — two people can share a name, and
+            # Email is the unique key. Cap name-only matches into the review band
+            # so they are surfaced for a human rather than merged automatically.
+            capped = min(score, DUPLICATE_THRESHOLD - 0.01)
             matches.append(DedupeMatch(db="contacts", matched_name=c.name, matched_id=c.id,
-                                       score=round(score, 3), reason="name similarity"))
+                                       score=round(capped, 3),
+                                       reason="name similarity (no email match)"))
     return _decision("contact", name, matches)
 
 
@@ -106,12 +122,24 @@ def match_company(name: str, domain: str, companies: list[CompanyRecord]) -> Ded
 
 def match_fund(name: str, funds: list[FundRecord]) -> DedupeDecision:
     name_n = normalize_name(name)
+    vintage = vintage_of(name)
     matches: list[DedupeMatch] = []
     for f in funds:
         score = _similarity(name_n, normalize_name(f.name))
-        if score >= REVIEW_THRESHOLD:
-            matches.append(DedupeMatch(db="funds", matched_name=f.name, matched_id=f.id,
-                                       score=round(score, 3), reason="name similarity"))
+        if score < REVIEW_THRESHOLD:
+            continue
+        other_vintage = vintage_of(f.name)
+        if vintage and other_vintage and vintage != other_vintage:
+            # Fund VII is not a duplicate of Fund VI, however similar the names.
+            # Surface it as a related fund for review, never as a duplicate.
+            matches.append(DedupeMatch(
+                db="funds", matched_name=f.name, matched_id=f.id,
+                score=round(min(score, REVIEW_THRESHOLD), 3),
+                reason=f"same franchise, different vintage ({other_vintage} vs {vintage})",
+            ))
+            continue
+        matches.append(DedupeMatch(db="funds", matched_name=f.name, matched_id=f.id,
+                                   score=round(score, 3), reason="name similarity"))
     return _decision("fund", name, matches)
 
 

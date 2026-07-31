@@ -9,4 +9,8 @@ data/pdfs/*.pdf
 data/dashboard.db
 data/flagged/
 
+# Outlook snapshots hold real mailbox and calendar contents - never commit them.
+data/inbox_snapshot.json
+data/calendar_snapshot.json
+
 .DS_Store

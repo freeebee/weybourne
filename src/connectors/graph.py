@@ -1,10 +1,18 @@
 """Microsoft Graph connector — Outlook mail and calendar.
 
-Live mode uses the Graph REST API with an Azure AD app registration (client
-credentials flow via MSAL). When the app is not configured (see
-``config.graph_configured``) every method returns representative **sample data**
-instead, so the connector — and every screen built on it — works end to end
-with no secrets.
+There are three modes, tried in order:
+
+1. **Live** — the Graph REST API with an Entra ID (Azure AD) app registration
+   (client-credentials flow via MSAL). Requires ``MS_TENANT_ID`` /
+   ``MS_CLIENT_ID`` / ``MS_CLIENT_SECRET``. Only needed for the standalone app
+   to reach Outlook unattended.
+2. **Snapshot bridge** — if ``data/inbox_snapshot.json`` /
+   ``data/calendar_snapshot.json`` exist, they are used. This is how *real*
+   Outlook data reaches the app today without an Entra registration: Claude
+   fetches mail/events through its own Microsoft 365 connector and writes the
+   snapshot files (see ``scripts/refresh_outlook_snapshot.py`` for the shape).
+3. **Sample data** — representative mock records, so the connector and every
+   screen built on it work end to end with no credentials at all.
 
 Only read + draft operations are exposed. Nothing here sends mail or mutates a
 calendar; drafts are created for the user to review and send from Outlook. This
@@ -14,10 +22,28 @@ action on the user's behalf without an explicit, separate confirmation step.
 from __future__ import annotations
 
 import datetime as dt
+import json
+from pathlib import Path
 from typing import Optional
 
 from src import config
 from src.schemas import Attendee, CalendarEvent, EmailMessage, TimeSlot
+
+# Snapshot files written by Claude's Microsoft 365 connector (see module docstring).
+INBOX_SNAPSHOT = config.BASE_DIR / "data" / "inbox_snapshot.json"
+CALENDAR_SNAPSHOT = config.BASE_DIR / "data" / "calendar_snapshot.json"
+
+
+def _load_snapshot(path: Path) -> list[dict] | None:
+    """Return the records in a snapshot file, or None if it's absent/unreadable."""
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+    records = data.get("value", data) if isinstance(data, dict) else data
+    return records if isinstance(records, list) else None
 
 # --------------------------------------------------------------------------- #
 # Sample data (mock mode) — grounded in the real Weybourne workflow.
@@ -211,6 +237,9 @@ class GraphConnector:
     # -- mail ------------------------------------------------------------- #
     def list_inbox(self, top: int = 25) -> list[EmailMessage]:
         if not self.live:
+            snapshot = _load_snapshot(INBOX_SNAPSHOT)
+            if snapshot is not None:
+                return [_email_from_snapshot(m) for m in snapshot][:top]
             return list(_SAMPLE_INBOX)[:top]
         data = self._get(
             f"/users/{self.user}/mailFolders/inbox/messages",
@@ -234,11 +263,16 @@ class GraphConnector:
     # -- calendar --------------------------------------------------------- #
     def list_events(self, start: dt.datetime, end: dt.datetime) -> list[CalendarEvent]:
         if not self.live:
-            return [
-                e
-                for e in _SAMPLE_EVENTS
-                if start.isoformat() <= e.start <= end.isoformat()
-            ] or list(_SAMPLE_EVENTS)
+            snapshot = _load_snapshot(CALENDAR_SNAPSHOT)
+            events = (
+                [_event_from_snapshot(e) for e in snapshot]
+                if snapshot is not None
+                else list(_SAMPLE_EVENTS)
+            )
+            in_window = [
+                e for e in events if start.isoformat() <= e.start <= end.isoformat()
+            ]
+            return in_window or events
         data = self._get(
             f"/users/{self.user}/calendarView",
             params={
@@ -262,13 +296,18 @@ class GraphConnector:
         work_start_hour: int = 9,
         work_end_hour: int = 18,
         max_slots: int = 5,
+        min_lead_hours: int = 24,
     ) -> list[TimeSlot]:
-        """Return open working-hours slots not overlapping any calendar event."""
+        """Return open working-hours slots not overlapping any calendar event.
+
+        ``min_lead_hours`` keeps the offer realistic — proposing a call starting
+        in ten minutes is worse than proposing nothing.
+        """
         now = _now()
         busy = self.list_events(now, now + dt.timedelta(days=days_ahead))
         busy_intervals = _parse_busy(busy)
         return _compute_free_slots(
-            now=now,
+            now=now + dt.timedelta(hours=min_lead_hours),
             days_ahead=days_ahead,
             slot_minutes=slot_minutes,
             work_start_hour=work_start_hour,
@@ -371,6 +410,58 @@ def _event_from_graph(e: dict) -> CalendarEvent:
         attendees=attendees,
         is_online=bool(e.get("isOnlineMeeting")),
         body_preview=e.get("bodyPreview") or "",
+    )
+
+
+def _email_from_snapshot(m: dict) -> EmailMessage:
+    """Parse a snapshot record, accepting either raw Graph JSON or a flat shape.
+
+    Claude's Microsoft 365 connector returns a simplified shape; a raw Graph
+    export nests sender under ``from.emailAddress``. Accept both so a snapshot
+    can be dropped in from either source.
+    """
+    if "from" in m or "receivedDateTime" in m:
+        return _email_from_graph(m)
+    return EmailMessage(
+        id=str(m.get("id") or m.get("message_id") or ""),
+        subject=m.get("subject") or "",
+        sender_name=m.get("sender_name") or m.get("sender") or "",
+        sender_email=m.get("sender_email") or m.get("from_email") or "",
+        received=m.get("received") or m.get("date") or "",
+        body_preview=m.get("body_preview") or m.get("snippet") or "",
+        body=m.get("body") or m.get("body_preview") or "",
+        has_attachments=bool(m.get("has_attachments")),
+        web_link=m.get("web_link"),
+    )
+
+
+def _event_from_snapshot(e: dict) -> CalendarEvent:
+    """Parse a calendar snapshot record (raw Graph JSON or a flat shape)."""
+    if "start" in e and isinstance(e.get("start"), dict):
+        return _event_from_graph(e)
+    attendees = []
+    for a in e.get("attendees", []):
+        if isinstance(a, dict):
+            attendees.append(Attendee(name=a.get("name", ""), email=a.get("email", "")))
+        elif isinstance(a, str):
+            attendees.append(Attendee(name=a, email=a if "@" in a else ""))
+    organizer = e.get("organizer")
+    if isinstance(organizer, dict):
+        organizer = Attendee(name=organizer.get("name", ""), email=organizer.get("email", ""))
+    elif isinstance(organizer, str):
+        organizer = Attendee(name=organizer, email=organizer if "@" in organizer else "")
+    else:
+        organizer = None
+    return CalendarEvent(
+        id=str(e.get("id") or ""),
+        subject=e.get("subject") or e.get("title") or "",
+        start=e.get("start") or "",
+        end=e.get("end") or "",
+        location=e.get("location") or "",
+        organizer=organizer,
+        attendees=attendees,
+        is_online=bool(e.get("is_online")),
+        body_preview=e.get("body_preview") or "",
     )
 
 
