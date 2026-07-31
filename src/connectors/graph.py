@@ -235,18 +235,46 @@ class GraphConnector:
         return resp.json() if resp.content else {}
 
     # -- mail ------------------------------------------------------------- #
-    def list_inbox(self, top: int = 25) -> list[EmailMessage]:
+    def list_inbox(self, top: Optional[int] = None, days: Optional[int] = None) -> list[EmailMessage]:
+        """Recent mail from the **top-level Inbox** only.
+
+        Scope, per how the mailbox is actually used:
+
+        * Only messages sitting directly in the Inbox. Anything filed into a
+          subfolder has been dealt with and is not returned — filing is the
+          "done" signal.
+        * Both Focused and Other, since cold fund intros frequently land in
+          Other.
+        * Only the last ``days`` days (rolling window, default
+          ``config.TRIAGE_LOOKBACK_DAYS``).
+        """
+        top = config.TRIAGE_MAX_MESSAGES if top is None else top
+        days = config.TRIAGE_LOOKBACK_DAYS if days is None else days
+        cutoff = _now() - dt.timedelta(days=days)
+
         if not self.live:
             snapshot = _load_snapshot(INBOX_SNAPSHOT)
             if snapshot is not None:
-                return [_email_from_snapshot(m) for m in snapshot][:top]
-            return list(_SAMPLE_INBOX)[:top]
+                records = [m for m in snapshot if _in_main_inbox(m)]
+                messages = [_email_from_snapshot(m) for m in records]
+            else:
+                messages = list(_SAMPLE_INBOX)
+            recent = [m for m in messages if _received_within(m.received, cutoff)]
+            recent.sort(key=lambda m: m.received, reverse=True)
+            return recent[:top]
+
+        # /mailFolders/inbox/messages returns only messages directly in the
+        # Inbox - subfolders are excluded by Graph itself, which is exactly the
+        # behaviour wanted here. $filter and $orderby both use receivedDateTime,
+        # so Graph won't reject the combination as too complex.
         data = self._get(
             f"/users/{self.user}/mailFolders/inbox/messages",
             params={
                 "$top": top,
-                "$select": "id,subject,from,receivedDateTime,bodyPreview,hasAttachments,webLink,body",
+                "$select": "id,subject,from,receivedDateTime,bodyPreview,"
+                           "hasAttachments,webLink,body,parentFolderId",
                 "$orderby": "receivedDateTime desc",
+                "$filter": f"receivedDateTime ge {_graph_timestamp(cutoff)}",
             },
         )
         return [_email_from_graph(m) for m in data.get("value", [])]
@@ -321,12 +349,80 @@ class GraphConnector:
 # Pure helpers (unit-tested without any network access)
 # --------------------------------------------------------------------------- #
 
+# The built-in sample data is dated around this moment, so demo mode uses it as
+# "now" to keep sample slots and the sample inbox window deterministic.
+SAMPLE_CLOCK = dt.datetime(2026, 7, 31, 9, 0, 0)
+
+
+def _serving_sample_data() -> bool:
+    """True only when the built-in sample records are what's being served.
+
+    Snapshot files hold *real* mail and calendar entries, so they must be judged
+    against the real clock — freezing time for them would, for example, make a
+    "last 3 days" window return nothing as soon as a snapshot is refreshed on a
+    later date.
+    """
+    return not config.graph_configured() and not (
+        INBOX_SNAPSHOT.exists() or CALENDAR_SNAPSHOT.exists()
+    )
+
+
 def _now() -> dt.datetime:
-    # Fixed reference date in mock mode keeps sample slots deterministic and
-    # aligned with the sample calendar. Live mode uses the real clock.
-    if config.graph_configured():
-        return dt.datetime.now()
-    return dt.datetime(2026, 7, 31, 9, 0, 0)
+    return SAMPLE_CLOCK if _serving_sample_data() else dt.datetime.now()
+
+
+def _graph_timestamp(value: dt.datetime) -> str:
+    """Format a datetime for a Graph $filter comparison (UTC, 'Z'-suffixed)."""
+    return _as_utc(value).replace(microsecond=0).isoformat() + "Z"
+
+
+def _as_utc(value: dt.datetime) -> dt.datetime:
+    """Normalise to naive UTC so timestamps from different sources compare.
+
+    Microsoft Graph returns timezone-aware values ("...Z"); the sample and
+    snapshot records are naive. Comparing the two directly raises TypeError, so
+    everything is converted to naive UTC first. Naive input is assumed to be UTC.
+    """
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(dt.timezone.utc).replace(tzinfo=None)
+
+
+def _received_within(received: str, cutoff: dt.datetime) -> bool:
+    """Whether an ISO-8601 timestamp is at or after ``cutoff``.
+
+    An unparseable or missing timestamp is **kept**: dropping a real email
+    because its date couldn't be read is worse than triaging one extra.
+    """
+    if not received:
+        return True
+    try:
+        parsed = dt.datetime.fromisoformat(received.strip())
+    except (ValueError, TypeError):
+        return True
+    return _as_utc(parsed) >= _as_utc(cutoff)
+
+
+# Folder names that count as the top-level Inbox. Anything the user has filed
+# into a subfolder (research, fund managers, ...) has been dealt with already.
+_INBOX_FOLDER_NAMES = {"inbox", "focused", "other"}
+
+
+def _in_main_inbox(record: dict) -> bool:
+    """Whether a snapshot record belongs to the top-level Inbox.
+
+    Records carrying no folder information are kept — absence of the field isn't
+    evidence that the message was filed.
+    """
+    folder = (
+        record.get("folder")
+        or record.get("parentFolderName")
+        or record.get("folder_name")
+        or ""
+    )
+    if not folder:
+        return True
+    return folder.strip().lower() in _INBOX_FOLDER_NAMES
 
 
 def _parse_busy(events: list[CalendarEvent]) -> list[tuple[dt.datetime, dt.datetime]]:

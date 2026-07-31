@@ -12,13 +12,26 @@ results here, and ``GraphConnector`` picks them up automatically.
     data/inbox_snapshot.json      -> list of email objects
     data/calendar_snapshot.json   -> list of calendar event objects
 
+Scope that matters
+------------------
+The inbox snapshot must be the **top-level Inbox only, last 3 days**. Do NOT use a
+mailbox-wide search: that would pull back messages already filed into subfolders
+(research, fund managers, ...), and filing is how mail is marked as dealt with.
+Re-surfacing it wastes a model call per message and puts handled mail back in the
+queue. Include both Focused and Other — cold fund intros often land in Other.
+
+Include a "folder" field on each record where the connector reports it; the app
+drops anything that isn't the Inbox as a second line of defence.
+
 Usage
 -----
 Ask Claude (in a session with the Microsoft 365 connector enabled) something like:
 
-    "Read my last 20 inbox messages and my calendar for the next two weeks, then
-     write them to data/inbox_snapshot.json and data/calendar_snapshot.json using
-     scripts/refresh_outlook_snapshot.py --format for the shape."
+    "Read the messages in my top-level Outlook Inbox from the last 3 days - not a
+     mailbox-wide search, and nothing from subfolders - plus my calendar for the
+     next two weeks. Write them to data/inbox_snapshot.json and
+     data/calendar_snapshot.json using the shapes from
+     scripts/refresh_outlook_snapshot.py --format, setting "folder" to "Inbox"."
 
 Or run this script directly to write example files / validate existing ones:
 
@@ -48,6 +61,7 @@ INBOX_FORMAT = [
         "sender_name": "Sender Name",
         "sender_email": "sender@example.com",
         "received": "2026-07-30T08:12:00",
+        "folder": "Inbox",
         "body_preview": "First ~200 characters",
         "body": "Full plain-text body",
         "has_attachments": False,
@@ -78,6 +92,11 @@ def print_format() -> None:
     print(
         "\nRaw Microsoft Graph JSON is also accepted (a {'value': [...]} wrapper, with "
         "'from.emailAddress' and 'start.dateTime' nesting) — both shapes parse."
+    )
+    print(
+        "\nScope: top-level Inbox only, last 3 days. Do not run a mailbox-wide search — "
+        "mail filed into subfolders has been dealt with and must not come back. "
+        "Records whose 'folder' is not Inbox/Focused/Other are dropped by the app."
     )
 
 

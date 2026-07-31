@@ -94,6 +94,26 @@ required** — that is only relevant if you later host the app on Azure.
 `GraphConnector` presents the same interface in all three modes, so switching is
 a matter of environment variables; no code changes.
 
+## What gets triaged
+
+Inbox triage deliberately reads a narrow slice of the mailbox:
+
+- **The top-level Inbox only.** Mail you've filed into a subfolder (research, fund
+  managers, and so on) is treated as already dealt with and is never re-triaged —
+  filing is the "done" signal. Archive, Junk and Sent are out of scope too.
+- **Focused *and* Other**, since cold fund intros frequently land in Other.
+- **The last 3 days**, as a rolling window. Adjustable per scan in the UI (for
+  catching up after time away) and via `TRIAGE_LOOKBACK_DAYS`; `TRIAGE_MAX_MESSAGES`
+  caps how many a single scan can pull.
+
+This matters for more than tidiness: on the Claude-account backend each message is
+a separate call, so a narrow scope directly protects your usage limit.
+
+If you feed the app through the Outlook snapshot bridge, make sure the snapshot is
+the top-level Inbox rather than a mailbox-wide search — see
+`scripts/refresh_outlook_snapshot.py --format`. The app also drops any snapshot
+record whose `folder` isn't the Inbox, as a second line of defence.
+
 ## Safety model
 
 Nothing leaves the app without you approving it:

@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from common import get_graph, get_notion, page_setup, require_claude, run_ai  # noqa: E402
 
-from src import llm  # noqa: E402
+from src import config, llm  # noqa: E402
 from src.features import notion_sync  # noqa: E402
 from src.features.dedupe import dedupe_entity  # noqa: E402
 from src.features.draft_reply import generate_draft_options  # noqa: E402
@@ -29,17 +29,34 @@ client = require_claude()
 # --------------------------------------------------------------------------- #
 # 1. Load the inbox
 # --------------------------------------------------------------------------- #
-left, right = st.columns([3, 1])
-count = right.number_input("Messages", min_value=5, max_value=50, value=15, step=5)
+st.caption(
+    "**Scope:** the top-level Inbox only — anything you've filed into a subfolder "
+    "is treated as dealt with and skipped. Focused and Other are both included."
+)
+left, mid, right = st.columns([2, 1, 1])
+days = mid.number_input("Last N days", min_value=1, max_value=30,
+                        value=config.TRIAGE_LOOKBACK_DAYS, step=1)
+count = right.number_input("Max messages", min_value=5, max_value=100,
+                           value=config.TRIAGE_MAX_MESSAGES, step=5)
 if left.button("Scan inbox", type="primary", use_container_width=True):
     with st.spinner("Reading inbox…"):
-        st.session_state.messages = graph.list_inbox(top=int(count))
+        st.session_state.messages = graph.list_inbox(top=int(count), days=int(days))
+        st.session_state.scanned_days = int(days)
     st.session_state.pop("triage", None)
 
 messages = st.session_state.get("messages", [])
 if not messages:
-    st.info("Press **Scan inbox** to begin.")
+    if "scanned_days" in st.session_state:
+        st.success(
+            f"Nothing in the Inbox from the last {st.session_state.scanned_days} "
+            "day(s) — everything is filed or already dealt with."
+        )
+    else:
+        st.info("Press **Scan inbox** to begin.")
     st.stop()
+
+scanned_days = st.session_state.get("scanned_days", days)
+st.caption(f"{len(messages)} message(s) in the Inbox from the last {scanned_days} day(s).")
 
 # --------------------------------------------------------------------------- #
 # 2. Triage

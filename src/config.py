@@ -78,6 +78,20 @@ MS_CLIENT_SECRET = os.environ.get("MS_CLIENT_SECRET")
 MS_USER = os.environ.get("MS_USER", "Jinghan.Chen@weybourneholdings.com")
 GRAPH_BASE_URL = os.environ.get("GRAPH_BASE_URL", "https://graph.microsoft.com/v1.0")
 
+# --------------------------------------------------------------------------- #
+# Inbox triage scope
+# --------------------------------------------------------------------------- #
+# Triage only reads the **top-level Inbox** — mail already filed into a subfolder
+# (research, fund managers, etc.) has been dealt with and is not re-triaged.
+# Both Focused and Other are included, since cold intros often land in Other.
+#
+# How far back to look, as a rolling window (not calendar days). Adjustable in
+# the UI for catching up after time away.
+TRIAGE_LOOKBACK_DAYS = int(os.environ.get("TRIAGE_LOOKBACK_DAYS", "3"))
+# Upper bound on messages fetched in one scan, so a busy period can't fan out
+# into an unbounded number of model calls.
+TRIAGE_MAX_MESSAGES = int(os.environ.get("TRIAGE_MAX_MESSAGES", "25"))
+
 
 def graph_configured() -> bool:
     return bool(MS_TENANT_ID and MS_CLIENT_ID and MS_CLIENT_SECRET)
