@@ -1,8 +1,22 @@
-"""Central configuration for the PDF extraction pipeline."""
+"""Central configuration for the Weybourne Investment Connector.
+
+Historically this module only configured the PDF-extraction pipeline. It now
+also holds the settings for the connector app (Microsoft 365 / Outlook, Notion,
+and the feature modules built on top of them).
+
+Everything is env-driven with sensible defaults. Crucially, the connectors run
+in a **mock/demo mode** whenever their credentials are absent, so the whole app
+launches and every screen is demonstrable without any live secrets. Provide the
+relevant env vars to switch a connector to live mode.
+"""
 import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# --------------------------------------------------------------------------- #
+# PDF extraction pipeline (existing)
+# --------------------------------------------------------------------------- #
 
 # Where source PDFs live (the "watched folder"). New quarterly drops go here.
 PDF_FOLDER = Path(os.environ.get("PDF_FOLDER", BASE_DIR / "data" / "pdfs"))
@@ -11,20 +25,81 @@ PDF_FOLDER = Path(os.environ.get("PDF_FOLDER", BASE_DIR / "data" / "pdfs"))
 DB_PATH = Path(os.environ.get("DB_PATH", BASE_DIR / "data" / "dashboard.db"))
 
 # Claude models used for OCR (vision) and structured extraction.
-# Override via env if a different model should be used.
 VISION_MODEL = os.environ.get("CLAUDE_VISION_MODEL", "claude-opus-4-8")
 EXTRACTION_MODEL = os.environ.get("CLAUDE_EXTRACTION_MODEL", "claude-opus-4-8")
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+
+# Model used by the connector feature modules (triage, screening, drafting,
+# meeting prep). Kept separate so the reasoning model can be tuned independently
+# of the extraction model.
+REASONING_MODEL = os.environ.get("CLAUDE_REASONING_MODEL", "claude-opus-4-8")
 
 # Page render resolution for scanned pages sent to vision OCR.
 PAGE_RENDER_ZOOM = float(os.environ.get("PAGE_RENDER_ZOOM", "2.0"))
 
 # If a document's assembled markdown exceeds this many characters, split it
 # into per-page-range sections and run extraction per section instead of
-# a single call (Claude API call per doc "or per section", per project brief).
+# a single call.
 MAX_DOC_CHARS_PER_CALL = int(os.environ.get("MAX_DOC_CHARS_PER_CALL", "40000"))
 
 # Minimum characters of text on a page before it's considered a "text" page
 # rather than a scanned/image page needing OCR.
 MIN_TEXT_LAYER_CHARS = int(os.environ.get("MIN_TEXT_LAYER_CHARS", "20"))
+
+# --------------------------------------------------------------------------- #
+# Microsoft 365 / Microsoft Graph (Outlook mail + calendar)
+# --------------------------------------------------------------------------- #
+# Live mode requires an Azure AD app registration. When these are unset the
+# Graph connector serves representative sample data instead (mock mode).
+
+MS_TENANT_ID = os.environ.get("MS_TENANT_ID")
+MS_CLIENT_ID = os.environ.get("MS_CLIENT_ID")
+MS_CLIENT_SECRET = os.environ.get("MS_CLIENT_SECRET")
+# The mailbox to operate on (defaults to the signed-in user in delegated flows).
+MS_USER = os.environ.get("MS_USER", "Jinghan.Chen@weybourneholdings.com")
+GRAPH_BASE_URL = os.environ.get("GRAPH_BASE_URL", "https://graph.microsoft.com/v1.0")
+
+
+def graph_configured() -> bool:
+    return bool(MS_TENANT_ID and MS_CLIENT_ID and MS_CLIENT_SECRET)
+
+
+# --------------------------------------------------------------------------- #
+# Notion
+# --------------------------------------------------------------------------- #
+# Live mode requires a Notion integration token and the four main database IDs.
+# When NOTION_TOKEN is unset the Notion connector serves sample data (mock mode).
+
+NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
+NOTION_VERSION = os.environ.get("NOTION_VERSION", "2022-06-28")
+NOTION_BASE_URL = os.environ.get("NOTION_BASE_URL", "https://api.notion.com/v1")
+
+# Main database IDs (data source IDs). Fill these in from the workspace.
+NOTION_FUNDS_DB = os.environ.get("NOTION_FUNDS_DB")
+NOTION_COMPANIES_DB = os.environ.get("NOTION_COMPANIES_DB")
+NOTION_CONTACTS_DB = os.environ.get("NOTION_CONTACTS_DB")
+NOTION_NOTES_DB = os.environ.get("NOTION_NOTES_DB")
+# Optional intake DB used by the existing "To Be Intelligenced" workflow.
+NOTION_INTAKE_DB = os.environ.get("NOTION_INTAKE_DB")
+
+# CHAO investment-preference pages. These IDs are the canonical Weybourne
+# preference pages referenced by the CHAO agent; the screening feature loads
+# them the same way CHAO does (General + Learnings always, plus the relevant
+# strategy sleeve).
+CHAO_PAGES = {
+    "chao": os.environ.get("CHAO_PAGE_ID", "3218387e-c92d-80d2-8e65-d87c27419f1e"),
+    "general": os.environ.get("CHAO_GENERAL_PAGE_ID", "646766a4-fa24-4220-8fe4-e31f37df8c14"),
+    "learnings": os.environ.get("CHAO_LEARNINGS_PAGE_ID", "3118387e-c92d-8096-9ece-f17626b43083"),
+    "private_growth": os.environ.get("CHAO_PRIVATE_PAGE_ID", "4027959f-fae4-40b8-9a76-dbf2b2ae147e"),
+    "public_growth": os.environ.get("CHAO_PUBLIC_PAGE_ID", "5b8a8e33-81c8-4895-ac73-d5e31acca14a"),
+    "diversifiers": os.environ.get("CHAO_DIVERSIFIERS_PAGE_ID", "6cdcde71-b2b4-498f-ad19-f13fba4dd6bb"),
+}
+
+
+def notion_configured() -> bool:
+    return bool(NOTION_TOKEN)
+
+
+def anthropic_configured() -> bool:
+    return bool(ANTHROPIC_API_KEY)
