@@ -35,6 +35,24 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 # of the extraction model.
 REASONING_MODEL = os.environ.get("CLAUDE_REASONING_MODEL", "claude-opus-4-8")
 
+# --------------------------------------------------------------------------- #
+# Model backend
+# --------------------------------------------------------------------------- #
+# Which billing rail the AI calls run on:
+#   claude_cli (default) -- the Claude Code CLI, i.e. your **Claude account**
+#                           (whatever `claude login` established). No API key.
+#   api                  -- anthropic.Anthropic(), billed to ANTHROPIC_API_KEY.
+#
+# The CLI backend needs Claude Code installed and logged in on the machine
+# running the app, so it suits local use rather than unattended hosting.
+LLM_BACKEND = os.environ.get("LLM_BACKEND", "claude_cli")
+
+CLAUDE_CLI_PATH = os.environ.get("CLAUDE_CLI_PATH", "claude")
+CLAUDE_CLI_TIMEOUT = int(os.environ.get("CLAUDE_CLI_TIMEOUT", "300"))
+# Empty directory the CLI runs from, so it doesn't auto-load an unrelated
+# CLAUDE.md / .mcp.json / hooks into every call. See src/llm.py.
+CLAUDE_CLI_SCRATCH_DIR = os.environ.get("CLAUDE_CLI_SCRATCH_DIR")
+
 # Page render resolution for scanned pages sent to vision OCR.
 PAGE_RENDER_ZOOM = float(os.environ.get("PAGE_RENDER_ZOOM", "2.0"))
 

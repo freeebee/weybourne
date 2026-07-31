@@ -8,7 +8,7 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src import config  # noqa: E402
+from src import config, llm  # noqa: E402
 from src.connectors.graph import GraphConnector  # noqa: E402
 from src.connectors.notion_client import NotionConnector  # noqa: E402
 
@@ -45,16 +45,14 @@ def get_notion() -> NotionConnector:
 
 @st.cache_resource
 def get_claude():
-    """Anthropic client, or None when no API key is configured.
+    """The configured model client, or None when no backend is usable.
 
-    Feature modules accept ``None`` and fall back to deterministic behaviour
-    where they can, so the app stays usable without a key.
+    By default this is the Claude Code CLI backend, which runs on your Claude
+    account rather than an Anthropic API key. Feature modules accept ``None`` and
+    fall back to deterministic behaviour where they can, so the app stays usable
+    without any backend at all.
     """
-    if not config.anthropic_configured():
-        return None
-    import anthropic
-
-    return anthropic.Anthropic()
+    return llm.get_client()
 
 
 def connection_status() -> list[tuple[str, bool, str]]:
@@ -69,10 +67,13 @@ def connection_status() -> list[tuple[str, bool, str]]:
     else:
         outlook_detail = "sample data"
 
+    label, detail = llm.describe_backend()
+    backend_ok, backend_msg = llm.preflight()
+
     return [
         ("Outlook", graph.live or INBOX_SNAPSHOT.exists(), outlook_detail),
         ("Notion", get_notion().live, "live" if get_notion().live else "sample data"),
-        ("Claude", config.anthropic_configured(), "live" if config.anthropic_configured() else "no API key"),
+        (label, backend_ok, detail if backend_ok else backend_msg),
     ]
 
 
@@ -88,12 +89,37 @@ def render_status_strip() -> None:
 
 
 def require_claude() -> object | None:
-    """Return the Claude client, or render a friendly notice and return None."""
-    client = get_claude()
-    if client is None:
-        st.info(
-            "**Demo mode** — no `ANTHROPIC_API_KEY` is set, so AI analysis is unavailable. "
-            "Set the key in `.env` to run real triage, screening and drafting. "
-            "Deterministic fallbacks are used where they exist."
-        )
-    return client
+    """Return the model client, or render an actionable notice and return None.
+
+    The notice distinguishes "nothing configured" (demo mode) from "the backend
+    you chose isn't usable" — the latter tells you how to fix it rather than
+    quietly switching to a different billing rail.
+    """
+    ok, message = llm.preflight()
+    if not ok:
+        if (config.LLM_BACKEND or "").strip().lower() == "api":
+            st.info(
+                f"**Demo mode** — {message}. Set the key in `.env` to run real triage, "
+                "screening and drafting. Deterministic fallbacks are used where they exist."
+            )
+        else:
+            st.warning(f"**AI backend unavailable** — {message}")
+        return None
+    return get_claude()
+
+
+def run_ai(fn, *args, **kwargs):
+    """Call a feature function, surfacing backend errors as clear UI messages.
+
+    Backend failures (not logged in, usage limit reached) are shown as-is rather
+    than being retried on another account or hidden behind a generic error.
+    """
+    try:
+        return fn(*args, **kwargs)
+    except llm.ClaudeCodeAuthError as e:
+        st.error(f"**Not signed in to Claude** — {e}")
+    except llm.ClaudeCodeRateLimited as e:
+        st.error(f"**Claude usage limit reached** — {e}")
+    except llm.ClaudeCodeError as e:
+        st.error(f"**Claude Code error** — {e}")
+    return None

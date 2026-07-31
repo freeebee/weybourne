@@ -8,7 +8,7 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from common import page_setup, require_claude  # noqa: E402
+from common import page_setup, require_claude, run_ai  # noqa: E402
 
 from src.features.track_record import (  # noqa: E402
     analyse_file,
@@ -36,7 +36,7 @@ if upload is not None and st.button("Analyse", type="primary", disabled=client i
     tmp.write_bytes(upload.getbuffer())
     with st.spinner("Reading and normalising…"):
         try:
-            st.session_state.record = analyse_file(client, tmp)
+            st.session_state.record = run_ai(analyse_file, client, tmp)
         except Exception as e:  # noqa: BLE001
             st.error(f"Could not analyse the file: {e}")
 

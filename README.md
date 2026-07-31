@@ -16,7 +16,7 @@ buttons, each opening one capability:
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env          # optional — see "Connecting things up"
+claude login                  # runs the AI on your Claude account (no API key)
 streamlit run dashboard/Home.py
 ```
 
@@ -24,15 +24,42 @@ streamlit run dashboard/Home.py
 representative sample data, so you can click through all five screens
 immediately. Add credentials to make each one real.
 
+The AI runs on **your Claude account** by default via the Claude Code CLI — see
+[Claude](#claude--needed-for-any-ai-analysis) below. Copy `.env.example` to `.env`
+when you're ready to connect Notion and Outlook.
+
 ## Connecting things up
 
 There are three independent connections, and you can enable them one at a time.
 
 ### Claude — needed for any AI analysis
 
-Set `ANTHROPIC_API_KEY` in `.env`. Without it the screens still render and the
-deterministic parts still work (dedupe, calendar slots, the fallback reply
-drafts), but triage, screening and prep are unavailable.
+**By default this runs on your Claude account, not an API key.** The app calls the
+Claude Code CLI, which uses whatever `claude login` established:
+
+```bash
+claude login        # once, in a terminal
+```
+
+That's the whole setup — no `ANTHROPIC_API_KEY` required. Verify with the status
+strip on the home page, which should read *Claude account · connected*.
+
+To use an Anthropic API account instead, set `LLM_BACKEND=api` and
+`ANTHROPIC_API_KEY` in `.env`.
+
+Two things worth knowing about the Claude-account route:
+
+- **It needs Claude Code installed and logged in on the machine running the app**,
+  so it suits running locally rather than an unattended hosted deployment.
+- **The cost is your usage limit, not dollars.** Each call carries a few seconds of
+  CLI startup, and inbox triage deliberately makes one call per message so each is
+  reasoned about in isolation — so triaging a full inbox is noticeably slower and
+  uses more of your limit than a single batched call would. If limits become a
+  problem, batching triage is the first lever to pull.
+
+The two backends are separate billing rails and the app never silently switches
+between them: if you're not logged in, or you hit your usage limit, it says so and
+stops rather than quietly falling back to an API key.
 
 ### Notion — self-serve, no admin needed
 
@@ -160,11 +187,18 @@ Streamlit (dashboard/) -- reads the DB directly
 ### Connector layer
 
 ```
+src/llm.py          model backend: Claude Code CLI (your Claude account) or the API
 src/connectors/     graph.py (Outlook), notion_client.py (Notion)
 src/features/       inbox_triage, dedupe, notion_sync, preferences,
                     draft_reply, meeting_prep, track_record, transcription
 dashboard/          Home.py + pages/, one page per feature
 ```
+
+Every model call goes through one shape — `client.messages.create(...)` — so
+`src/llm.py` can swap the backend without any feature module changing. The CLI
+backend translates that call into
+`claude -p --output-format json --json-schema <schema>`, which gives the same
+schema-validated output the API's structured outputs provide.
 
 ### Data model
 
@@ -224,3 +258,7 @@ internal infrastructure. A small internal VPS running
   Claude, which has web search.
 - The track-record output format is a first cut (`SCHEMA_VERSION = "1.0"`) and is
   expected to be refined once real files have been run through it.
+- **OCR on the Claude-account backend is clunkier than on the API.** The CLI can't
+  take an inline image, so page images are written to temp files for Claude to
+  read. It works, but if you run the PDF pipeline at volume, `LLM_BACKEND=api`
+  is the better route for that particular job.

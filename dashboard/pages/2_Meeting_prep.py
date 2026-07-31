@@ -7,7 +7,7 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from common import get_graph, get_notion, page_setup, require_claude  # noqa: E402
+from common import get_graph, get_notion, page_setup, require_claude, run_ai  # noqa: E402
 
 from src.features.meeting_prep import (  # noqa: E402
     build_context,
@@ -83,7 +83,9 @@ if selection:
             research=research,
         )
     with st.spinner("Writing the brief…"):
-        prep = synthesize_prep(client, ctx)
+        prep = run_ai(synthesize_prep, client, ctx)
+    if prep is None:
+        st.stop()
 
     st.divider()
     st.subheader(prep.counterparty_name or selection["name"])

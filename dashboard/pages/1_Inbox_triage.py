@@ -6,8 +6,9 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from common import get_graph, get_notion, page_setup, require_claude  # noqa: E402
+from common import get_graph, get_notion, page_setup, require_claude, run_ai  # noqa: E402
 
+from src import llm  # noqa: E402
 from src.features import notion_sync  # noqa: E402
 from src.features.dedupe import dedupe_entity  # noqa: E402
 from src.features.draft_reply import generate_draft_options  # noqa: E402
@@ -44,11 +45,20 @@ if not messages:
 # 2. Triage
 # --------------------------------------------------------------------------- #
 if client is not None and st.button(f"Triage {len(messages)} messages"):
+    st.caption(
+        "One call per message, so each is reasoned about in isolation. On the Claude "
+        "account backend this takes a few seconds each and uses your usage limit."
+    )
     results = {}
     progress = st.progress(0.0, "Triaging…")
     for i, msg in enumerate(messages):
         try:
             results[msg.id] = triage_email(client, msg)
+        except (llm.ClaudeCodeAuthError, llm.ClaudeCodeRateLimited) as e:
+            # A backend-level problem affects every remaining message - stop
+            # rather than repeating the same failure once per email.
+            st.error(f"**Stopped after {i} of {len(messages)}** — {e}")
+            break
         except Exception as e:  # noqa: BLE001 - one bad message shouldn't stop the batch
             st.warning(f"Could not triage “{msg.subject}”: {e}")
         progress.progress((i + 1) / len(messages), f"Triaged {i + 1}/{len(messages)}")
@@ -145,8 +155,8 @@ for msg in messages:
         screen_key = f"screen-{msg.id}"
         if client is not None and st.button("Run preference screen", key=f"btn-{screen_key}"):
             with st.spinner("Screening against the CHAO preference pages…"):
-                st.session_state[screen_key] = screen_opportunity(
-                    client, entity, result.key_facts, notion
+                st.session_state[screen_key] = run_ai(
+                    screen_opportunity, client, entity, result.key_facts, notion
                 )
         screen = st.session_state.get(screen_key)
         if screen:
@@ -172,8 +182,8 @@ for msg in messages:
             if st.button("Generate reply options", key=f"btn-{draft_key}"):
                 slots = graph.find_free_slots(max_slots=4) if offer else []
                 with st.spinner("Drafting…"):
-                    st.session_state[draft_key] = generate_draft_options(
-                        client, msg, entity, screen, slots
+                    st.session_state[draft_key] = run_ai(
+                        generate_draft_options, client, msg, entity, screen, slots
                     )
             options = st.session_state.get(draft_key)
             if options:

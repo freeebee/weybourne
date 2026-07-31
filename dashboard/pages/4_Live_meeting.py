@@ -12,7 +12,7 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from common import page_setup, require_claude  # noqa: E402
+from common import page_setup, require_claude, run_ai  # noqa: E402
 
 from src.features.transcription import (  # noqa: E402
     QuestionLedger,
@@ -73,11 +73,9 @@ with col_q:
     if st.button("Suggest questions", type="primary",
                  disabled=client is None or not buffer.segments):
         with st.spinner("Listening…"):
-            try:
-                fresh = generate_live_questions(client, buffer, ledger, context)
+            fresh = run_ai(generate_live_questions, client, buffer, ledger, context)
+            if fresh is not None:
                 st.session_state.latest = fresh
-            except Exception as e:  # noqa: BLE001
-                st.error(f"Could not generate questions: {e}")
 
     for q in st.session_state.get("latest", []):
         urgency = {"now": "🔴", "soon": "🟠", "later": "⚪"}.get(q.get("urgency"), "•")
