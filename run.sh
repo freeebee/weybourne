@@ -77,7 +77,9 @@ requirements_hash() {
 WANT="$(requirements_hash)"
 HAVE="$(cat "$STAMP" 2>/dev/null || true)"
 
-if [ "$WANT" != "$HAVE" ]; then
+# Reinstall when requirements change, and also whenever Streamlit isn't actually
+# importable - a stamp file can outlive a half-built environment.
+if [ "$WANT" != "$HAVE" ] || ! "$PY" -c "import streamlit" >/dev/null 2>&1; then
     say "Installing dependencies (one-off, a minute or two)..."
     "$PY" -m pip install --quiet --upgrade pip
     "$PY" -m pip install --quiet -r requirements.txt || die \
@@ -85,6 +87,9 @@ if [ "$WANT" != "$HAVE" ]; then
 a transient network error."
     echo "$WANT" > "$STAMP"
 fi
+
+"$PY" -c "import streamlit" >/dev/null 2>&1 || die \
+"Streamlit did not install correctly. Delete the .venv folder and run ./run.sh again."
 
 # --------------------------------------------------------------------------- #
 # 3. Check the AI backend (a warning, never a blocker)
@@ -109,4 +114,6 @@ fi
 say "Starting the app - your browser will open automatically."
 echo "   (press Ctrl+C here to stop it)"
 echo
-exec "$VENV/bin/streamlit" run dashboard/Home.py ${STREAMLIT_ARGS+"${STREAMLIT_ARGS[@]}"}
+# "python -m streamlit" rather than the streamlit shim: works even when the
+# script shim is missing or the PATH is unusual.
+exec "$PY" -m streamlit run dashboard/Home.py ${STREAMLIT_ARGS+"${STREAMLIT_ARGS[@]}"}
