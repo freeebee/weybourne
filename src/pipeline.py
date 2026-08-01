@@ -10,8 +10,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-import anthropic
-
 from src.config import PDF_FOLDER
 from src.db import (
     delete_facts_and_notes_for_doc,
@@ -24,6 +22,7 @@ from src.db import (
     upsert_manifest_entry,
 )
 from src.extraction import extract_document
+from src.llm import get_client
 from src.manifest import diff_against_manifest, hash_file, scan_pdfs
 from src.ocr import assemble_document_markdown
 from src.triage import triage_pages
@@ -50,7 +49,7 @@ class RunSummary:
 
 def process_file(
     conn: sqlite3.Connection,
-    client: anthropic.Anthropic,
+    client,
     path: Path,
     file_hash: str,
     default_period: str | None,
@@ -80,7 +79,12 @@ def run(
 ) -> RunSummary:
     init_db()
     summary = RunSummary()
-    client = anthropic.Anthropic()
+    client = get_client()
+    if client is None:
+        raise RuntimeError(
+            "No model backend available. Run `claude login` for the Claude account "
+            "backend, or set LLM_BACKEND=api with an ANTHROPIC_API_KEY."
+        )
     run_date = datetime.now(timezone.utc).isoformat()
 
     with get_connection() as conn:

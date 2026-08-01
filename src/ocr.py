@@ -2,8 +2,6 @@
 import base64
 from pathlib import Path
 
-import anthropic
-
 from src.config import VISION_MODEL
 from src.triage import PageInfo, render_page_png
 
@@ -14,7 +12,7 @@ OCR_PROMPT = (
 )
 
 
-def ocr_page(client: anthropic.Anthropic, pdf_path: Path, page_number: int) -> str:
+def ocr_page(client, pdf_path: Path, page_number: int) -> str:
     png_bytes = render_page_png(pdf_path, page_number)
     image_b64 = base64.standard_b64encode(png_bytes).decode("utf-8")
     response = client.messages.create(
@@ -36,7 +34,7 @@ def ocr_page(client: anthropic.Anthropic, pdf_path: Path, page_number: int) -> s
     return "".join(block.text for block in response.content if block.type == "text").strip()
 
 
-def assemble_document_markdown(client: anthropic.Anthropic, pdf_path: Path, pages: list[PageInfo]) -> str:
+def assemble_document_markdown(client, pdf_path: Path, pages: list[PageInfo]) -> str:
     """Combine text-layer pages and vision-OCR'd pages into one ordered markdown doc."""
     sections = []
     for page in pages:

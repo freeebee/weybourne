@@ -1,8 +1,8 @@
-"""Streamlit dashboard reading directly from the pipeline's SQLite database.
+"""Fund data — the time-series dashboard over the pipeline's SQLite database.
 
-Run with: streamlit run dashboard/app.py
-Re-running update.py is enough to refresh this dashboard on next page load -
-no redeploy needed as long as the DB file is on the same host as the app.
+Reached from the connector home page. Re-running update.py is enough to refresh
+this on next page load — no redeploy needed as long as the DB file is on the
+same host as the app.
 """
 import sys
 from pathlib import Path
@@ -11,12 +11,12 @@ import pandas as pd
 import sqlite3
 import streamlit as st
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.config import DB_PATH  # noqa: E402
 from src.db import init_db  # noqa: E402
 
-st.set_page_config(page_title="Fund Data Dashboard", layout="wide")
+st.set_page_config(page_title="Fund data · Weybourne", page_icon="📊", layout="wide")
 
 
 def get_connection() -> sqlite3.Connection:
@@ -30,7 +30,7 @@ def load_table(conn: sqlite3.Connection, query: str, params: tuple = ()) -> pd.D
 
 conn = get_connection()
 
-st.title("Fund Data Dashboard")
+st.title("📊 Fund data")
 
 facts = load_table(conn, "SELECT * FROM fact_table")
 notes = load_table(conn, "SELECT * FROM notes_table")

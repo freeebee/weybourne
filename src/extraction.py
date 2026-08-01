@@ -9,7 +9,6 @@ never silently dropped.
 import json
 from dataclasses import dataclass, field
 
-import anthropic
 from pydantic import ValidationError
 
 from src.config import EXTRACTION_MODEL, MAX_DOC_CHARS_PER_CALL
@@ -95,7 +94,7 @@ class ExtractionOutcome:
 
 
 def _extract_chunk(
-    client: anthropic.Anthropic, chunk: str, source_doc: str, fallback_period: str | None
+    client, chunk: str, source_doc: str, fallback_period: str | None
 ) -> ExtractionOutcome:
     outcome = ExtractionOutcome()
     user_prompt = (
@@ -145,7 +144,7 @@ def _extract_chunk(
 
 
 def extract_document(
-    client: anthropic.Anthropic,
+    client,
     markdown: str,
     source_doc: str,
     fallback_period: str | None = None,
