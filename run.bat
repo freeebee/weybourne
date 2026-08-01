@@ -146,6 +146,12 @@ if "%DEV%"=="1" (
 )
 
 REM -- 5. Launch -------------------------------------------------------------- #
+REM A previous instance (or a crashed one) may still hold port 8000 - free it
+REM so a double-click always works. Only python processes are touched.
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr :8000 ^| findstr LISTENING') do (
+    tasklist /fi "PID eq %%p" 2>nul | findstr /i "python uvicorn" >nul && taskkill /PID %%p /F >nul 2>&1
+)
+
 echo.
 echo Starting the app - your browser will open automatically at
 echo http://localhost:8000
