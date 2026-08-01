@@ -1,13 +1,12 @@
-/* Weybourne UI kit — component idiom from the Weybourne Design System
-   (quiet cards, hairline rules, mono badges, restrained states). */
+/* Weybourne UI kit — redesign per design_handoff_connector_redesign. */
 import React from "react";
 
 export function Button({ variant = "primary", disabled, busy, children, style, ...rest }) {
   const [hover, setHover] = React.useState(false);
   const palettes = {
-    primary: { bg: hover ? "var(--teal-700)" : "var(--teal-600)", color: "#fff", border: "transparent" },
-    secondary: { bg: hover ? "var(--paper-050)" : "var(--paper-000)", color: "var(--ink-800)", border: hover ? "var(--stone-400)" : "var(--paper-300)" },
-    ghost: { bg: hover ? "var(--paper-100)" : "transparent", color: "var(--ink-700)", border: "transparent" },
+    primary: { bg: hover ? "var(--teal-700)" : "var(--teal-600)", color: "var(--paper-000)", border: "transparent" },
+    dark: { bg: hover ? "var(--ink-800)" : "var(--ink-700)", color: "var(--paper-050)", border: "transparent" },
+    ghost: { bg: hover ? "var(--paper-000)" : "transparent", color: "var(--ink-700)", border: hover ? "var(--stone-400)" : "var(--paper-300)" },
   };
   const p = palettes[variant] || palettes.primary;
   return (
@@ -17,11 +16,11 @@ export function Button({ variant = "primary", disabled, busy, children, style, .
       onMouseLeave={() => setHover(false)}
       style={{
         display: "inline-flex", alignItems: "center", gap: ".5rem",
-        height: "2.25rem", padding: "0 1rem", fontSize: ".92rem", fontWeight: 600,
+        padding: "10px 17px", fontSize: "13.5px", fontWeight: 500,
         color: disabled || busy ? "var(--stone-400)" : p.color,
         background: disabled || busy ? "var(--paper-100)" : p.bg,
         border: `1px solid ${disabled || busy ? "var(--paper-300)" : p.border}`,
-        borderRadius: "var(--radius-md)", cursor: disabled || busy ? "default" : "pointer",
+        borderRadius: "var(--radius)", cursor: disabled || busy ? "default" : "pointer",
         transition: "background .15s ease, border-color .15s ease", whiteSpace: "nowrap",
         ...style,
       }}
@@ -45,119 +44,123 @@ export function Spinner({ size = 16 }) {
   );
 }
 
-export function Card({ children, style, ...rest }) {
+/* accent: "teal" = primary card, "brass" = finished artefact, none = quiet */
+export function Card({ accent, children, style, ...rest }) {
   return (
     <div style={{
       background: "var(--paper-000)", border: "1px solid var(--paper-200)",
-      borderRadius: "var(--radius-lg)", padding: "1.1rem 1.3rem",
-      boxShadow: "var(--shadow-sm)", ...style,
+      borderTop: accent === "teal" ? "2px solid var(--teal-500)"
+        : accent === "brass" ? "2px solid var(--brass-500)"
+        : "1px solid var(--paper-200)",
+      borderRadius: "var(--radius)", padding: "17px 18px", ...style,
     }} {...rest}>{children}</div>
   );
 }
 
-export function Pill({ tone = "neutral", children }) {
-  const tones = {
-    live: { bg: "var(--positive-100)", fg: "var(--positive-600)", bd: "var(--positive-600)" },
-    demo: { bg: "var(--caution-100)", fg: "var(--caution-600)", bd: "var(--caution-500)" },
-    flag: { bg: "var(--brass-100)", fg: "var(--brass-700)", bd: "var(--brass-500)" },
-    neutral: { bg: "var(--paper-100)", fg: "var(--stone-600)", bd: "var(--paper-300)" },
-    critical: { bg: "var(--critical-100)", fg: "var(--critical-600)", bd: "var(--critical-500)" },
-  };
-  const t = tones[tone] || tones.neutral;
+export function Chip({ tone = "neutral", dot, children }) {
   return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", height: "1.35rem", padding: "0 .5rem",
-      font: "500 .62rem/1 var(--mono)", letterSpacing: ".08em", textTransform: "uppercase",
-      color: t.fg, background: t.bg, border: `1px solid ${t.bd}`,
-      borderRadius: "var(--radius-sm)", marginLeft: ".4rem", whiteSpace: "nowrap",
-    }}>{children}</span>
+    <span className={`chip ${tone}`}>
+      {dot && <span className="dot" style={{ background: "currentColor" }} />}
+      {children}
+    </span>
   );
 }
 
-export function Banner({ tone = "info", children }) {
-  const tones = {
-    info: { bg: "var(--teal-100)", bd: "var(--teal-600)" },
-    success: { bg: "var(--positive-100)", bd: "var(--positive-600)" },
-    warning: { bg: "var(--caution-100)", bd: "var(--caution-500)" },
-    error: { bg: "var(--critical-100)", bd: "var(--critical-500)" },
-  };
-  const t = tones[tone] || tones.info;
+export function KpiBand({ items }) {
   return (
-    <div style={{
-      background: t.bg, borderLeft: `3px solid ${t.bd}`,
-      border: `1px solid var(--paper-200)`, borderLeftWidth: 3, borderLeftColor: t.bd,
-      borderRadius: "var(--radius-sm)", padding: ".7rem 1rem", fontSize: ".92rem",
-      margin: ".6rem 0",
-    }}>{children}</div>
-  );
-}
-
-export function Stat({ label, value, caption }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: ".35rem" }}>
-      <span className="eyebrow" style={{ margin: 0 }}>{label}</span>
-      <span className="mono" style={{ fontSize: "1.8rem", color: "var(--ink-800)", lineHeight: 1 }}>
-        {value}
-      </span>
-      {caption && <span className="muted small">{caption}</span>}
-    </div>
-  );
-}
-
-export function Tabs({ tabs, active, onChange }) {
-  return (
-    <div style={{ display: "flex", gap: "1.4rem", borderBottom: "1px solid var(--paper-200)", margin: "1rem 0" }}>
-      {tabs.map((t) => (
-        <button key={t} onClick={() => onChange(t)} style={{
-          background: "none", border: "none", cursor: "pointer", padding: ".5rem 0",
-          fontSize: ".95rem", fontWeight: 500,
-          color: t === active ? "var(--teal-700)" : "var(--stone-500)",
-          borderBottom: t === active ? "2px solid var(--teal-600)" : "2px solid transparent",
-          marginBottom: -1,
-        }}>{t}</button>
+    <div className="kpis">
+      {items.map(([label, value, warn, caption]) => (
+        <div className="kpi" key={label}>
+          <span className="microlabel">{label}</span>
+          <div className={"kval" + (warn ? " warn" : "")}>{value}</div>
+          {caption && <div className="muted" style={{ fontSize: "12px" }}>{caption}</div>}
+        </div>
       ))}
     </div>
   );
 }
 
-export function Field({ label, hint, children }) {
+export function Field({ label, hint, children, style }) {
   return (
-    <label style={{ display: "block", margin: "0 0 1rem" }}>
-      <span className="eyebrow">{label}</span>
+    <label style={{ display: "block", margin: "0 0 1rem", ...style }}>
+      <span className="microlabel" style={{ display: "block", marginBottom: 5 }}>{label}</span>
       {children}
-      {hint && <div className="muted small" style={{ marginTop: 4, fontStyle: "italic" }}>{hint}</div>}
+      {hint && <div className="muted" style={{ marginTop: 4, fontSize: "12.5px", fontStyle: "italic" }}>{hint}</div>}
     </label>
   );
 }
 
-export const inputStyle = {
-  width: "100%", padding: ".55rem .7rem", fontSize: ".95rem", fontFamily: "var(--sans)",
-  color: "var(--ink-700)", background: "var(--paper-000)",
-  border: "1px solid var(--paper-300)", borderRadius: "var(--radius-sm)", outline: "none",
-};
+export const inputStyle = { width: "100%" };
 
-/* The exported mascot SVGs are static frames, so the motion lives here:
-   each state gets a CSS animation applied to the inlined figure. */
+export function PageHeader({ eyebrow, eyebrowTone, title, xl, children, actions }) {
+  return (
+    <div className="pagehead fade-in">
+      <div className="lead">
+        <span className={"eyebrow" + (eyebrowTone ? ` ${eyebrowTone}` : "")}>
+          {eyebrowTone === "rec" && <span className="dot" style={{ background: "var(--positive-600)", marginRight: 7 }} />}
+          {eyebrow}
+        </span>
+        <h1 className={xl ? "xl" : ""}>{title}</h1>
+        {children && <p className="desc">{children}</p>}
+      </div>
+      {actions && <div className="actions">{actions}</div>}
+    </div>
+  );
+}
+
+export function SectionHead({ label, right, style }) {
+  return (
+    <div className="spread" style={{ paddingBottom: 12, ...style }}>
+      <span className="microlabel">{label}</span>
+      {right && <span className="microlabel" style={{ letterSpacing: ".1em" }}>{right}</span>}
+    </div>
+  );
+}
+
+export function ErrorNote({ error }) {
+  if (!error) return null;
+  return (
+    <div style={{ borderTop: "1px solid var(--paper-200)", borderBottom: "1px solid var(--paper-200)",
+                  padding: "12px 0", margin: "14px 0" }}>
+      <span className="microlabel" style={{ color: "var(--critical-600)" }}>SOMETHING WENT WRONG</span>
+      <div style={{ fontSize: "13.5px", marginTop: 4 }}>{String(error)}</div>
+    </div>
+  );
+}
+
+export function Banner({ tone = "info", children }) {
+  const colors = { info: "var(--teal-700)", success: "var(--positive-600)",
+                   warning: "var(--caution-600)", error: "var(--critical-600)" };
+  return (
+    <div style={{ borderTop: "1px solid var(--paper-200)", borderBottom: "1px solid var(--paper-200)",
+                  padding: "10px 0", margin: "10px 0", fontSize: "13.5px" }}>
+      <span className="dot" style={{ background: colors[tone] || colors.info, marginRight: 8 }} />
+      {children}
+    </div>
+  );
+}
+
+/* The exported mascot SVGs are static frames, so the motion lives here. */
 const MASCOT_MOTION = {
   working: "wb-wiggle 1.1s ease-in-out infinite",
-  crunching: "wb-wiggle .7s ease-in-out infinite",
+  crunching: "wb-wiggle .9s ease-in-out infinite",
   notes: "wb-bob 1.6s ease-in-out infinite",
-  reading: "wb-bob 2.2s ease-in-out infinite",
-  filing: "wb-bob 1.4s ease-in-out infinite",
+  reading: "wb-bob 2.6s ease-in-out infinite",
+  filing: "wb-bob 2.2s ease-in-out infinite",
   thinking: "wb-pulse 2.4s ease-in-out infinite",
-  confused: "wb-pulse 3s ease-in-out infinite",
-  waving: "wb-wave 1.6s ease-in-out infinite",
-  celebrating: "wb-wave 1s ease-in-out infinite",
-  call: "wb-bob 2s ease-in-out infinite",
-  presenting: "wb-bob 2s ease-in-out infinite",
+  confused: "wb-pulse 3.2s ease-in-out infinite",
+  waving: "wb-wave 2.6s ease-in-out infinite",
+  celebrating: "wb-wave 1.4s ease-in-out infinite",
+  call: "wb-bob 2.4s ease-in-out infinite",
+  presenting: "wb-bob 3s ease-in-out infinite",
   coffee: "wb-float 3.4s ease-in-out infinite",
-  sleeping: "wb-float 4s ease-in-out infinite",
+  sleeping: "wb-float 4.2s ease-in-out infinite",
   avatar: "none",
 };
 
 const mascotCache = {};
 
-export function Mascot({ state, width = 110, text }) {
+export function Mascot({ state, width = 110, text, style }) {
   const [svg, setSvg] = React.useState(mascotCache[state] || "");
 
   React.useEffect(() => {
@@ -166,8 +169,6 @@ export function Mascot({ state, width = 110, text }) {
       .then((r) => (r.ok ? r.text() : ""))
       .then((t) => {
         if (!t) return;
-        // Namespace ids so two mascots on one page can't collide, and make the
-        // svg fill its container.
         t = t.replace(/\bid="/g, `id="${state}-`)
              .replaceAll('href="#', `href="#${state}-`)
              .replaceAll("url(#", `url(#${state}-`)
@@ -179,27 +180,12 @@ export function Mascot({ state, width = 110, text }) {
   }, [state]);
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "1.1rem", padding: ".4rem 0" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: "14px", ...style }}>
       <div aria-label={`mascot ${state}`} style={{
-        width, flex: "none", transformOrigin: "50% 92%",
+        width, flex: "none", transformOrigin: "60% 90%",
         animation: MASCOT_MOTION[state] || "wb-bob 2.4s ease-in-out infinite",
       }} dangerouslySetInnerHTML={{ __html: svg }} />
-      {text && <div className="muted" style={{ fontSize: ".92rem" }}>{text}</div>}
+      {text && <div className="muted" style={{ fontSize: "13.5px" }}>{text}</div>}
     </div>
   );
-}
-
-export function PageHeader({ eyebrow, title, children }) {
-  return (
-    <div className="hero fade-in">
-      <span className="eyebrow">{eyebrow}</span>
-      <h1>{title}</h1>
-      {children && <p>{children}</p>}
-    </div>
-  );
-}
-
-export function ErrorNote({ error }) {
-  if (!error) return null;
-  return <Banner tone="error"><b>Something went wrong</b> — {String(error)}</Banner>;
 }

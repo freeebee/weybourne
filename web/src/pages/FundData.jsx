@@ -1,11 +1,15 @@
 import React from "react";
 import { get } from "../api.js";
-import { Card, ErrorNote, Mascot, PageHeader, Stat, Tabs } from "../ui.jsx";
+import {
+  Card, ErrorNote, KpiBand, Mascot, PageHeader, SectionHead,
+} from "../ui.jsx";
+
+const PALETTE = ["#249692", "#16415C", "#B0894E", "#4F6D7C", "#84C7C2", "#9A9385"];
+const WIDTHS = [2, 2, 1.75, 1.5, 1.5, 1.5];
 
 export default function FundData() {
   const [data, setData] = React.useState(null);
   const [error, setError] = React.useState(null);
-  const [tab, setTab] = React.useState("Metrics");
   const [metric, setMetric] = React.useState("");
 
   React.useEffect(() => {
@@ -13,7 +17,7 @@ export default function FundData() {
   }, []);
 
   if (error) return <div className="fade-in"><PageHeader eyebrow="PORTFOLIO" title="Fund data" /><ErrorNote error={error} /></div>;
-  if (!data) return <div className="fade-in"><PageHeader eyebrow="PORTFOLIO" title="Fund data" /><Mascot state="working" text="Loading…" /></div>;
+  if (!data) return <div className="fade-in"><PageHeader eyebrow="PORTFOLIO" title="Fund data" /><Mascot state="working" width={64} text="Loading…" /></div>;
 
   const metrics = [...new Set(data.facts.map((f) => f.metric_name))];
   const active = metric || metrics[0];
@@ -25,73 +29,87 @@ export default function FundData() {
 
   return (
     <div className="fade-in">
-      <PageHeader eyebrow="PORTFOLIO · TIME SERIES" title="Fund data">
+      <PageHeader eyebrow="PORTFOLIO · TIME SERIES" title="Fund data"
+        actions={metrics.length > 0 && (
+          <label className="microlabel" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            METRIC
+            <select value={active} onChange={(e) => setMetric(e.target.value)}>
+              {metrics.map((m) => <option key={m}>{m}</option>)}
+            </select>
+          </label>
+        )}>
         The dashboard over everything ingested from quarterly reports and statements.
       </PageHeader>
 
-      <div className="row" style={{ gap: "2.5rem", marginBottom: "1rem" }}>
-        <Stat label="Last updated" value={data.last_updated || "never"} />
-        <Stat label="Documents ingested" value={data.manifest_count} />
-        <Stat label="Flagged for review" value={data.flagged.length} />
-      </div>
+      <KpiBand items={[
+        ["DOCUMENTS INGESTED", data.manifest_count],
+        ["FACTS EXTRACTED", data.facts.length.toLocaleString()],
+        ["FLAGGED FOR REVIEW", data.flagged.length, data.flagged.length > 0],
+        ["LAST RUN", data.last_updated ? String(data.last_updated).slice(0, 10) : "never"],
+      ]} />
 
       {data.facts.length === 0 ? (
-        <Card><Mascot state="confused"
-          text="No data yet — run `python update.py` (or scripts/seed_test_data.py) to ingest PDFs into the database." /></Card>
+        <Card>
+          <Mascot state="confused" width={54}
+            text="No data yet — run `python update.py` (or scripts/seed_test_data.py) to ingest PDFs into the database." />
+        </Card>
       ) : (
         <>
-          <Tabs tabs={["Metrics", "Narrative notes", "Ingestion log"]} active={tab} onChange={setTab} />
+          <SectionHead label={`${(active || "").toUpperCase()} · BY FUND`}
+            right={data.last_updated ? `AS AT ${String(data.last_updated).slice(0, 10)}` : ""} />
+          <Card style={{ padding: "22px 24px", marginBottom: 26 }}>
+            <LineChart series={series} />
+          </Card>
 
-          {tab === "Metrics" && (
-            <Card>
-              <div className="row" style={{ marginBottom: "1rem" }}>
-                <span className="eyebrow" style={{ margin: 0 }}>METRIC</span>
-                <select value={active} onChange={(e) => setMetric(e.target.value)}
-                  style={{ padding: ".4rem .6rem", fontFamily: "var(--mono)", fontSize: ".85rem",
-                           border: "1px solid var(--paper-300)", background: "var(--paper-000)" }}>
-                  {metrics.map((m) => <option key={m}>{m}</option>)}
-                </select>
-              </div>
-              <LineChart series={series} />
-            </Card>
-          )}
-
-          {tab === "Narrative notes" && (
-            <Card>
-              {data.notes.map((n, i) => (
-                <div key={i} style={{ borderBottom: "1px dotted var(--paper-300)", padding: ".6rem 0" }}>
+          <div style={{ display: "grid",
+            gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 36 }}>
+            <section>
+              <SectionHead label="NARRATIVE NOTES" right={String(data.notes.length)} />
+              {data.notes.slice(0, 12).map((n, i) => (
+                <div key={i} className="rrow">
                   <div className="spread">
-                    <b className="small">{n.fund_name}</b>
-                    <span className="mono muted small">{n.period}</span>
+                    <b style={{ fontSize: "14px" }}>{n.fund_name}</b>
+                    <span className="mono" style={{ fontSize: 11, color: "var(--stone-400)" }}>{n.period}</span>
                   </div>
-                  <p className="small" style={{ margin: ".3rem 0 0" }}>{n.note_text || n.text || ""}</p>
+                  <p style={{ fontSize: "13.5px", lineHeight: 1.55, margin: "5px 0 0" }}>
+                    {n.note_text || n.text || ""}
+                  </p>
                 </div>
               ))}
-            </Card>
-          )}
+            </section>
 
-          {tab === "Ingestion log" && (
-            <Card>
-              <table className="small mono" style={{ width: "100%", borderCollapse: "collapse" }}>
-                <tbody>
-                  {data.log.map((l, i) => (
-                    <tr key={i} style={{ borderBottom: "1px dotted var(--paper-200)" }}>
-                      <td style={{ padding: ".3rem .8rem .3rem 0" }}>{l.timestamp || l.run_date || ""}</td>
-                      <td>{l.filename || l.file || ""}</td>
-                      <td className="muted">{l.status || l.message || ""}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Card>
-          )}
+            <section>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, paddingBottom: 12 }}>
+                <Mascot state="confused" width={42} />
+                <span className="microlabel">
+                  FLAGGED FOR REVIEW · <span style={{ color: "var(--caution-600)" }}>{data.flagged.length}</span>
+                </span>
+              </div>
+              {data.flagged.length === 0 && <p className="muted small">Nothing flagged.</p>}
+              {data.flagged.map((f, i) => (
+                <div key={i} className="rrow" style={{ display: "grid",
+                  gridTemplateColumns: "minmax(0,1fr) auto", gap: "4px 14px" }}>
+                  <b style={{ fontSize: "14px" }}>{f.fund_name || f.filename || "record"}</b>
+                  <span className="mono" style={{ fontSize: 10.5, letterSpacing: ".1em",
+                    color: "var(--caution-600)" }}>
+                    {(f.reason || f.issue || "REVIEW").toUpperCase().slice(0, 22)}
+                  </span>
+                  <span className="muted" style={{ fontSize: "12.5px", gridColumn: "1 / -1" }}>
+                    {f.detail || f.raw_value || ""}
+                  </span>
+                </div>
+              ))}
+              <p className="muted" style={{ fontSize: "12.5px", marginTop: 10 }}>
+                Nothing is written to the fact table with a guessed value — flagged rows wait
+                for a human call.
+              </p>
+            </section>
+          </div>
         </>
       )}
     </div>
   );
 }
-
-const PALETTE = ["#249692", "#16415C", "#B0894E", "#4F6D7C", "#84C7C2", "#9A9385"];
 
 function LineChart({ series }) {
   const names = Object.keys(series);
@@ -100,43 +118,42 @@ function LineChart({ series }) {
   const periods = [...new Set(all.map((f) => f.period))].sort();
   const values = all.map((f) => +f.metric_value).filter((v) => !isNaN(v));
   const [min, max] = [Math.min(...values), Math.max(...values)];
-  const W = 900, H = 300, PX = 60, PY = 24;
+  const W = 900, H = 260, PX = 60, PY = 26;
   const x = (p) => PX + periods.indexOf(p) * ((W - PX * 2) / Math.max(1, periods.length - 1));
   const y = (v) => H - PY - ((v - min) / (max - min || 1)) * (H - PY * 2);
 
   return (
     <div style={{ overflowX: "auto" }}>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", minWidth: 600 }}>
-        {[0, 0.5, 1].map((t) => {
+        {[0, 0.5, 1].map((t, i) => {
           const v = min + t * (max - min);
           return (
             <g key={t}>
-              <line x1={PX} x2={W - PX} y1={y(v)} y2={y(v)} stroke="#E4DCCB" strokeWidth="1" />
-              <text x={PX - 8} y={y(v) + 4} textAnchor="end"
-                fontSize="10" fontFamily="IBM Plex Mono" fill="#7A7468">{v.toFixed(1)}</text>
+              <line x1={PX} x2={W - PX} y1={y(v)} y2={y(v)}
+                stroke={i === 1 ? "#EFE9DC" : "#E4DCCB"} strokeWidth="1" />
+              <text x={PX - 8} y={y(v) + 4} textAnchor="end" fontSize="11"
+                fontFamily="IBM Plex Mono" fill="#9A9385">{v.toFixed(1)}</text>
             </g>
           );
         })}
         {periods.map((p) => (
-          <text key={p} x={x(p)} y={H - 6} textAnchor="middle"
-            fontSize="10" fontFamily="IBM Plex Mono" fill="#7A7468">{p}</text>
+          <text key={p} x={x(p)} y={H - 8} textAnchor="middle" fontSize="11"
+            fontFamily="IBM Plex Mono" fill="#9A9385">{p}</text>
         ))}
         {names.map((n, i) => (
-          <g key={n}>
-            <polyline fill="none" stroke={PALETTE[i % PALETTE.length]} strokeWidth="2"
-              points={series[n].map((f) => `${x(f.period)},${y(+f.metric_value)}`).join(" ")} />
-            {series[n].map((f, j) => (
-              <circle key={j} cx={x(f.period)} cy={y(+f.metric_value)} r="3"
-                fill={PALETTE[i % PALETTE.length]} />
-            ))}
-          </g>
+          <polyline key={n} fill="none" stroke={PALETTE[i % PALETTE.length]}
+            strokeWidth={WIDTHS[i % WIDTHS.length]}
+            strokeDasharray={i === 2 ? "5 4" : undefined}
+            points={series[n].map((f) => `${x(f.period)},${y(+f.metric_value)}`).join(" ")} />
         ))}
       </svg>
-      <div className="row small" style={{ gap: "1.2rem" }}>
+      <div style={{ borderTop: "1px solid var(--paper-200)", marginTop: 12, paddingTop: 10,
+                    display: "flex", gap: 22, flexWrap: "wrap" }}>
         {names.map((n, i) => (
-          <span key={n}><span style={{
-            display: "inline-block", width: 10, height: 10, borderRadius: 2,
-            background: PALETTE[i % PALETTE.length], marginRight: 6 }} />{n}</span>
+          <span key={n} style={{ fontSize: "12.5px", display: "inline-flex", alignItems: "center", gap: 7 }}>
+            <span style={{ width: 14, height: 2, background: PALETTE[i % PALETTE.length], display: "inline-block" }} />
+            {n}
+          </span>
         ))}
       </div>
     </div>

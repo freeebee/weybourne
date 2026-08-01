@@ -1,12 +1,12 @@
 import React from "react";
 import { get } from "../api.js";
 import {
-  Banner, Button, Card, ErrorNote, Field, Mascot, PageHeader, Pill, Tabs,
+  Banner, Button, Card, ErrorNote, Field, Mascot, PageHeader, SectionHead,
   inputStyle,
 } from "../ui.jsx";
 
 export default function Prep() {
-  const [tab, setTab] = React.useState("From my calendar");
+  const [tab, setTab] = React.useState("calendar");   // calendar | name | deck
   const [wantBrief, setWantBrief] = React.useState(true);
   const [wantScreen, setWantScreen] = React.useState(true);
   const [events, setEvents] = React.useState([]);
@@ -20,25 +20,25 @@ export default function Prep() {
   const [elapsed, setElapsed] = React.useState(0);
   const [eta, setEta] = React.useState(0);
   const [jobId, setJobId] = React.useState(null);
+  const [jobLabel, setJobLabel] = React.useState("");
   const [result, setResult] = React.useState(null);
   const [error, setError] = React.useState(null);
   const [cancelled, setCancelled] = React.useState(false);
+  const [showFull, setShowFull] = React.useState(false);
+  const pollRef = React.useRef(null);
 
   React.useEffect(() => {
     get("/api/calendar").then((d) => setEvents(d.events)).catch(() => {});
   }, []);
 
-  // The prep runs as a server-side job: it keeps going if you navigate away,
-  // and this page re-attaches to the newest job when you come back.
-  const pollRef = React.useRef(null);
-
-  function attach(id) {
+  function attach(id, label) {
     clearInterval(pollRef.current);
-    setBusy(true); setJobId(id); setCancelled(false);
+    setBusy(true); setJobId(id); setCancelled(false); setJobLabel(label || "");
     pollRef.current = setInterval(async () => {
       try {
         const j = await get(`/api/jobs/${id}`);
         setStages(j.stages); setElapsed(j.elapsed); setEta(j.eta || 0);
+        setJobLabel(j.label);
         if (j.status !== "running") {
           clearInterval(pollRef.current);
           setBusy(false); setJobId(null);
@@ -53,27 +53,28 @@ export default function Prep() {
     }, 1200);
   }
 
-  async function cancel() {
-    if (!jobId) return;
-    try { await fetch(`/api/jobs/${jobId}/cancel`, { method: "POST" }); }
-    catch { /* job may already be finishing */ }
-  }
-
   React.useEffect(() => {
     get("/api/jobs?kind=prep").then(({ jobs }) => {
       const latest = jobs[0];
       if (!latest) return;
-      if (latest.status === "running") { setStages(latest.stages); attach(latest.id); }
+      if (latest.status === "running") { setStages(latest.stages); attach(latest.id, latest.label); }
       else get(`/api/jobs/${latest.id}`).then((j) => {
-        setStages(j.stages); setElapsed(j.elapsed);
-        if (j.status === "error") setError(j.error); else setResult(j.result);
+        setStages(j.stages); setElapsed(j.elapsed); setJobLabel(j.label);
+        if (j.status === "error") setError(j.error);
+        else if (j.status === "done") setResult(j.result);
       });
     }).catch(() => {});
     return () => clearInterval(pollRef.current);
   }, []);
 
+  async function cancel() {
+    if (!jobId) return;
+    try { await fetch(`/api/jobs/${jobId}/cancel`, { method: "POST" }); }
+    catch { /* finishing anyway */ }
+  }
+
   async function prepare(fields, file) {
-    setError(null); setResult(null); setStages([]); setElapsed(0);
+    setError(null); setResult(null); setStages([]); setElapsed(0); setShowFull(false);
     const fd = new FormData();
     Object.entries({
       ...fields,
@@ -89,176 +90,357 @@ export default function Prep() {
       }
       const job = await res.json();
       setStages(job.stages);
-      attach(job.id);
+      attach(job.id, job.label);
     } catch (e) { setError(e.message); }
   }
 
   const ev = events[eventIdx];
   const nothingPicked = !wantBrief && !wantScreen;
+  const remaining = eta > 0 ? eta - elapsed : 0;
+  const progress = eta > 0 ? Math.min(0.97, elapsed / eta) : 0;
 
   return (
     <div className="fade-in">
-      <PageHeader eyebrow="PREPARATION · BRIEFING" title="Meeting prep">
+      <PageHeader eyebrow="PREPARATION · BRIEFING" title="Meeting prep"
+        actions={
+          <>
+            <Button variant={tab === "calendar" ? "dark" : "ghost"} onClick={() => setTab("calendar")}>From my calendar</Button>
+            <Button variant={tab === "name" ? "dark" : "ghost"} onClick={() => setTab("name")}>By name</Button>
+            <Button variant={tab === "deck" ? "dark" : "ghost"} onClick={() => setTab("deck")}>From a deck</Button>
+          </>
+        }>
         Who you're meeting, what they do, our history with them, and what to probe.
+        Runs in the background — leave and come back.
       </PageHeader>
 
-      <div className="row" style={{ marginBottom: ".4rem" }}>
-        <span className="eyebrow" style={{ margin: 0 }}>PREPARE</span>
-        <label className="small" style={{ display: "flex", gap: ".35rem", alignItems: "center" }}>
-          <input type="checkbox" checked={wantBrief} onChange={(e) => setWantBrief(e.target.checked)} />
-          Meeting briefing
-        </label>
-        <label className="small" style={{ display: "flex", gap: ".35rem", alignItems: "center" }}>
-          <input type="checkbox" checked={wantScreen} onChange={(e) => setWantScreen(e.target.checked)} />
-          Preference review (against the Notion CHAO pages)
-        </label>
-      </div>
-      {nothingPicked && <Banner tone="warning">Pick at least one of briefing / preference review.</Banner>}
-
-      <Tabs tabs={["From my calendar", "By manager name", "From an attachment"]}
-        active={tab} onChange={setTab} />
-
-      {tab === "From my calendar" && (
-        <Card>
-          <Field label="Upcoming meetings">
-            <select value={eventIdx} onChange={(e) => setEventIdx(+e.target.value)} style={inputStyle}>
-              {events.map((e, i) => (
-                <option key={i} value={i}>{e.start?.slice(0, 16).replace("T", " ")} — {e.subject}</option>
-              ))}
-            </select>
-          </Field>
-          {ev && <p className="muted small">Counterparty detected: <b>{ev.counterparty_name}</b>{ev.counterparty_email && ` (${ev.counterparty_email})`}</p>}
-          <Button busy={busy} disabled={!ev || nothingPicked}
-            onClick={() => prepare({
-              name: ev.counterparty_name, email: ev.counterparty_email,
-              event: JSON.stringify(ev),
-            })}>
-            Prepare me
-          </Button>
-        </Card>
-      )}
-
-      {tab === "By manager name" && (
-        <Card>
-          <Field label="Manager or firm name">
-            <input value={typedName} onChange={(e) => setTypedName(e.target.value)}
-              placeholder="e.g. Old Well Labs" style={inputStyle} />
-          </Field>
-          <Field label="Company (optional)">
-            <input value={typedCompany} onChange={(e) => setTypedCompany(e.target.value)} style={inputStyle} />
-          </Field>
-          <Button busy={busy} disabled={!typedName || nothingPicked}
-            onClick={() => prepare({ name: typedName, company: typedCompany })}>
-            Prepare me
-          </Button>
-        </Card>
-      )}
-
-      {tab === "From an attachment" && (
-        <Card>
-          <Field label="Deck or tearsheet (PDF)">
-            <input type="file" accept=".pdf" onChange={(e) => setDeck(e.target.files[0])} />
-          </Field>
-          <Field label="Counterparty name (optional — helps matching)">
-            <input value={deckName} onChange={(e) => setDeckName(e.target.value)} style={inputStyle} />
-          </Field>
-          <Button busy={busy} disabled={!deck || nothingPicked}
-            onClick={() => prepare({
-              name: deckName || deck.name.replace(/\.[^.]+$/, ""),
-            }, deck)}>
-            Prepare me
-          </Button>
-        </Card>
-      )}
-
-      {(busy || stages.length > 0) && !result && (
-        <Card style={{ marginTop: "1rem" }}>
-          {stages.map((s, i) => (
-            <div key={i} style={{ display: "flex", gap: ".6rem", alignItems: "baseline", padding: ".25rem 0" }}>
-              <span className="mono" style={{ color: "var(--teal-600)" }}>
-                {i < stages.length - 1 || !busy ? "✓" : "·"}
-              </span>
-              <div>
-                <b className="small">{s.label}</b>
-                {s.detail && <span className="muted small"> — {s.detail}</span>}
-                {busy && i === stages.length - 1 && elapsed > 0 && (
-                  <span className="mono small" style={{ color: "var(--teal-700)" }}> · {elapsed}s</span>
-                )}
-              </div>
-            </div>
-          ))}
-          {busy && (
+      <div className="panes">
+        {/* Left pane — source + outputs */}
+        <div style={{ flex: "1 1 300px", maxWidth: 400, minWidth: "min(100%,280px)" }}>
+          {tab === "calendar" && (
             <>
-              <div className="spread" style={{ alignItems: "center" }}>
-                <Mascot state="thinking" width={84}
-                  text={eta > 0
-                    ? (eta - elapsed > 0
-                        ? `≈${eta - elapsed}s remaining (based on recent runs)`
-                        : "taking longer than recent runs — still working…")
-                    : `${elapsed}s elapsed`} />
-                <Button variant="secondary" onClick={cancel}>Cancel</Button>
+              <SectionHead label="NEXT TWENTY-ONE DAYS" right={String(events.length)} />
+              <div style={{ maxHeight: 480, overflowY: "auto",
+                            border: "1px solid var(--paper-200)", borderRadius: "var(--radius)" }}>
+              {events.map((e, i) => (
+                <div key={i} onClick={() => setEventIdx(i)} className="rrow click" style={{
+                  display: "grid", gridTemplateColumns: "58px minmax(0,1fr)", gap: 12,
+                  padding: "14px", cursor: "pointer",
+                  background: i === eventIdx ? "var(--paper-000)" : "transparent",
+                  borderLeft: i === eventIdx ? "2px solid var(--teal-500)" : "2px solid transparent",
+                }}>
+                  <span className="mono" style={{ fontSize: 11, color: "var(--stone-500)", lineHeight: 1.5 }}>
+                    {(e.start || "").slice(5, 10)}<br />{(e.start || "").slice(11, 16)}
+                  </span>
+                  <span>
+                    <span style={{ fontSize: "14.5px", color: "var(--ink-800)", display: "block" }}>{e.subject}</span>
+                    <span style={{ fontSize: "12.5px", color: "var(--stone-500)" }}>
+                      {e.counterparty_name}{e.is_online ? " · online" : e.location ? ` · ${e.location}` : ""}
+                    </span>
+                  </span>
+                </div>
+              ))}
               </div>
-              <p className="muted small" style={{ margin: 0 }}>
-                Runs in the background — you can move to another page and come back;
-                the result will be waiting here. Cancel stops it at the next step and
-                discards any in-flight output.
-              </p>
             </>
           )}
-        </Card>
-      )}
-      {cancelled && <Banner tone="warning">Preparation cancelled — nothing was produced.</Banner>}
-      <ErrorNote error={error} />
+          {tab === "name" && (
+            <>
+              <Field label="MANAGER OR FIRM NAME">
+                <input value={typedName} onChange={(e) => setTypedName(e.target.value)}
+                  placeholder="e.g. Old Well Labs" style={inputStyle} />
+              </Field>
+              <Field label="COMPANY (OPTIONAL)">
+                <input value={typedCompany} onChange={(e) => setTypedCompany(e.target.value)} style={inputStyle} />
+              </Field>
+            </>
+          )}
+          {tab === "deck" && (
+            <>
+              <Field label="DECK OR TEARSHEET (PDF)">
+                <input type="file" accept=".pdf" onChange={(e) => setDeck(e.target.files[0])} />
+              </Field>
+              <Field label="COUNTERPARTY NAME (OPTIONAL)">
+                <input value={deckName} onChange={(e) => setDeckName(e.target.value)} style={inputStyle} />
+              </Field>
+            </>
+          )}
 
-      {result?.screen && <ScreenView screen={result.screen} />}
-      {result?.briefing && <BriefingView data={result.briefing} />}
+          <div style={{ marginTop: 18, borderTop: "1px solid var(--paper-200)", paddingTop: 14 }}>
+            <span className="microlabel" style={{ display: "block", marginBottom: 8 }}>OUTPUTS</span>
+            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: "13.5px", marginBottom: 6 }}>
+              <input type="checkbox" checked={wantBrief} onChange={(e) => setWantBrief(e.target.checked)} />
+              Full DD briefing
+            </label>
+            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: "13.5px" }}>
+              <input type="checkbox" checked={wantScreen} onChange={(e) => setWantScreen(e.target.checked)} />
+              Preference screen (Notion CHAO pages)
+            </label>
+            {nothingPicked && <Banner tone="warning">Pick at least one output.</Banner>}
+            <Button style={{ marginTop: 14 }} busy={busy}
+              disabled={nothingPicked
+                || (tab === "calendar" && !ev)
+                || (tab === "name" && !typedName)
+                || (tab === "deck" && !deck)}
+              onClick={() => {
+                if (tab === "calendar") prepare({ name: ev.counterparty_name, email: ev.counterparty_email, event: JSON.stringify(ev) });
+                else if (tab === "name") prepare({ name: typedName, company: typedCompany });
+                else prepare({ name: deckName || deck.name.replace(/\.[^.]+$/, "") }, deck);
+              }}>
+              Prepare
+            </Button>
+          </div>
+        </div>
+
+        {/* Right pane — running / result */}
+        <div style={{ flex: "2 1 480px", minWidth: "min(100%,320px)" }}>
+          {busy && (
+            <Card style={{ padding: "18px 20px", marginBottom: 20 }}>
+              <div className="spread" style={{ marginBottom: 12 }}>
+                <span className="microlabel">RUNNING · {jobLabel.toUpperCase()}</span>
+                <span className="mono" style={{ fontSize: 11, color: "var(--teal-700)" }}>
+                  {elapsed}S ELAPSED{eta > 0 && remaining > 0 ? ` · ~${remaining}S LEFT` : eta > 0 ? " · OVERRUNNING" : ""}
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: 18, alignItems: "flex-start" }}>
+                <Mascot state="crunching" width={66} />
+                <div style={{ flex: 1 }}>
+                  {stages.map((s, i) => {
+                    const isLast = i === stages.length - 1;
+                    return (
+                      <div key={i} style={{ display: "flex", gap: 9, alignItems: "baseline",
+                        padding: "3px 0", fontSize: "13.5px",
+                        color: isLast ? "var(--ink-800)" : "var(--stone-500)" }}>
+                        <span className="mono" style={{ color: isLast ? "var(--teal-600)" : "var(--positive-600)" }}>
+                          {isLast ? "›" : "✓"}
+                        </span>
+                        <span>{s.label}{s.detail && <span className="muted"> — {s.detail}</span>}</span>
+                      </div>
+                    );
+                  })}
+                  <div style={{ height: 2, background: "var(--paper-200)", marginTop: 12, borderRadius: 1 }}>
+                    <div style={{ height: 2, width: `${progress * 100}%`, background: "var(--teal-500)",
+                                  transition: "width 1s linear" }} />
+                  </div>
+                </div>
+                <Button variant="ghost" onClick={cancel}>Cancel</Button>
+              </div>
+            </Card>
+          )}
+          {cancelled && <Banner tone="warning">Preparation cancelled — nothing was produced.</Banner>}
+          <ErrorNote error={error} />
+
+          {result?.screen && <ScreenView screen={result.screen} />}
+
+          {result?.briefing && (
+            <Card accent="brass" style={{ padding: "26px 28px 28px", marginTop: result?.screen ? 20 : 0 }}>
+              <div className="spread" style={{ marginBottom: 12 }}>
+                <span className="microlabel">LAST BRIEF · {(result.briefing.entity || "").toUpperCase()}</span>
+                <span className="mono" style={{ fontSize: 10.5, color: "var(--stone-400)" }}>
+                  {result.briefing.meeting_details || ""}
+                </span>
+              </div>
+              <div style={{ font: "400 26px/1.25 var(--serif)", color: "var(--ink-800)", marginBottom: 10 }}>
+                {result.briefing.descriptor}
+              </div>
+              <p style={{ font: "400 16.5px/1.65 var(--serif)", color: "var(--ink-700)",
+                          maxWidth: "64ch", margin: "0 0 16px" }}>
+                {result.briefing.relationship}
+                {result.briefing.vehicle ? ` · ${result.briefing.vehicle}` : ""}
+              </p>
+              <SectionHead label="QUESTIONS THAT WOULD CHANGE THE VIEW" />
+              {(result.briefing.questions_a || []).slice(0, 5).map((q, i) => (
+                <div key={i} className="rrow" style={{ display: "grid",
+                  gridTemplateColumns: "28px minmax(0,1fr)", gap: 10 }}>
+                  <span className="mono" style={{ fontSize: 11, color: "var(--brass-500)" }}>
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span style={{ fontSize: 14 }}>{q.q}</span>
+                </div>
+              ))}
+              <div className="row" style={{ marginTop: 16 }}>
+                <Button onClick={() => setShowFull(!showFull)}>
+                  {showFull ? "Collapse full briefing" : "Open full briefing"}
+                </Button>
+              </div>
+            </Card>
+          )}
+          {result?.briefing && showFull && <BriefingView data={result.briefing} />}
+        </div>
+      </div>
     </div>
   );
 }
 
 function ScreenView({ screen }) {
-  const tone = { Fit: "success", Partial: "warning", "Non-fit": "error", Unclear: "info" }[screen.overall_fit];
+  const color = { Fit: "var(--positive-600)", Partial: "var(--caution-600)",
+    "Non-fit": "var(--critical-600)", Unclear: "var(--stone-500)" }[screen.overall_fit];
   return (
-    <Card style={{ marginTop: "1.4rem" }}>
-      <span className="eyebrow">PREFERENCE REVIEW · CHAO</span>
-      <Banner tone={tone}><b>{screen.overall_fit}</b> · {screen.sleeve} — {screen.summary}</Banner>
-      <div className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
-        <div><b className="small">Fits</b>
-          <ul className="small">{screen.fit_points.map((p, i) => <li key={i}>{p}</li>)}</ul></div>
-        <div><b className="small">Non-fits</b>
-          <ul className="small">{screen.non_fit_points.map((p, i) => <li key={i}>{p}</li>)}</ul></div>
+    <Card accent="teal" style={{ padding: "20px 22px" }}>
+      <div className="spread" style={{ marginBottom: 8 }}>
+        <span className="microlabel">PREFERENCE SCREEN · CHAO</span>
+        <span className="mono" style={{ fontSize: 11, letterSpacing: ".1em", color }}>
+          {screen.overall_fit.toUpperCase()} · {screen.sleeve.toUpperCase()}
+        </span>
+      </div>
+      <p style={{ fontSize: 14, lineHeight: 1.55, margin: "0 0 12px" }}>{screen.summary}</p>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 16 }}>
+        <div>
+          <span className="microlabel" style={{ color: "var(--positive-600)" }}>FITS</span>
+          <div style={{ fontSize: "13.5px", marginTop: 4 }}>{screen.fit_points.join(" · ") || "—"}</div>
+        </div>
+        <div>
+          <span className="microlabel" style={{ color: "var(--critical-600)" }}>NON-FITS</span>
+          <div style={{ fontSize: "13.5px", marginTop: 4 }}>{screen.non_fit_points.join(" · ") || "—"}</div>
+        </div>
       </div>
       {screen.open_questions?.length > 0 && (
-        <><b className="small">Open questions</b>
-          <ul className="small">{screen.open_questions.map((q, i) => <li key={i}>{q}</li>)}</ul></>
+        <div style={{ marginTop: 12 }}>
+          <span className="microlabel">OPEN QUESTIONS</span>
+          <div style={{ fontSize: "13.5px", marginTop: 4 }}>{screen.open_questions.join(" · ")}</div>
+        </div>
       )}
     </Card>
   );
 }
 
-function SectionHead({ n, title }) {
+function BriefingView({ data }) {
   return (
-    <div style={{ display: "flex", alignItems: "baseline", gap: ".8rem",
-                  borderBottom: "1px solid var(--ink-800)", padding: "0 0 .4rem",
-                  margin: "1.8rem 0 1rem" }}>
-      <span className="mono" style={{ color: "var(--teal-600)", fontSize: ".8rem" }}>{n}</span>
-      <h3 style={{ margin: 0, fontWeight: 500 }}>{title}</h3>
+    <div style={{ marginTop: 20 }}>
+      <Section n="1" title="Historical meeting context">
+        {data.meetings?.length
+          ? data.meetings.map((m, i) => (
+              <div key={i} className="rrow">
+                <div className="spread"><b style={{ fontSize: "14.5px" }}>{m.title}</b>
+                  <span className="mono" style={{ fontSize: 11, color: "var(--stone-400)" }}>{m.date}</span></div>
+                <div className="mono" style={{ fontSize: 10.5, color: "var(--stone-400)" }}>{m.format} · {m.attendees}</div>
+                <p style={{ fontSize: "13.5px", margin: "6px 0 0" }}>{m.summary}</p>
+              </div>
+            ))
+          : <p style={{ fontSize: "13.5px" }}>{data.no_meetings_text || "No qualifying meetings on record."}</p>}
+        {data.other_mentions?.map((mn, i) => (
+          <div key={i} className="rrow" style={{ color: "var(--stone-600)", fontSize: "13px" }}>
+            <span className="mono" style={{ fontSize: 10, color: "var(--stone-400)" }}>
+              {mn.source} · {mn.date} · {mn.context}</span>
+            <div>{mn.text}</div>
+          </div>
+        ))}
+      </Section>
+      <Section n="2" title="Background research">
+        <SubHead>Sector &amp; market landscape</SubHead><Markdown text={data.landscape_md} />
+        <SubHead>Manager background</SubHead><Markdown text={data.manager_bg_md} />
+        <SubHead>Potential red flags</SubHead><Markdown text={data.red_flags_md} />
+      </Section>
+      <Section n="3" title="Strategy"><Markdown text={data.strategy_md} /></Section>
+      <Section n="4" title="Questions for the manager">
+        <SubHead>A. Strategy &amp; direction</SubHead>
+        <QList items={data.questions_a || []} />
+        <SubHead style={{ marginTop: 14 }}>B. Manager-level &amp; structural</SubHead>
+        <QList items={data.questions_b || []} />
+      </Section>
+      <Section n="5" title="Deals">
+        {!data.is_manager ? (
+          <p style={{ fontSize: "13.5px", fontStyle: "italic", color: "var(--stone-500)" }}>
+            {data.deals_omit_text || "Omitted: the relationship is not an investment manager or fund."}
+          </p>
+        ) : (
+          <>
+            {data.ledger?.length > 0 && (
+              <div style={{ overflowX: "auto", marginBottom: 14 }}>
+                <table className="wb">
+                  <thead><tr>
+                    {["Company", "Fund · sector", "Entry", "Cost", "Own.", "MoIC", "IRR", "Business"]
+                      .map((h) => <th key={h}>{h}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {data.ledger.map((r, i) => (
+                      <tr key={i} style={r.hot ? { background: "var(--paper-100)",
+                        boxShadow: "inset 2px 0 0 var(--brass-500)" } : undefined}>
+                        <td>{r.company}</td>
+                        <td style={{ fontFamily: "var(--sans)", textAlign: "left" }}>{r.fund_sector}</td>
+                        <td>{r.entry}</td><td>{r.cost}</td><td>{r.ownership}</td>
+                        <td>{r.moic}</td><td>{r.irr}</td>
+                        <td style={{ fontFamily: "var(--sans)", textAlign: "left",
+                          color: "var(--stone-600)", fontSize: "12.5px" }}>{r.description}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {data.deal_cards?.map((c, i) => (
+              <Card key={i} style={{ marginBottom: 12 }}>
+                <div className="spread"><b>{c.name}</b>
+                  <span className="mono" style={{ fontSize: 11, color: "var(--stone-400)" }}>{c.figs}</span></div>
+                {[["BUSINESS", c.business], ["WHAT THE MANAGER DID", c.actions],
+                  ["LATEST NEWSFLOW", c.newsflow]].map(([k, v]) => (
+                  <div key={k} style={{ marginTop: 8 }}>
+                    <span className="microlabel">{k}</span>
+                    <p style={{ fontSize: "13.5px", margin: "3px 0 0" }}>{v}</p>
+                  </div>
+                ))}
+                {c.questions?.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <span className="microlabel">QUESTIONS</span>
+                    <QList items={c.questions} />
+                  </div>
+                )}
+                {c.key_flag && (
+                  <div style={{ borderLeft: "2px solid var(--brass-500)", background: "var(--brass-100)",
+                                padding: "8px 12px", marginTop: 10, fontSize: "13px" }}>
+                    <span className="microlabel" style={{ color: "var(--brass-700)" }}>KEY FLAG</span>
+                    <div>{c.key_flag}</div>
+                  </div>
+                )}
+              </Card>
+            ))}
+            {data.standouts_md && (<><SubHead>Standouts</SubHead><Markdown text={data.standouts_md} /></>)}
+          </>
+        )}
+      </Section>
+      <Section n="6" title="Sources" last>
+        {(data.sources || []).map((s, i) => (
+          <div key={i} className="rrow" style={{ fontSize: "13.5px" }}>
+            <span className="mono" style={{ fontSize: 10, letterSpacing: ".1em",
+              textTransform: "uppercase", color: "var(--stone-400)", marginRight: 12 }}>{s.kind}</span>
+            {s.text}
+          </div>
+        ))}
+        <p className="muted" style={{ fontSize: "12.5px", fontStyle: "italic", marginTop: 10 }}>
+          Prepared from Notion, Outlook and independent research. Teams chat is never used as a source.
+        </p>
+      </Section>
     </div>
   );
+}
+
+function Section({ n, title, last, children }) {
+  return (
+    <section style={{ marginBottom: last ? 0 : 28 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 12,
+                    borderBottom: "1px solid var(--ink-800)", paddingBottom: 6, marginBottom: 14 }}>
+        <span className="mono" style={{ fontSize: 12, color: "var(--teal-600)" }}>{n}</span>
+        <h3 style={{ margin: 0, fontWeight: 500, fontSize: 20 }}>{title}</h3>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function SubHead({ children, style }) {
+  return <div className="microlabel" style={{ color: "var(--ink-700)", margin: "10px 0 4px", ...style }}>{children}</div>;
 }
 
 function QList({ items }) {
   return (
     <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
       {items.map((q, i) => (
-        <li key={i} style={{ display: "grid", gridTemplateColumns: "28px 1fr", gap: 10,
-                             padding: ".55rem 0", borderBottom: "1px dotted var(--paper-300)" }}>
-          <span className="mono small" style={{ color: "var(--brass-500)" }}>
+        <li key={i} className="rrow" style={{ display: "grid",
+          gridTemplateColumns: "28px minmax(0,1fr)", gap: 10 }}>
+          <span className="mono" style={{ fontSize: 11, color: "var(--brass-500)" }}>
             {String(i + 1).padStart(2, "0")}
           </span>
           <div>
-            <div style={{ fontFamily: "var(--serif)", fontSize: ".97rem" }}>{q.q}</div>
-            <div className="mono muted" style={{ fontSize: ".7rem", marginTop: 3 }}>→ {q.src}</div>
+            <div style={{ font: "400 14.5px/1.5 var(--serif)" }}>{q.q}</div>
+            <div className="mono" style={{ fontSize: 10, color: "var(--stone-400)", marginTop: 2 }}>→ {q.src}</div>
           </div>
         </li>
       ))}
@@ -266,150 +448,7 @@ function QList({ items }) {
   );
 }
 
-function BriefingView({ data }) {
-  return (
-    <div style={{ marginTop: "1.4rem" }}>
-      <Card style={{ background: "var(--ink-800)", color: "var(--paper-050)", border: "none" }}>
-        <span className="eyebrow" style={{ color: "var(--teal-300)" }}>PRE-MEETING BRIEFING · PRIVATE &amp; CONFIDENTIAL</span>
-        <h2 style={{ color: "var(--paper-050)", fontWeight: 300, fontSize: "2rem", margin: ".2rem 0" }}>
-          {data.entity}
-        </h2>
-        <p style={{ fontStyle: "italic", color: "var(--teal-300)", margin: 0 }}>{data.descriptor}</p>
-        <div className="row" style={{ marginTop: "1rem", gap: "2rem" }}>
-          {[["Status", data.relationship], ["Meeting", data.meeting_details],
-            ["Vehicle", data.vehicle]].filter(([, v]) => v).map(([k, v]) => (
-            <div key={k}>
-              <span className="eyebrow" style={{ margin: 0, color: "var(--stone-400)" }}>{k}</span>
-              <div className="small" style={{ color: "var(--paper-050)" }}>{v}</div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <SectionHead n="1" title="Historical meeting context" />
-      {data.meetings?.length
-        ? data.meetings.map((m, i) => (
-            <div key={i} style={{ borderBottom: "1px dotted var(--paper-300)", padding: ".6rem 0" }}>
-              <div className="spread"><b>{m.title}</b><span className="mono muted small">{m.date}</span></div>
-              <div className="mono muted" style={{ fontSize: ".72rem" }}>{m.format} · {m.attendees}</div>
-              <p className="small" style={{ margin: ".35rem 0 0" }}>{m.summary}</p>
-              <div className="mono muted" style={{ fontSize: ".68rem", marginTop: 2 }}>{m.source}</div>
-            </div>
-          ))
-        : <p className="small">{data.no_meetings_text || "No qualifying meetings on record."}</p>}
-      {data.other_mentions?.length > 0 && (
-        <>
-          <b className="small" style={{ display: "block", marginTop: ".8rem" }}>Other mentions</b>
-          {data.other_mentions.map((mn, i) => (
-            <div key={i} style={{ borderLeft: "2px solid var(--paper-300)", padding: ".2rem .8rem",
-                                  margin: ".5rem 0", fontSize: ".88rem", color: "var(--stone-600)" }}>
-              <span className="mono" style={{ fontSize: ".68rem" }}>{mn.source} · {mn.date} · {mn.context}</span>
-              <div>{mn.text}</div>
-            </div>
-          ))}
-        </>
-      )}
-
-      <SectionHead n="2" title="Background research" />
-      <b className="small">Sector &amp; market landscape</b><Markdown text={data.landscape_md} />
-      <b className="small">Manager background</b><Markdown text={data.manager_bg_md} />
-      <b className="small">Potential red flags</b><Markdown text={data.red_flags_md} />
-
-      <SectionHead n="3" title="Strategy" />
-      <Markdown text={data.strategy_md} />
-
-      <SectionHead n="4" title="Questions for the manager" />
-      <b className="small">A. Strategy &amp; direction</b>
-      <QList items={data.questions_a || []} />
-      <b className="small" style={{ display: "block", marginTop: "1rem" }}>B. Manager-level &amp; structural</b>
-      <QList items={data.questions_b || []} />
-
-      <SectionHead n="5" title="Deals" />
-      {!data.is_manager ? (
-        <p className="small" style={{ fontStyle: "italic", color: "var(--stone-500)" }}>
-          {data.deals_omit_text || "Omitted: the relationship is not an investment manager or fund."}
-        </p>
-      ) : (
-        <>
-          {data.ledger?.length > 0 && (
-            <div style={{ overflowX: "auto", marginBottom: "1rem" }}>
-              <table className="small" style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead><tr>
-                  {["Company", "Fund · sector", "Entry", "Cost", "Own.", "MoIC", "IRR", "Business"].map((h) => (
-                    <th key={h} className="eyebrow" style={{ textAlign: "left", padding: ".3rem .6rem .3rem 0",
-                      borderBottom: "1px solid var(--ink-600)" }}>{h}</th>
-                  ))}
-                </tr></thead>
-                <tbody>
-                  {data.ledger.map((r, i) => (
-                    <tr key={i} style={{
-                      borderBottom: "1px dotted var(--paper-300)",
-                      background: r.hot ? "var(--paper-100)" : "transparent",
-                      boxShadow: r.hot ? "inset 2px 0 0 var(--brass-500)" : "none",
-                    }}>
-                      <td style={{ padding: ".35rem .6rem .35rem 0", fontWeight: 600 }}>{r.company}</td>
-                      <td>{r.fund_sector}</td>
-                      <td className="mono">{r.entry}</td>
-                      <td className="mono">{r.cost}</td>
-                      <td className="mono">{r.ownership}</td>
-                      <td className="mono">{r.moic}</td>
-                      <td className="mono">{r.irr}</td>
-                      <td className="muted">{r.description}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {data.deal_cards?.map((c, i) => (
-            <Card key={i} style={{ marginBottom: ".8rem" }}>
-              <div className="spread"><b>{c.name}</b><span className="mono muted small">{c.figs}</span></div>
-              {[["Business", c.business], ["What the manager did", c.actions],
-                ["Latest newsflow", c.newsflow]].map(([k, v]) => (
-                <div key={k} style={{ marginTop: ".5rem" }}>
-                  <span className="eyebrow" style={{ margin: 0 }}>{k}</span>
-                  <p className="small" style={{ margin: ".15rem 0 0" }}>{v}</p>
-                </div>
-              ))}
-              {c.questions?.length > 0 && (
-                <div style={{ marginTop: ".5rem" }}>
-                  <span className="eyebrow" style={{ margin: 0 }}>Questions</span>
-                  <QList items={c.questions} />
-                </div>
-              )}
-              {c.key_flag && (
-                <div style={{ borderLeft: "2px solid var(--brass-500)", background: "var(--brass-100)",
-                              padding: ".5rem .8rem", marginTop: ".6rem", fontSize: ".88rem" }}>
-                  <span className="mono" style={{ fontSize: ".65rem", letterSpacing: ".12em",
-                    textTransform: "uppercase", color: "var(--brass-700)", display: "block" }}>Key flag</span>
-                  {c.key_flag}
-                </div>
-              )}
-            </Card>
-          ))}
-          {data.standouts_md && (<><b className="small">Standouts</b><Markdown text={data.standouts_md} /></>)}
-        </>
-      )}
-
-      <SectionHead n="6" title="Sources" />
-      <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-        {(data.sources || []).map((s, i) => (
-          <li key={i} className="small" style={{ padding: ".35rem 0", borderBottom: "1px dotted var(--paper-200)" }}>
-            <span className="mono muted" style={{ fontSize: ".68rem", textTransform: "uppercase",
-              letterSpacing: ".1em", marginRight: ".8rem" }}>{s.kind}</span>
-            {s.text}
-          </li>
-        ))}
-      </ul>
-      <p className="muted small" style={{ fontStyle: "italic" }}>
-        Prepared from Notion, Outlook and independent research. Teams chat is never used
-        as a source.
-      </p>
-    </div>
-  );
-}
-
-/* Tiny markdown renderer: headings, bold, bullets. */
+/* Tiny markdown renderer. */
 export function Markdown({ text }) {
   const html = String(text || "")
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")
@@ -420,6 +459,6 @@ export function Markdown({ text }) {
     .replace(/^- (.*)$/gm, "<li>$1</li>")
     .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
     .replace(/\n{2,}/g, "</p><p>");
-  return <div className="small" style={{ lineHeight: 1.6, margin: ".3rem 0 1rem" }}
+  return <div style={{ fontSize: "13.5px", lineHeight: 1.6, margin: "4px 0 12px" }}
     dangerouslySetInnerHTML={{ __html: `<p>${html}</p>` }} />;
 }

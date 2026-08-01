@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, NavLink, Route, HashRouter as Router, Routes } from "react-router-dom";
+import { NavLink, Route, HashRouter as Router, Routes } from "react-router-dom";
 import { get } from "./api.js";
 import * as liveStore from "./liveStore.js";
 import FundData from "./pages/FundData.jsx";
@@ -9,43 +9,30 @@ import Prep from "./pages/Prep.jsx";
 import TrackRecords from "./pages/TrackRecords.jsx";
 import Triage from "./pages/Triage.jsx";
 import WhatsNew from "./pages/WhatsNew.jsx";
-import { Spinner } from "./ui.jsx";
+import * as uiStore from "./uiStore.js";
 
-const NAV = [
-  ["/", "Home"],
-  ["/triage", "Inbox triage"],
-  ["/prep", "Meeting prep"],
-  ["/track-records", "Track records"],
-  ["/live", "Live meeting"],
-  ["/fund-data", "Fund data"],
-  ["/whats-new", "What's new"],
+const GROUPS = [
+  ["OVERVIEW", [["/", "Home"]]],
+  ["WORKFLOW", [["/triage", "Inbox triage"], ["/prep", "Meeting prep"], ["/live", "Live meeting"]]],
+  ["ANALYSIS", [["/track-records", "Track records"], ["/fund-data", "Fund data"], ["/whats-new", "What's new"]]],
 ];
 
-const JOB_ROUTE = { prep: "/prep", "whats-new-team": "/whats-new",
-                    "whats-new-inbox": "/whats-new", "outlook-refresh": "/" };
-
-function LiveChip() {
+function NavMeta({ to }) {
+  React.useSyncExternalStore(uiStore.subscribe, uiStore.getVersion);
   React.useSyncExternalStore(liveStore.subscribe, liveStore.getVersion);
-  const s = liveStore.S;
-  if (!s.running) return null;
-  const words = s.transcript ? s.transcript.split(/\s+/).length : 0;
-  return (
-    <Link to="/live" style={{
-      display: "flex", alignItems: "center", gap: ".55rem",
-      color: "var(--teal-300)", fontSize: ".82rem", padding: ".35rem .8rem",
-      textDecoration: "none",
-    }}>
-      <span style={{
-        width: 8, height: 8, borderRadius: "50%", background: "var(--teal-300)",
-        animation: "wb-pulse 1.6s ease-in-out infinite",
-      }} />
-      Live meeting · recording · {words} words
-    </Link>
-  );
+  if (to === "/triage" && uiStore.ui.inboxCount != null) {
+    return <span className="meta">{uiStore.ui.inboxCount}</span>;
+  }
+  if (to === "/live" && liveStore.S.running) {
+    return <span className="dot" style={{ background: "var(--teal-300)", animation: "wb-pulse 1.6s ease-in-out infinite" }} />;
+  }
+  return null;
 }
 
-function JobsTray() {
+function SideFoot() {
+  React.useSyncExternalStore(liveStore.subscribe, liveStore.getVersion);
   const [jobs, setJobs] = React.useState([]);
+  const [status, setStatus] = React.useState(null);
 
   React.useEffect(() => {
     let timer;
@@ -53,28 +40,50 @@ function JobsTray() {
       try {
         const { jobs: js } = await get("/api/jobs");
         setJobs(js.filter((j) => j.status === "running"));
-      } catch { /* backend briefly away — keep the last state */ }
+      } catch { /* keep last */ }
       timer = setTimeout(poll, 3000);
     };
     poll();
+    get("/api/status").then(setStatus).catch(() => {});
     return () => clearTimeout(timer);
   }, []);
 
-  if (!jobs.length) return null;
+  const liveRunning = liveStore.S.running;
+  const words = liveStore.S.transcript ? liveStore.S.transcript.split(/\s+/).length : 0;
+
   return (
-    <div style={{ marginTop: "auto", padding: ".6rem .5rem", borderTop: "1px solid rgba(255,255,255,.12)" }}>
-      {jobs.map((j) => (
-        <Link key={j.id} to={JOB_ROUTE[j.kind] || "/"} style={{
-          display: "flex", alignItems: "center", gap: ".55rem",
-          color: "var(--teal-300)", fontSize: ".82rem", padding: ".25rem .3rem",
-          textDecoration: "none",
-        }}>
-          <Spinner size={12} />
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {j.label} · {j.elapsed}s
-          </span>
-        </Link>
-      ))}
+    <div className="sidefoot">
+      {(liveRunning || jobs.length > 0) && (
+        <>
+          <span className="flabel">Running</span>
+          {liveRunning && (
+            <NavLink to="/live" className="frow live">
+              <span className="dot" style={{ background: "var(--teal-300)" }} />
+              Live meeting · {words} words
+            </NavLink>
+          )}
+          {jobs.map((j) => (
+            <NavLink key={j.id} to="/prep" className="frow">
+              <span className="dot" style={{ background: "var(--brass-500)" }} />
+              {j.label} · {j.elapsed}s
+            </NavLink>
+          ))}
+          <hr />
+        </>
+      )}
+      {status && (
+        <>
+          {[["Outlook", status.outlook], ["Notion", status.notion],
+            ["Claude", status.ai]].map(([name, s]) => (
+            <div className="conn" key={name}>
+              <span className="cname">{name}</span>
+              <span className={"cstate " + (s.ok ? "live" : "demo")}>
+                {s.ok ? "LIVE" : "DEMO"}
+              </span>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }
@@ -84,15 +93,28 @@ export default function App() {
     <Router>
       <div className="shell">
         <nav className="sidebar">
-          <img className="mark" src="/brand/weybourne-mark-light.png" alt="Weybourne" />
-          {NAV.map(([to, label]) => (
-            <NavLink key={to} to={to} end={to === "/"}
-              className={({ isActive }) => "nav" + (isActive ? " active" : "")}>
-              {label}
-            </NavLink>
-          ))}
-          <LiveChip />
-          <JobsTray />
+          <div className="lockup">
+            <img src="/brand/weybourne-mark-light.png" alt="" />
+            <div>
+              <div className="word">WEYBOURNE</div>
+              <div className="sub">INVESTMENT CONNECTOR</div>
+            </div>
+          </div>
+          <div className="navgroups">
+            {GROUPS.map(([glabel, items]) => (
+              <div className="navgroup" key={glabel}>
+                <span className="glabel">{glabel}</span>
+                {items.map(([to, label]) => (
+                  <NavLink key={to} to={to} end={to === "/"}
+                    className={({ isActive }) => "nav" + (isActive ? " active" : "")}>
+                    {label}
+                    <NavMeta to={to} />
+                  </NavLink>
+                ))}
+              </div>
+            ))}
+          </div>
+          <SideFoot />
         </nav>
         <main className="main">
           <Routes>

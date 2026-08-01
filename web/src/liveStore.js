@@ -9,10 +9,14 @@ const MIN_NEW_WORDS = 5;
 
 export const S = {
   running: false, who: "", goal: "", source: "system", deviceId: "",
-  transcript: "", items: [], batches: [], reads: 0, unreadWords: 0,
-  lastTail: "", lastReadAt: 0, reading: false, nextIn: CADENCE_S,
+  transcript: "", entries: [], items: [], batches: [], reads: 0, unreadWords: 0,
+  lastTail: "", lastReadAt: 0, startedAt: 0, reading: false, nextIn: CADENCE_S,
   error: null, note: null, sharp: null, busy: "", seq: 1, version: 0,
 };
+
+function stamp() {
+  return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
 
 let listeners = new Set();
 let micStream = null, displayStream = null, audioCtx = null, analyser = null,
@@ -96,7 +100,9 @@ export async function start() {
     }
 
     const stream = mixed.stream;
-    S.running = true; S.lastReadAt = Date.now(); emit();
+    S.running = true; S.lastReadAt = Date.now();
+    S.startedAt = S.startedAt || Date.now();
+    emit();
     drawLoop();
 
     const recordChunk = () => {
@@ -111,6 +117,7 @@ export async function start() {
           const { text } = await postFile("/api/stt", blob, "chunk.webm");
           if (text) {
             S.transcript += (S.transcript ? " " : "") + text;
+            S.entries = [...S.entries, { at: stamp(), text }];
             S.unreadWords += text.split(/\s+/).length;
             emit();
           }
@@ -164,8 +171,9 @@ function drawLoop() {
     let v = 0;
     for (let j = a; j < b; j++) v = Math.max(v, data[j]);
     v /= 255;
-    const bh = Math.max(2, v * (h - 8));
-    ctx.fillStyle = v > 0.02 ? "#249692" : "#D3C9B4";
+    const bh = Math.max(2, v * (h - 6));
+    // Drawn on the ink control strip: teal-300 for signal, ink-500 for quiet.
+    ctx.fillStyle = v > 0.02 ? "#84C7C2" : "#2F6688";
     ctx.fillRect(i * bw + 1, (h - bh) / 2, bw - 2, bh);
   }
 }
@@ -174,6 +182,7 @@ function drawLoop() {
 
 export async function addPaste(text, read) {
   S.transcript += (S.transcript ? " " : "") + text;
+  S.entries = [...S.entries, { at: stamp(), text }];
   S.unreadWords += text.split(/\s+/).length;
   emit();
   if (read) await performRead();
@@ -220,9 +229,9 @@ export async function draftNote() {
 export function newSession() {
   stop();
   Object.assign(S, {
-    transcript: "", items: [], batches: [], reads: 0, unreadWords: 0,
-    lastTail: "", lastReadAt: 0, nextIn: CADENCE_S, error: null, note: null,
-    sharp: null, busy: "", seq: 1,
+    transcript: "", entries: [], items: [], batches: [], reads: 0, unreadWords: 0,
+    lastTail: "", lastReadAt: 0, startedAt: 0, nextIn: CADENCE_S, error: null,
+    note: null, sharp: null, busy: "", seq: 1,
   });
   emit();
 }

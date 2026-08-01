@@ -1,8 +1,8 @@
 import React from "react";
 import { get } from "../api.js";
-import { Banner, Button, Card, ErrorNote, Mascot, PageHeader, Pill } from "../ui.jsx";
+import { Button, Chip, ErrorNote, Mascot, PageHeader, SectionHead } from "../ui.jsx";
 
-const MOVE_TONE = { new: "demo", completed: "live", "in progress": "neutral" };
+const MOVE_TONE = { new: "caution", completed: "positive", "in progress": "teal" };
 
 /* Each part runs automatically as a background job on first visit; coming back
    re-attaches to the running job or shows the last result. */
@@ -61,139 +61,158 @@ function useAutoJob(kind, startUrl) {
   return { result, running, error, refresh: start };
 }
 
+function weekEyebrow() {
+  const d = new Date();
+  return `BRIEFING · WEEK TO ${d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }).toUpperCase()}`;
+}
+
 export default function WhatsNew() {
   const team = useAutoJob("whats-new-team", "/api/jobs/whats-new-team");
   const inbox = useAutoJob("whats-new-inbox", "/api/jobs/whats-new-inbox");
+  const t = team.result;
+  const p = inbox.result;
 
   return (
     <div className="fade-in">
-      <PageHeader eyebrow="BRIEFING · WEEKLY" title="What's new">
-        The last 7 days in one sitting — built automatically when you open this page.
+      <PageHeader eyebrow={weekEyebrow()} eyebrowTone="brass" title="What's new"
+        actions={
+          <Button variant="ghost" busy={team.running || inbox.running}
+            onClick={() => { team.refresh(); inbox.refresh(); }}>
+            Rebuild the briefing
+          </Button>
+        }>
+        Built automatically when you open this page — the last seven days across the
+        team's Notion activity and the shared inbox.
       </PageHeader>
 
-      <section>
-        <div className="spread">
-          <div>
-            <span className="eyebrow">PART ONE · NOTION</span>
-            <h3 style={{ fontWeight: 500 }}>What's going on in the team</h3>
-          </div>
-          {team.result && <Button variant="ghost" onClick={team.refresh}>Refresh</Button>}
-        </div>
-        {team.running && <Mascot state="reading" text="Reading the week's notes and the execution dashboard…" />}
-        <ErrorNote error={team.error} />
-        {team.result && <TeamView team={team.result} />}
-      </section>
+      <ErrorNote error={team.error || inbox.error} />
 
-      <hr className="rule" />
-
-      <section>
-        <div className="spread">
-          <div>
-            <span className="eyebrow">PART TWO · SHARED INBOX</span>
-            <h3 style={{ fontWeight: 500 }}>What people are saying</h3>
-          </div>
-          {inbox.result && <Button variant="ghost" onClick={inbox.refresh}>Refresh</Button>}
-        </div>
-        {inbox.running && <Mascot state="filing" text="Sorting the shared inbox into themes…" />}
-        <ErrorNote error={inbox.error} />
-        {inbox.result && <InboxView pulse={inbox.result} />}
-      </section>
-
-      <hr className="rule" />
-
-      <section>
-        <span className="eyebrow">PART THREE · PORTFOLIO</span>
-        <h3 style={{ fontWeight: 500 }}>What's going on in the portfolio</h3>
-        <Card>
-          <Mascot state="sleeping" width={90}
-            text="Not wired up yet. This will run a news search across every position and surface only what's material — it needs the position list (not in the system yet) and a search backend." />
-        </Card>
-      </section>
-    </div>
-  );
-}
-
-function TeamView({ team }) {
-  return (
-    <>
-      <p style={{ fontStyle: "italic" }}>{team.headline}</p>
-
-      {team.key_insights?.length > 0 && (
-        <Card style={{ marginBottom: "1rem", borderTop: "2px solid var(--brass-500)" }}>
-          <span className="eyebrow">KEY INSIGHTS · THE WEEK ON THE INVESTMENTS SIDE</span>
-          <ul style={{ margin: ".2rem 0 0", paddingLeft: "1.1rem" }}>
-            {team.key_insights.map((k, i) => (
-              <li key={i} style={{ marginBottom: ".45rem", fontSize: ".95rem" }}>{k}</li>
-            ))}
-          </ul>
-        </Card>
-      )}
-
-      <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", alignItems: "start" }}>
-        <div>
-          <span className="eyebrow">INVESTMENT · MEETINGS TAKEN</span>
-          {team.investment_updates.map((u, i) => (
-            <Card key={i} style={{ marginBottom: ".7rem" }}>
-              <div className="spread"><b>{u.title}</b><span className="mono muted small">{u.date}</span></div>
-              <p className="small" style={{ margin: ".4rem 0 0" }}>{u.insight}</p>
-              {u.follow_up && <p className="muted small" style={{ margin: ".3rem 0 0" }}>Follow-up: {u.follow_up}</p>}
-            </Card>
-          ))}
-        </div>
-        <div>
-          <span className="eyebrow">OPERATIONAL · EXECUTION DASHBOARD</span>
-          {team.operational_updates.map((o, i) => (
-            <Card key={i} style={{ marginBottom: ".7rem" }}>
-              <b className="small">{o.item}</b>
-              <Pill tone={MOVE_TONE[o.movement] || "neutral"}>{o.movement}</Pill>
-              {o.detail && <p className="muted small" style={{ margin: ".3rem 0 0" }}>{o.detail}</p>}
-            </Card>
-          ))}
-        </div>
+      {/* In short */}
+      <div style={{ display: "flex", gap: 26, alignItems: "center", margin: "6px 0 30px" }}>
+        <Mascot state="presenting" width={96} />
+        <p style={{ font: "400 20px/1.6 var(--serif)", color: "var(--ink-800)",
+                    maxWidth: "60ch", margin: 0 }}>
+          {(team.running || inbox.running) && !t && !p
+            ? "Reading the week's notes, the execution dashboard and the shared inbox…"
+            : [t?.headline, p?.headline].filter(Boolean).join(" ") || "Nothing to report yet."}
+        </p>
       </div>
 
-      {team.interesting_points?.length > 0 && (
-        <div style={{ marginTop: "1rem" }}>
-          <span className="eyebrow">WORTH REPEATING</span>
-          {team.interesting_points.map((p, i) => (
-            <p key={i} style={{
-              fontFamily: "var(--serif)", fontStyle: "italic", fontSize: "1rem",
-              borderLeft: "2px solid var(--teal-500)", paddingLeft: ".8rem",
-              margin: "0 0 .6rem",
-            }}>{p}</p>
+      <div style={{ display: "grid",
+        gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 36 }}>
+        {/* Execution moves */}
+        <section>
+          <SectionHead label="EXECUTION MOVES" right="FROM NOTION" />
+          {team.running && <Mascot state="reading" width={48} text="Reading the execution dashboard…" />}
+          {t?.operational_updates?.map((o, i) => (
+            <div key={i} className="rrow">
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <b style={{ fontSize: "14.5px" }}>{o.item}</b>
+                <Chip tone={MOVE_TONE[o.movement] || "neutral"}>{o.movement.toUpperCase()}</Chip>
+              </div>
+              {o.detail && <p style={{ fontSize: "13.5px", lineHeight: 1.55, margin: "5px 0 0" }}>{o.detail}</p>}
+            </div>
           ))}
-        </div>
+          {t && !t.operational_updates?.length && (
+            <p className="muted small">No dashboard movement in the window.</p>
+          )}
+        </section>
+
+        {/* Shared inbox condensed */}
+        <section>
+          <SectionHead label="SHARED INBOX, CONDENSED"
+            right={p ? `${p._sources?.messages ?? 0} MESSAGES → ${p.insights?.length ?? 0} INSIGHTS` : ""} />
+          {inbox.running && <Mascot state="filing" width={48} text="Sorting the shared inbox…" />}
+          {p?.insights?.map((x, i) => (
+            <div key={i} className="rrow" style={{ display: "grid",
+              gridTemplateColumns: "32px minmax(0,1fr)", gap: 12 }}>
+              <span className="mono" style={{ fontSize: 11, color: "var(--brass-500)" }}>
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <div>
+                <b style={{ fontSize: "14px" }}>{x.insight}</b>
+                <p style={{ fontSize: "13px", lineHeight: 1.5, margin: "4px 0 0" }}>{x.detail}</p>
+                <span className="mono" style={{ fontSize: 10, color: "var(--stone-400)" }}>→ {x.source}</span>
+                {x.action_needed && (
+                  <div style={{ fontSize: "12.5px", color: "var(--caution-600)", marginTop: 3 }}>
+                    Action: {x.action_needed}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          {p && !p.insights?.length && (
+            <p className="muted small">
+              No market-relevant content in the window — only reporting and operational traffic
+              ({p.excluded_count ?? 0} item(s) ignored).
+            </p>
+          )}
+          {p?.insights?.length > 0 && p.excluded_count > 0 && (
+            <p className="muted" style={{ fontSize: "12px", marginTop: 8 }}>
+              {p.excluded_count} reporting/ops item(s) ignored.
+            </p>
+          )}
+        </section>
+      </div>
+
+      {/* Meetings + insights — kept from the previous design (not in the handoff,
+          preserved so nothing the digest produces is lost). */}
+      {t && (
+        <>
+          {t.key_insights?.length > 0 && (
+            <section style={{ marginTop: 34 }}>
+              <SectionHead label="KEY INSIGHTS · THE WEEK ON THE INVESTMENTS SIDE" />
+              {t.key_insights.map((k, i) => (
+                <div key={i} className="rrow" style={{ display: "grid",
+                  gridTemplateColumns: "32px minmax(0,1fr)", gap: 12 }}>
+                  <span className="mono" style={{ fontSize: 11, color: "var(--teal-600)" }}>
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span style={{ fontSize: "14px", lineHeight: 1.55 }}>{k}</span>
+                </div>
+              ))}
+            </section>
+          )}
+          {t.investment_updates?.length > 0 && (
+            <section style={{ marginTop: 34 }}>
+              <SectionHead label="MEETINGS TAKEN" right={String(t.investment_updates.length)} />
+              <div style={{ display: "grid",
+                gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: "0 36px" }}>
+                {t.investment_updates.map((u, i) => (
+                  <div key={i} className="rrow">
+                    <div className="spread">
+                      <b style={{ fontSize: "14.5px" }}>{u.title}</b>
+                      <span className="mono" style={{ fontSize: 11, color: "var(--stone-400)" }}>{u.date}</span>
+                    </div>
+                    <p style={{ fontSize: "13.5px", lineHeight: 1.55, margin: "5px 0 0" }}>{u.insight}</p>
+                    {u.follow_up && (
+                      <p className="muted" style={{ fontSize: "12.5px", margin: "4px 0 0" }}>
+                        Follow-up: {u.follow_up}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+          {t.interesting_points?.length > 0 && (
+            <section style={{ marginTop: 34 }}>
+              <SectionHead label="WORTH REPEATING" />
+              {t.interesting_points.map((x, i) => (
+                <p key={i} style={{ font: "italic 400 15.5px/1.6 var(--serif)",
+                  borderLeft: "2px solid var(--teal-500)", paddingLeft: 14, margin: "0 0 10px" }}>
+                  {x}
+                </p>
+              ))}
+            </section>
+          )}
+        </>
       )}
 
-      <p className="muted small">
-        From {team._sources?.notes ?? 0} note(s) and {team._sources?.execution ?? 0} execution item(s).
+      <p className="muted" style={{ fontSize: "12.5px", marginTop: 34 }}>
+        Portfolio news is not wired yet and is deliberately empty — it needs the
+        position list and a search backend.
       </p>
-    </>
-  );
-}
-
-function InboxView({ pulse }) {
-  return (
-    <>
-      <p style={{ fontStyle: "italic" }}>{pulse.headline}</p>
-      {(pulse.insights || []).map((t, i) => (
-        <Card key={i} style={{ marginBottom: ".7rem" }}>
-          <b>{t.insight}</b>
-          <p className="small" style={{ margin: ".4rem 0 0" }}>{t.detail}</p>
-          <div className="mono muted" style={{ fontSize: ".7rem", marginTop: ".35rem" }}>
-            → {t.source}
-          </div>
-          {t.action_needed && <Banner tone="warning">Action: {t.action_needed}</Banner>}
-        </Card>
-      ))}
-      {!(pulse.insights || []).length && (
-        <p className="muted small">No market-relevant content in the window — only
-          reporting and operational traffic.</p>
-      )}
-      <p className="muted small">
-        From {pulse._sources?.messages ?? 0} message(s)
-        {pulse.excluded_count ? ` · ${pulse.excluded_count} reporting/ops item(s) ignored` : ""}.
-      </p>
-    </>
+    </div>
   );
 }
