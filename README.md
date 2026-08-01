@@ -13,20 +13,48 @@ buttons, each opening one capability:
 
 ## Quick start
 
+**macOS / Linux**
+
 ```bash
-python -m venv .venv && source .venv/bin/activate
+./run.sh
+```
+
+**Windows**
+
+```
+run.bat
+```
+
+That's it — the launcher finds Python, creates the virtual environment, installs
+what's needed and starts the app, opening your browser at `http://localhost:8501`.
+It's safe to run every time: after the first run it skips straight to launching
+(dependencies are only reinstalled when `requirements.txt` actually changes).
+Press `Ctrl+C` to stop.
+
+Extra flags are passed through to Streamlit (`./run.sh --server.port 8600`), and
+`--setup-only` prepares the environment without launching.
+
+<details>
+<summary>Prefer to do it by hand?</summary>
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-claude login                  # runs the AI on your Claude account (no API key)
 streamlit run dashboard/Home.py
 ```
+</details>
+
+Requires **Python 3.10+**. If it's missing: macOS `brew install python`, Windows
+[python.org](https://python.org) (tick *Add Python to PATH*), Linux
+`sudo apt install python3 python3-venv`.
+
+Run `claude login` once to switch the AI features on — see
+[Claude](#claude--needed-for-any-ai-analysis) below.
 
 **It runs with no credentials at all.** Every connector falls back to
 representative sample data, so you can click through all five screens
-immediately. Add credentials to make each one real.
-
-The AI runs on **your Claude account** by default via the Claude Code CLI — see
-[Claude](#claude--needed-for-any-ai-analysis) below. Copy `.env.example` to `.env`
-when you're ready to connect Notion and Outlook.
+immediately. Copy `.env.example` to `.env` when you're ready to connect Notion
+and Outlook for real.
 
 ## Connecting things up
 
