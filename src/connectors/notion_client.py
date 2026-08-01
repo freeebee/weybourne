@@ -115,16 +115,27 @@ class NotionConnector:
 
     def _query_db(self, db_id: str, page_size: int = 100,
                   filter_payload: Optional[dict] = None,
-                  sorts: Optional[list] = None) -> list[dict]:
+                  sorts: Optional[list] = None,
+                  property_ids: Optional[list] = None) -> list[dict]:
         """Paginated query with 5xx resilience.
 
-        Large live databases (the Funds DB in particular) intermittently 500 on
-        page_size=100 — Notion chokes on the payload. On a server error the
-        page size is halved and the same cursor retried, down to 10.
+        Live databases can 500 server-side — either on payload size or on a
+        specific row whose formula/rollup property errors inside Notion. On a
+        5xx the page size is halved and retried; if a tiny page still 500s the
+        rows fetched so far are returned rather than failing the caller (the
+        app degrades to a partial list instead of a dead feature).
+
+        ``property_ids`` (Notion property IDs, not names) narrows the returned
+        properties via filter_properties — both smaller payloads and a way to
+        avoid pathological computed properties entirely.
         """
+        import sys
         import time
 
         import requests
+
+        url = f"{config.NOTION_BASE_URL}/databases/{db_id}/query"
+        params = [("filter_properties", pid) for pid in (property_ids or [])]
 
         results, cursor = [], None
         size = page_size
@@ -136,16 +147,28 @@ class NotionConnector:
                 payload["sorts"] = sorts
             if cursor:
                 payload["start_cursor"] = cursor
-            resp = requests.post(
-                f"{config.NOTION_BASE_URL}/databases/{db_id}/query",
-                headers=self._headers(),
-                json=payload,
-                timeout=60,
-            )
-            if resp.status_code >= 500 and size > 10:
-                size = max(10, size // 4)
-                time.sleep(1)
-                continue
+            try:
+                resp = requests.post(url, headers=self._headers(), params=params,
+                                     json=payload, timeout=90)
+            except (requests.exceptions.Timeout,
+                    requests.exceptions.ConnectionError) as e:
+                if size > 5:
+                    size = max(5, size // 4)
+                    time.sleep(1)
+                    continue
+                print(f"[notion] {type(e).__name__} on {db_id} after "
+                      f"{len(results)} rows — returning partial list",
+                      file=sys.stderr)
+                break
+            if resp.status_code >= 500:
+                if size > 5:
+                    size = max(5, size // 4)
+                    time.sleep(1)
+                    continue
+                print(f"[notion] persistent 5xx on {db_id} after "
+                      f"{len(results)} rows — returning partial list",
+                      file=sys.stderr)
+                break
             if resp.status_code == 429:
                 time.sleep(float(resp.headers.get("Retry-After", 1)))
                 continue
@@ -156,6 +179,19 @@ class NotionConnector:
                 break
             cursor = data.get("next_cursor")
         return results
+
+    def _property_ids(self, db_id: str, names: list[str]) -> list[str]:
+        """Property IDs for the given property names (empty on any failure)."""
+        import requests
+
+        try:
+            resp = requests.get(f"{config.NOTION_BASE_URL}/databases/{db_id}",
+                                headers=self._headers(), timeout=30)
+            resp.raise_for_status()
+            props = resp.json().get("properties", {})
+            return [v["id"] for k, v in props.items() if k in names]
+        except Exception:  # noqa: BLE001 - narrowing is an optimisation only
+            return []
 
     # -- reads: main databases ------------------------------------------- #
     def list_contacts(self) -> list[ContactRecord]:
@@ -173,8 +209,18 @@ class NotionConnector:
     def list_funds(self) -> list[FundRecord]:
         if not self.live or not config.NOTION_FUNDS_DB:
             return list(_SAMPLE_FUNDS)
-        return self._cached("funds", lambda: [
-            _fund_from_page(p) for p in self._query_db(config.NOTION_FUNDS_DB)])
+
+        def load():
+            # Only the properties the app reads: the Funds DB has computed
+            # properties that 500 inside Notion when evaluated for some rows.
+            pids = self._property_ids(config.NOTION_FUNDS_DB, [
+                "Fund Name", "Name", "Asset Class", "Geographic Focus",
+                "Strategy Description", "Status", "Company Name",
+            ])
+            return [_fund_from_page(p)
+                    for p in self._query_db(config.NOTION_FUNDS_DB,
+                                            property_ids=pids)]
+        return self._cached("funds", load)
 
     # -- reads: page text (CHAO preference pages, notes) ----------------- #
     def get_page_text(self, page_id: str, max_depth: int = 2) -> str:
@@ -341,13 +387,16 @@ def _company_from_page(p: dict) -> CompanyRecord:
 
 
 def _fund_from_page(p: dict) -> FundRecord:
+    # The live Funds DB titles the page 'Fund Name' and carries the manager as
+    # 'Company Name' (rich text); accept the guidebook's 'Name' as fallback.
     return FundRecord(
         id=p.get("id"),
-        name=_title(p, "Name"),
+        name=_title(p, "Fund Name") or _title(p, "Name"),
         asset_class=_multi(p, "Asset Class"),
         geographic_focus=_multi(p, "Geographic Focus"),
         strategy_description=_rich(p, "Strategy Description"),
         status=_status(p, "Status") or _select(p, "Status"),
+        company=_rich(p, "Company Name"),
     )
 
 
