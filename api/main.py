@@ -61,6 +61,18 @@ from src.features.whats_new import inbox_whats_new, portfolio_whats_new, team_wh
 from src.schemas import EmailMessage, ExtractedEntity, InvestmentTriage, PreferenceScreen
 
 app = FastAPI(title="Weybourne Investment Connector API")
+
+# The UI polls /api/jobs every few seconds (sidebar tray + job pages), which
+# would otherwise flood the access log. Drop just those lines.
+import logging  # noqa: E402
+
+
+class _QuietJobPolling(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return '"GET /api/jobs' not in record.getMessage()
+
+
+logging.getLogger("uvicorn.access").addFilter(_QuietJobPolling())
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],   # vite dev server
