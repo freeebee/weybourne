@@ -1,15 +1,15 @@
 @echo off
 REM Start the Weybourne Investment Connector (Windows).
+REM React front-end + FastAPI backend at http://localhost:8000
 REM
-REM   run.bat                        launch the app (or just double-click it)
-REM   run.bat --server.port 8600     pass extra flags through to Streamlit
-REM   run.bat --setup-only           prepare the environment but don't launch
+REM   run.bat                launch the app (or just double-click it)
+REM   run.bat --setup-only   prepare the environment but don't launch
+REM   run.bat --dev          also start the Vite dev server (hot reload, :5173)
 REM
-REM Safe to run as often as you like: the virtual environment and dependencies
-REM are only created/installed when missing or out of date.
+REM Safe to run as often as you like: the virtual environment, dependencies and
+REM front-end build are only created/refreshed when missing or out of date.
 REM
-REM This window stays open on failure so the error is readable - double-clicking
-REM a .bat otherwise closes it instantly and takes the message with it.
+REM This window stays open on failure so the error is readable.
 
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
@@ -17,16 +17,12 @@ cd /d "%~dp0"
 set "VENV=.venv"
 set "REQ_COPY=%VENV%\.deps-requirements.txt"
 set "SETUP_ONLY=0"
-set "ARGS="
+set "DEV=0"
 
-REM -- collect args, pulling out --setup-only -------------------------------- #
 :parse_args
 if "%~1"=="" goto args_done
-if "%~1"=="--setup-only" (
-    set "SETUP_ONLY=1"
-) else (
-    set "ARGS=!ARGS! %~1"
-)
+if "%~1"=="--setup-only" set "SETUP_ONLY=1"
+if "%~1"=="--dev" set "DEV=1"
 shift
 goto parse_args
 :args_done
@@ -68,13 +64,10 @@ if not exist "%PY%" (
     goto fail
 )
 
-REM -- 2. Install dependencies when missing or out of date -------------------- #
-REM Decided by two plain checks - is Streamlit importable, and does the
-REM requirements file differ from the copy saved at last install. No hashing,
-REM so there is no command output to parse and get wrong.
+REM -- 2. Install Python dependencies when missing or out of date ------------- #
 set "NEED_INSTALL=0"
 
-"%PY%" -c "import streamlit" >nul 2>&1
+"%PY%" -c "import fastapi, uvicorn" >nul 2>&1
 if errorlevel 1 set "NEED_INSTALL=1"
 
 if not exist "%REQ_COPY%" set "NEED_INSTALL=1"
@@ -99,17 +92,39 @@ if "!NEED_INSTALL!"=="1" (
     copy /y requirements.txt "%REQ_COPY%" >nul
 )
 
-REM Confirm it really is installed before trying to launch, so a failure here
-REM reports itself rather than surfacing as a confusing error later.
-"%PY%" -c "import streamlit" >nul 2>&1
+"%PY%" -c "import fastapi, uvicorn" >nul 2>&1
 if errorlevel 1 (
     echo.
-    echo   Streamlit did not install correctly.
+    echo   The backend did not install correctly.
     echo   Delete the ".venv" folder inside this directory and run this again.
     goto fail
 )
 
-REM -- 3. Check the AI backend (a note, never a blocker) ---------------------- #
+REM -- 3. Front-end: install + build when missing ----------------------------- #
+where npm >nul 2>&1
+if errorlevel 1 (
+    echo.
+    echo   Could not find npm ^(Node.js^). Install the LTS version from
+    echo   https://nodejs.org then run this again.
+    goto fail
+)
+
+if not exist "web\node_modules" (
+    echo Installing front-end dependencies...
+    pushd web
+    call npm install --no-audit --no-fund
+    if errorlevel 1 (popd & goto fail)
+    popd
+)
+if not exist "web\dist\index.html" (
+    echo Building the front-end...
+    pushd web
+    call npm run build
+    if errorlevel 1 (popd & goto fail)
+    popd
+)
+
+REM -- 4. Check the AI backend (a note, never a blocker) ---------------------- #
 where claude >nul 2>&1
 if errorlevel 1 (
     echo.
@@ -126,16 +141,19 @@ if "%SETUP_ONLY%"=="1" (
     exit /b 0
 )
 
-REM -- 4. Launch -------------------------------------------------------------- #
-REM "python -m streamlit" rather than streamlit.exe: it works even when the
-REM script shim is missing or the PATH is unusual.
+if "%DEV%"=="1" (
+    start "Vite dev server" cmd /k "cd /d %~dp0web && npm run dev"
+)
+
+REM -- 5. Launch -------------------------------------------------------------- #
 echo.
 echo Starting the app - your browser will open automatically at
-echo http://localhost:8501
+echo http://localhost:8000
 echo.
 echo Keep this window open while you use the app. Press Ctrl+C to stop.
 echo.
-"%PY%" -m streamlit run dashboard\Home.py!ARGS!
+start "" http://localhost:8000
+"%PY%" -m uvicorn api.main:app --port 8000
 
 echo.
 echo The app has stopped.

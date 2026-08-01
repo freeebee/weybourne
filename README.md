@@ -1,15 +1,16 @@
 # Weybourne Investment Connector
 
-Outlook and Notion, joined up. A Streamlit app whose home page is a set of
-buttons, each opening one capability:
+Outlook and Notion, joined up. A React web app (FastAPI backend wrapping the
+feature modules in `src/`), one screen per capability:
 
-| | Feature | What it does |
-|---|---|---|
-| 📥 | **Inbox triage** | Flags investment-relevant mail, checks it against Notion for duplicates, screens it against our investment preferences, and drafts a reply |
-| 🗂️ | **Meeting prep** | Turns a calendar entry, a manager's name, or an attached deck into a briefing on who you're meeting and what to probe |
-| 📈 | **Track records** | Normalises a manager's Excel/PDF track record into one common format — private and public markets alike |
-| 🎙️ | **Live meeting** *(preview)* | Follows a meeting transcript and suggests the questions worth asking next |
-| 📊 | **Fund data** | The time-series dashboard over everything ingested by the PDF pipeline |
+| Feature | What it does |
+|---|---|
+| **Inbox triage** | Flags investment-relevant mail, checks it against Notion for duplicates, screens it against our investment preferences, and drafts a reply |
+| **Meeting prep** | Turns a calendar entry, a manager's name, or an attached deck into a quick brief or the full DD briefing (self-contained HTML with the deck embedded) |
+| **Track records** | Normalises a manager's Excel/PDF track record into one common format — private and public markets alike |
+| **Live meeting** | Streams the room from your microphone (local Whisper transcription), recaps every half-minute, and suggests the questions worth asking next |
+| **Fund data** | The time-series dashboard over everything ingested by the PDF pipeline |
+| **What's new** | The last week in one sitting — team meetings and execution moves from Notion, the shared inbox condensed, portfolio news (placeholder) |
 
 ## Quick start
 
@@ -26,13 +27,13 @@ run.bat
 ```
 
 That's it — the launcher finds Python, creates the virtual environment, installs
-what's needed and starts the app, opening your browser at `http://localhost:8501`.
-It's safe to run every time: after the first run it skips straight to launching
-(dependencies are only reinstalled when `requirements.txt` actually changes).
-Press `Ctrl+C` to stop.
+what's needed, builds the front-end and starts the app, opening your browser at
+`http://localhost:8000`. It's safe to run every time: after the first run it
+skips straight to launching (dependencies are only reinstalled when
+`requirements.txt` actually changes). Press `Ctrl+C` to stop.
 
-Extra flags are passed through to Streamlit (`./run.sh --server.port 8600`), and
-`--setup-only` prepares the environment without launching.
+`--setup-only` prepares the environment without launching; `--dev` also starts
+the Vite dev server (hot reload on :5173) for front-end work.
 
 <details>
 <summary>Prefer to do it by hand?</summary>
@@ -40,13 +41,15 @@ Extra flags are passed through to Streamlit (`./run.sh --server.port 8600`), and
 ```bash
 python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-streamlit run dashboard/Home.py
+(cd web && npm install && npm run build)
+python -m uvicorn api.main:app --port 8000
 ```
 </details>
 
-Requires **Python 3.10+**. If it's missing: macOS `brew install python`, Windows
-[python.org](https://python.org) (tick *Add Python to PATH*), Linux
-`sudo apt install python3 python3-venv`.
+Requires **Python 3.10+** and **Node.js LTS** (for the front-end build). If
+missing: macOS `brew install python node`, Windows [python.org](https://python.org)
+(tick *Add Python to PATH*) + [nodejs.org](https://nodejs.org), Linux
+`sudo apt install python3 python3-venv nodejs npm`.
 
 Run `claude login` once to switch the AI features on — see
 [Claude](#claude--needed-for-any-ai-analysis) below.
@@ -202,7 +205,7 @@ To try the dashboard with static sample data first:
 
 ```bash
 python scripts/seed_test_data.py
-streamlit run dashboard/Home.py
+./run.sh          # Windows: run.bat — then open Fund data
 ```
 
 ## Architecture
@@ -229,7 +232,7 @@ SQLite (src/db.py): fact_table, notes_table, manifest_table,
                      flagged_table, ingestion_log
       |
       v
-Streamlit (dashboard/) -- reads the DB directly
+FastAPI (api/main.py) -> React (web/) -- reads the DB via /api/fund-data
 ```
 
 ### Connector layer
@@ -237,9 +240,11 @@ Streamlit (dashboard/) -- reads the DB directly
 ```
 src/llm.py          model backend: Claude Code CLI (your Claude account) or the API
 src/connectors/     graph.py (Outlook), notion_client.py (Notion)
-src/features/       inbox_triage, dedupe, notion_sync, preferences,
-                    draft_reply, meeting_prep, track_record, transcription
-dashboard/          Home.py + pages/, one page per feature
+src/features/       inbox_triage, dedupe, notion_sync, preferences, draft_reply,
+                    meeting_prep, brief_builder, track_record, transcription,
+                    stt (local Whisper), whats_new
+api/main.py         FastAPI — thin HTTP layer over src/, serves the built front-end
+web/                React + Vite front-end (design-system components, one route per feature)
 ```
 
 Every model call goes through one shape — `client.messages.create(...)` — so
@@ -289,17 +294,19 @@ API calls are made in tests**.
 ## Hosting
 
 This handles PE fund/financial data and mailbox contents. Before deploying
-anywhere, confirm with IT/compliance whether a third-party host (Streamlit
-Community Cloud, Render, Railway) is acceptable or whether it needs to run on
-internal infrastructure. A small internal VPS running
-`streamlit run dashboard/Home.py` plus the SQLite file is sufficient.
+anywhere, confirm with IT/compliance whether a third-party host (Render,
+Railway, etc.) is acceptable or whether it needs to run on internal
+infrastructure. A small internal VPS running
+`python -m uvicorn api.main:app` plus the SQLite file and the built `web/dist`
+is sufficient. Note the live-meeting microphone requires the page to be served
+over HTTPS (or localhost) for browser mic access.
 
 ## Known gaps
 
-- **Live meeting** is a preview: audio capture and automatic transcription are not
-  wired up (they need a local microphone, so this must be run locally rather than
-  in a hosted container). Everything downstream of the transcript works — paste or
-  stream text in and the question generation and ledger operate normally.
+- **Live meeting** transcribes the *microphone* — for remote calls through
+  headphones it only hears your side unless system audio is routed in (e.g.
+  Windows "Stereo Mix") or Teams captions are pasted into the paste panel.
+  Whisper runs locally, so the first use downloads the model (~75MB).
 - **Meeting prep** has a `research` hook for web background that is deliberately
   left unwired; the app has no search backend of its own and inventing one would
   risk fabricated background. Wire a search API there, or run the prep through

@@ -191,7 +191,10 @@ class TestVisionPath:
         seen: list = []
         self._image_call(seen)
         prompt = seen[0][seen[0].index("-p") + 1]
-        written = [line.strip("- ") for line in prompt.splitlines() if line.strip().startswith("- /")]
+        # The path is absolute but platform-shaped ("/tmp/…" or "C:\…"), so key
+        # off the .png suffix rather than a leading slash.
+        written = [line.strip().lstrip("- ") for line in prompt.splitlines()
+                   if line.strip().startswith("- ") and line.strip().endswith(".png")]
         assert written, "expected an image path in the prompt"
         assert not Path(written[0]).exists(), "temp image should be removed after the call"
 

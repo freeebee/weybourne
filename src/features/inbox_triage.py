@@ -50,11 +50,21 @@ TRIAGE_SCHEMA = {
                     "description": "Which Weybourne strategy sleeve this most likely belongs to",
                 },
                 "summary": {"type": "string"},
+                "strategy_description": {
+                    "type": "string",
+                    "description": "The strategy in the manager's own terms — what it "
+                                   "invests in, stage, approach. Fuller than summary.",
+                },
+                "vintage": {"type": "string", "description": "Fund vintage year if stated, e.g. '2026'"},
+                "target_size": {"type": "string", "description": "Target fund size if stated, e.g. '$500m'"},
+                "company_city": {"type": "string", "description": "Management company HQ city if stated or inferable"},
+                "company_country": {"type": "string", "description": "Management company HQ country if stated or inferable"},
             },
             "required": [
                 "fund_name", "company_name", "company_domain", "contact_name",
                 "contact_email", "contact_title", "asset_class", "geography",
-                "sleeve", "summary",
+                "sleeve", "summary", "strategy_description", "vintage",
+                "target_size", "company_city", "company_country",
             ],
             "additionalProperties": False,
         },
@@ -72,10 +82,12 @@ co-investment, a manager/LP update, or diligence material the Financial Investme
 track. Do NOT flag pure internal/admin chatter, personal email, generic event marketing with no \
 specific opportunity, or vendor spam.
 
-When it is an investment, extract the fund, the management company (and its email domain if you \
-can infer it from the sender address), the primary contact, the asset class and geography, and \
-the most likely strategy sleeve. Prefer the sender's own email domain for company_domain. Leave \
-a field as an empty string if it is not present — never guess an email address."""
+When it is an investment, extract as much as the email supports: the fund (name, vintage, \
+target size, strategy in the manager's own terms), the management company (name, email domain, \
+HQ city and country if stated or clearly inferable), the primary contact (name, email, title), \
+the asset class and geography, and the most likely strategy sleeve. Prefer the sender's own \
+email domain for company_domain. Leave a field as an empty string if it is not present — never \
+guess an email address or a figure."""
 
 
 def _default_entity_from_email(email: EmailMessage) -> ExtractedEntity:

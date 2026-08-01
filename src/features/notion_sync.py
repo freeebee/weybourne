@@ -80,16 +80,32 @@ def contact_properties(entity: ExtractedEntity) -> dict:
 
 
 def company_properties(entity: ExtractedEntity) -> dict:
-    return {
+    props = {
         "Name": _title_prop(entity.company_name),
         "Description": _rich_prop(entity.summary),
     }
+    if entity.company_city:
+        props["City"] = _rich_prop(entity.company_city)
+    if entity.company_country:
+        props["Country"] = _rich_prop(entity.company_country)
+    return props
 
 
 def fund_properties(entity: ExtractedEntity, comments: str = "") -> dict:
+    # The fullest strategy text available; vintage and target size are folded in
+    # here rather than as separate properties, since the Property Guidebook
+    # defines no dedicated fields for them.
+    strategy = entity.strategy_description or entity.summary
+    facts = " · ".join(x for x in (
+        f"Vintage {entity.vintage}" if entity.vintage else "",
+        f"Target {entity.target_size}" if entity.target_size else "",
+    ) if x)
+    if facts:
+        strategy = f"{facts} — {strategy}" if strategy else facts
+
     props = {
         "Name": _title_prop(entity.fund_name),
-        "Strategy Description": _rich_prop(entity.summary),
+        "Strategy Description": _rich_prop(strategy),
         # New inbound opportunities enter the pipeline unreviewed.
         "Status": {"status": {"name": "Not reviewed"}},
     }
@@ -100,6 +116,32 @@ def fund_properties(entity: ExtractedEntity, comments: str = "") -> dict:
     if comments:
         props["Weybourne Comments"] = _rich_prop(comments)
     return props
+
+
+def describe_properties(props: dict) -> list[tuple[str, str]]:
+    """Human-readable (property, value) pairs for a proposal's Notion payload.
+
+    Lets the UI show exactly what a page will be created with before approval.
+    """
+    out: list[tuple[str, str]] = []
+    for name, payload in props.items():
+        if "title" in payload:
+            value = "".join(t["text"]["content"] for t in payload["title"])
+        elif "rich_text" in payload:
+            value = "".join(t["text"]["content"] for t in payload["rich_text"])
+        elif "email" in payload:
+            value = payload["email"]
+        elif "select" in payload:
+            value = payload["select"]["name"]
+        elif "status" in payload:
+            value = payload["status"]["name"]
+        elif "multi_select" in payload:
+            value = ", ".join(o["name"] for o in payload["multi_select"])
+        else:
+            value = str(payload)
+        if value:
+            out.append((name, value))
+    return out
 
 
 # --------------------------------------------------------------------------- #

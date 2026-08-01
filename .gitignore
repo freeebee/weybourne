@@ -12,5 +12,10 @@ data/flagged/
 # Outlook snapshots hold real mailbox and calendar contents - never commit them.
 data/inbox_snapshot.json
 data/calendar_snapshot.json
+data/shared_inbox_snapshot.json
+
+# Front-end build artefacts
+web/node_modules/
+web/dist/
 
 .DS_Store

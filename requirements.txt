@@ -1,12 +1,19 @@
 pymupdf>=1.24
 anthropic>=0.40
 pydantic>=2.6
-streamlit>=1.38
 pandas>=2.2
 python-dotenv>=1.0
 pytest>=8.0
+
+# Web app (React front-end lives in web/; this is the API serving it)
+fastapi>=0.115
+uvicorn>=0.30
+python-multipart>=0.0.10   # file uploads (decks, track records, audio chunks)
 
 # Connector layer
 requests>=2.31        # Microsoft Graph + Notion REST calls
 msal>=1.28            # Entra ID auth; only needed for live Outlook
 openpyxl>=3.1         # reading .xlsx track records
+
+# Live meeting
+faster-whisper>=1.0   # local mic transcription; model (~75MB) downloads on first use

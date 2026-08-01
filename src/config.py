@@ -98,6 +98,15 @@ def graph_configured() -> bool:
 
 
 # --------------------------------------------------------------------------- #
+# "What's new" briefing
+# --------------------------------------------------------------------------- #
+# The Investments shared mailbox condensed in part two of What's new.
+SHARED_MAILBOX = os.environ.get("SHARED_MAILBOX", "wbinvestments@weybourne.co.uk")
+# Rolling window for all three What's-new sections.
+WHATS_NEW_LOOKBACK_DAYS = int(os.environ.get("WHATS_NEW_LOOKBACK_DAYS", "7"))
+
+
+# --------------------------------------------------------------------------- #
 # Notion
 # --------------------------------------------------------------------------- #
 # Live mode requires a Notion integration token and the four main database IDs.
@@ -114,6 +123,8 @@ NOTION_CONTACTS_DB = os.environ.get("NOTION_CONTACTS_DB")
 NOTION_NOTES_DB = os.environ.get("NOTION_NOTES_DB")
 # Optional intake DB used by the existing "To Be Intelligenced" workflow.
 NOTION_INTAKE_DB = os.environ.get("NOTION_INTAKE_DB")
+# FI execution monitoring dashboard — operational items surfaced in What's new.
+NOTION_EXECUTION_DB = os.environ.get("NOTION_EXECUTION_DB")
 
 # CHAO investment-preference pages. These IDs are the canonical Weybourne
 # preference pages referenced by the CHAO agent; the screening feature loads

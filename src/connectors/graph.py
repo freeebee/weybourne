@@ -32,6 +32,7 @@ from src.schemas import Attendee, CalendarEvent, EmailMessage, TimeSlot
 # Snapshot files written by Claude's Microsoft 365 connector (see module docstring).
 INBOX_SNAPSHOT = config.BASE_DIR / "data" / "inbox_snapshot.json"
 CALENDAR_SNAPSHOT = config.BASE_DIR / "data" / "calendar_snapshot.json"
+SHARED_INBOX_SNAPSHOT = config.BASE_DIR / "data" / "shared_inbox_snapshot.json"
 
 
 def _load_snapshot(path: Path) -> list[dict] | None:
@@ -122,6 +123,42 @@ _SAMPLE_INBOX = [
         body_preview="Join 900+ GPs and LPs at the BVCA Summit in London this October...",
         body="Join 900+ GPs and LPs at the BVCA Summit in London this October. Register now.",
         has_attachments=False,
+    ),
+]
+
+_SAMPLE_SHARED_INBOX = [
+    EmailMessage(
+        id="shared-1",
+        subject="FW: Nephila — capacity reopening for existing LPs",
+        sender_name="Tom Osborne",
+        sender_email="t.osborne@placementpartners.com",
+        received="2026-07-31T10:02:00",
+        body_preview="Nephila is reopening capacity in the climate strategy for existing "
+                     "LPs only, closing end of August...",
+        body="Nephila is reopening limited capacity in the climate strategy for existing "
+             "LPs, closing end of August. Minimum $10m. Happy to set up a call.",
+    ),
+    EmailMessage(
+        id="shared-2",
+        subject="Q2 letters — consolidated pack",
+        sender_name="Weybourne Investments",
+        sender_email="wbinvestments@weybourne.co.uk",
+        received="2026-07-30T09:15:00",
+        body_preview="All Q2 manager letters received to date are filed in the shared "
+                     "drive; three managers outstanding...",
+        body="All Q2 manager letters received to date are filed. Outstanding: REVA, "
+             "Cavamont, Dockside. Chasers sent 29 July.",
+    ),
+    EmailMessage(
+        id="shared-3",
+        subject="Invitation: Asia allocators roundtable — Singapore, 12 Sept",
+        sender_name="Institutional Investor Events",
+        sender_email="events@institutionalinvestor.com",
+        received="2026-07-28T14:30:00",
+        body_preview="You are invited to an allocators-only roundtable on Asian private "
+                     "markets...",
+        body="Allocators-only roundtable on Asian private markets, Singapore, 12 Sept. "
+             "Peer group: 20 family offices and endowments.",
     ),
 ]
 
@@ -287,6 +324,48 @@ class GraphConnector:
             f"/users/{self.user}/messages/{message_id}/createReply",
             {"comment": comment},
         )
+
+    def delete_message(self, message_id: str) -> dict:
+        """Move a message to Deleted Items (soft delete — recoverable in Outlook).
+
+        Deliberately not a hard delete: the app never destroys mail
+        irrecoverably. Mock mode returns a no-op preview.
+        """
+        if not self.live:
+            return {"id": message_id, "status": "mock-deleted"}
+        return self._post(
+            f"/users/{self.user}/messages/{message_id}/move",
+            {"destinationId": "deleteditems"},
+        )
+
+    def list_shared_inbox(self, top: int = 40, days: int = 7) -> list[EmailMessage]:
+        """Recent mail from the Investments shared mailbox (read-only).
+
+        Live mode reads ``config.SHARED_MAILBOX`` via Graph (the app
+        registration needs Mail.Read for that mailbox). Otherwise a snapshot at
+        ``data/shared_inbox_snapshot.json`` is used if present, else samples.
+        """
+        cutoff = _now() - dt.timedelta(days=days)
+
+        if not self.live:
+            snapshot = _load_snapshot(SHARED_INBOX_SNAPSHOT)
+            messages = ([_email_from_snapshot(m) for m in snapshot]
+                        if snapshot is not None else list(_SAMPLE_SHARED_INBOX))
+            recent = [m for m in messages if _received_within(m.received, cutoff)]
+            recent.sort(key=lambda m: m.received, reverse=True)
+            return recent[:top]
+
+        data = self._get(
+            f"/users/{config.SHARED_MAILBOX}/mailFolders/inbox/messages",
+            params={
+                "$top": top,
+                "$select": "id,subject,from,receivedDateTime,bodyPreview,"
+                           "hasAttachments,webLink,body,parentFolderId",
+                "$orderby": "receivedDateTime desc",
+                "$filter": f"receivedDateTime ge {_graph_timestamp(cutoff)}",
+            },
+        )
+        return [_email_from_graph(m) for m in data.get("value", [])]
 
     # -- calendar --------------------------------------------------------- #
     def list_events(self, start: dt.datetime, end: dt.datetime) -> list[CalendarEvent]:

@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<!--
+  WEYBOURNE — MEETING PREP BRIEFING KIT
+  =====================================
+  This file is the design system. Do not re-derive it, do not restyle it,
+  do not read any other design doc.
+
+  HOW TO USE (this is the whole build procedure):
+    1. project_read this file. Save it verbatim to
+       /mnt/user-data/outputs/[entity]-briefing.html
+    2. Use Edit to replace ONLY the content between the FILL markers.
+       Never rewrite the style block. Never re-emit CSS. Delete example
+       blocks you do not need; duplicate the ones you need more of.
+    3. Inject the source PDF with the asset-injection pattern (see PDF SWAP below).
+
+  NOTE FOR EDITORS: do not paste angle-bracket tags or comment delimiters into
+  this comment block — it terminates the comment and breaks the stylesheet.
+
+  Editing rather than regenerating is the point: the stylesheet costs zero
+  output tokens because it is never written twice.
+
+  CLASS VOCABULARY (everything you need — there is nothing else)
+    Pages     .page  .page--ink (cover)  .page__foot
+    Headings  .eyebrow  h1 h2 h3  .lede  .dek
+    Text      .prose  .muted  .note  .rule  .rule--brass
+    Data      .meta (dt/dd grid)  .fig (mono tabular figures)
+    Blocks    .entry (meeting / mention)  .entry__head  .entry__meta
+              .card (deal)  .card__head  .card__label  .flag (brass callout)
+    Tables    .ledger  tr.is-flagged (shaded)  .num (right-aligned mono cell)
+    Q&A       .qlist > li  .src (clickable source line, ends every question)
+    Sources   .srclist > li
+    Status    .pos .cau .crit (desaturated status text)
+
+  RULES BAKED IN — do not override: sentence-case headings, mono tabular
+  figures, hairline rules not boxes, no emoji, "as at" date on every figure.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__ — meeting briefing</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root{
+  --ink-900:#0A2230; --ink-800:#0F2E42; --ink-700:#16415C; --ink-600:#21536F;
+  --paper-000:#FCFAF5; --paper-050:#F7F3EA; --paper-100:#EFE9DC; --paper-200:#E4DCCB; --paper-300:#D3C9B4;
+  --stone-600:#5F5A51; --stone-500:#7A7468; --stone-400:#9A9385; --stone-300:#BDB6A6;
+  --teal-800:#114E4A; --teal-700:#176B66; --teal-500:#249692; --teal-300:#84C7C2; --teal-100:#DBEDEB;
+  --brass-700:#8A6A33; --brass-500:#B0894E; --brass-300:#D9BE8C; --brass-100:#F0E6D2;
+  --slate-500:#4F6D7C;
+  --positive-600:#3C6A48; --caution-600:#9A6B22; --critical-600:#8C3A2F;
+  --serif:"Newsreader",Georgia,"Times New Roman",serif;
+  --sans:"Hanken Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono","SF Mono",ui-monospace,monospace;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+body{
+  margin:0; background:var(--paper-100);
+  font:400 15px/1.45 var(--sans); color:var(--ink-700);
+  font-feature-settings:"kern" 1,"liga" 1;
+}
+
+/* ---- Pages ------------------------------------------------------- */
+@page{ size:A4; margin:0 }
+.page{
+  position:relative; width:210mm; min-height:297mm;
+  margin:0 auto 10mm; padding:24mm 22mm 20mm;
+  background:var(--paper-050); color:var(--ink-700);
+  box-shadow:0 1px 2px rgba(22,32,43,.06),0 8px 20px rgba(22,32,43,.07);
+  page-break-after:always; break-after:page;
+}
+.page:last-child{page-break-after:auto;break-after:auto;margin-bottom:0}
+.page--ink{
+  background:var(--ink-800); color:var(--paper-050);
+  display:flex; flex-direction:column;
+}
+.page--ink h1,.page--ink h2,.page--ink h3{color:var(--paper-050)}
+.page--ink a{color:var(--teal-300)}
+.page--ink .eyebrow,.page--ink .muted{color:var(--stone-400)}
+.page--ink .meta dt{color:var(--stone-400)}
+.page--ink .meta dd{color:var(--paper-050)}
+.page--ink .rule{border-color:rgba(255,255,255,.16)}
+.page__foot{
+  position:absolute; left:22mm; right:22mm; bottom:12mm;
+  display:flex; justify-content:space-between;
+  font:400 9.5px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase;
+  color:var(--stone-400); border-top:1px solid var(--paper-200); padding-top:6px;
+}
+.page--ink .page__foot{border-color:rgba(255,255,255,.14);color:var(--stone-400)}
+
+/* ---- Brand lockup ------------------------------------------------ */
+/* SWAP POINT: to restore the five-stroke mark, replace the .lockup element
+   in the markup with <img class="mark" src="data:image/png;base64,__MARK__">
+   and add .mark{width:46mm;height:auto}. Nothing else changes. */
+.lockup{
+  font:300 20px/1 var(--serif); letter-spacing:.42em; text-transform:uppercase;
+  color:var(--ink-800); padding-left:.42em;
+}
+.page--ink .lockup{color:var(--paper-050)}
+.lockup--sm{font-size:12px;letter-spacing:.34em}
+.lockup__rule{width:34mm;border:0;border-top:1px solid var(--brass-500);margin:10px 0 0}
+
+/* ---- Type -------------------------------------------------------- */
+h1,h2,h3,h4{
+  margin:0 0 .5em; font-family:var(--serif); font-weight:400;
+  color:var(--ink-800); line-height:1.2; letter-spacing:-.01em;
+}
+h1{font-size:38px;font-weight:300;letter-spacing:-.02em}
+h2{font-size:26px;margin-top:0}
+h3{font-size:18px;font-weight:500;margin-bottom:.35em}
+h4{font-size:15px;font-weight:600;font-family:var(--sans);margin-bottom:.3em}
+p{margin:0 0 1em}
+a{color:var(--teal-700);text-decoration:none;text-underline-offset:.15em}
+a:hover{color:var(--teal-800);text-decoration:underline}
+strong{font-weight:600;color:var(--ink-800)}
+
+.eyebrow{
+  font:500 11px/1.2 var(--mono); letter-spacing:.18em; text-transform:uppercase;
+  color:var(--stone-500); margin:0 0 14px;
+}
+.display{font:300 62px/1.05 var(--serif);letter-spacing:-.025em;margin:0 0 .18em}
+.dek{font:400 17px/1.4 var(--serif);font-style:italic;color:var(--teal-300);margin:0}
+.page:not(.page--ink) .dek{color:var(--teal-700)}
+.lede{font:400 18px/1.55 var(--serif);color:var(--ink-700);margin:0 0 1.2em}
+.prose{font:400 15.5px/1.62 var(--serif);color:var(--ink-700);max-width:62em}
+.prose p{margin:0 0 1em}
+.prose ul{margin:0 0 1em;padding-left:1.1em}
+.prose li{margin:0 0 .45em}
+.muted{color:var(--stone-500)}
+.note{font:400 12.5px/1.5 var(--sans);color:var(--stone-500);margin:0 0 1em}
+.rule{border:0;border-top:1px solid var(--paper-200);margin:22px 0}
+.rule--brass{border-top:1px solid var(--brass-500);width:34mm;margin:0 0 22px}
+.fig{font-family:var(--mono);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+.pos{color:var(--positive-600)} .cau{color:var(--caution-600)} .crit{color:var(--critical-600)}
+
+/* ---- Meta grid (cover meeting details, entity facts) -------------- */
+.meta{display:grid;grid-template-columns:34mm 1fr;gap:7px 16px;margin:0}
+.meta dt{
+  font:500 10px/1.5 var(--mono); letter-spacing:.13em; text-transform:uppercase;
+  color:var(--stone-500); margin:0;
+}
+.meta dd{margin:0;font:400 13.5px/1.5 var(--sans);color:var(--ink-700)}
+
+/* ---- Entry (meeting / other mention) ----------------------------- */
+.entry{border-top:1px solid var(--paper-200);padding:16px 0 4px;break-inside:avoid}
+.entry:first-of-type{border-top:0;padding-top:0}
+.entry__head{display:flex;justify-content:space-between;align-items:baseline;gap:16px}
+.entry__head h3{margin:0}
+.entry__date{font:400 11.5px/1 var(--mono);color:var(--stone-500);white-space:nowrap}
+.entry__meta{
+  font:400 11.5px/1.5 var(--mono); color:var(--stone-500);
+  margin:5px 0 9px; letter-spacing:.01em;
+}
+.entry .prose{font-size:15px}
+
+/* ---- Card (deal) ------------------------------------------------- */
+.card{
+  border-top:1px solid var(--paper-200); padding:18px 0 6px;
+  break-inside:avoid; page-break-inside:avoid;
+}
+.card__head{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:10px}
+.card__head h3{margin:0}
+.card__figs{font:400 12px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--ink-700);white-space:nowrap}
+.card__label{
+  font:500 10px/1.4 var(--mono); letter-spacing:.14em; text-transform:uppercase;
+  color:var(--stone-500); margin:14px 0 4px;
+}
+.card p{font:400 14.5px/1.55 var(--serif);margin:0 0 .6em}
+
+/* ---- Flag (brass callout) ---------------------------------------- */
+.flag{
+  border-left:2px solid var(--brass-500); background:var(--brass-100);
+  padding:9px 13px; margin:14px 0 4px;
+  font:400 13px/1.5 var(--sans); color:var(--ink-800);
+}
+.flag b{
+  display:block; font:500 10px/1.4 var(--mono); letter-spacing:.14em;
+  text-transform:uppercase; color:var(--brass-700); margin-bottom:3px;
+}
+
+/* ---- Ledger table ------------------------------------------------ */
+.ledger{width:100%;border-collapse:collapse;font-size:11.5px;margin:0 0 8px}
+.ledger caption{text-align:left;font:400 12px/1.5 var(--sans);color:var(--stone-500);margin-bottom:8px}
+.ledger th{
+  font:500 9.5px/1.3 var(--mono); letter-spacing:.12em; text-transform:uppercase;
+  color:var(--stone-500); text-align:left; font-weight:500;
+  border-bottom:1px solid var(--ink-600); padding:0 8px 6px 0; vertical-align:bottom;
+}
+.ledger td{
+  border-bottom:1px solid var(--paper-200); padding:7px 8px 7px 0;
+  vertical-align:top; font:400 12px/1.4 var(--sans); color:var(--ink-700);
+}
+.ledger td:first-child{font-weight:600;color:var(--ink-800)}
+.ledger .num,.ledger th.num{
+  text-align:right; padding-right:0; font-family:var(--mono);
+  font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.ledger th:last-child,.ledger td:last-child{padding-left:12px}
+.ledger tr.is-flagged td{background:var(--paper-100)}
+.ledger tr.is-flagged td:first-child{box-shadow:inset 2px 0 0 var(--brass-500);padding-left:7px}
+.ledger .desc{font-size:11px;color:var(--stone-600);line-height:1.35}
+
+/* ---- Questions --------------------------------------------------- */
+.qlist{list-style:none;margin:0 0 4px;padding:0;counter-reset:q}
+.qlist>li{
+  position:relative; padding:0 0 13px 26px; margin:0 0 13px;
+  border-bottom:1px solid var(--paper-200); break-inside:avoid;
+  font:400 14.5px/1.55 var(--serif); color:var(--ink-700);
+}
+.qlist>li:last-child{border-bottom:0}
+.qlist>li::before{
+  counter-increment:q; content:counter(q,decimal-leading-zero);
+  position:absolute; left:0; top:.3em;
+  font:400 10px/1 var(--mono); color:var(--brass-500); letter-spacing:.06em;
+}
+.src{
+  display:block; margin-top:5px;
+  font:400 10.5px/1.45 var(--mono); color:var(--stone-500); letter-spacing:.01em;
+}
+.src a{color:var(--teal-700)}
+.src::before{content:"→ ";color:var(--brass-500)}
+
+/* ---- Sources ----------------------------------------------------- */
+.srclist{list-style:none;margin:0 0 18px;padding:0}
+.srclist>li{
+  padding:7px 0; border-bottom:1px solid var(--paper-200);
+  font:400 12.5px/1.45 var(--sans); color:var(--ink-700);
+}
+.srclist .k{
+  display:inline-block; min-width:20mm;
+  font:500 9.5px/1.4 var(--mono); letter-spacing:.12em; text-transform:uppercase;
+  color:var(--stone-500);
+}
+
+/* ---- Deck link --------------------------------------------------- */
+.deck{
+  display:inline-block; border:1px solid var(--paper-300); background:var(--paper-000);
+  padding:9px 14px; margin:0 0 4px;
+  font:500 12px/1.3 var(--sans); color:var(--ink-800); text-decoration:none;
+}
+.deck:hover{border-color:var(--teal-500);text-decoration:none}
+.deck span{display:block;font:400 9.5px/1.4 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--stone-500);margin-top:2px}
+
+/* ---- Print ------------------------------------------------------- */
+@media print{
+  body{background:#fff}
+  .page{margin:0;box-shadow:none;min-height:auto;height:297mm}
+  a{color:var(--ink-700)!important;text-decoration:none}
+  .page--ink{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================ COVER -->
+<section class="page page--ink">
+  <div class="lockup">Weybourne</div>
+  <hr class="lockup__rule">
+
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 0 8mm">
+    <!-- FILL: entity -->
+    <p class="eyebrow">Pre-meeting briefing · Private &amp; confidential</p>
+    <h1 class="display">__ENTITY__</h1>
+    <p class="dek">__ONE_LINE_STRATEGY_DESCRIPTOR__</p>
+    <!-- /FILL -->
+  </div>
+
+  <hr class="rule">
+  <!-- FILL: meeting details -->
+  <dl class="meta">
+    <dt>Status</dt><dd>__New relationship — first meeting__ / __Existing relationship__</dd>
+    <dt>Date</dt><dd>__</dd>
+    <dt>Location</dt><dd>__</dd>
+    <dt>Counterparty</dt><dd>__Name, role__</dd>
+    <dt>Weybourne</dt><dd>__attendees__</dd>
+    <dt>Vehicle</dt><dd>__fund, vintage, status__</dd>
+    <dt>Source deck</dt><dd><a href="#source-pdf">__deck filename__</a></dd>
+  </dl>
+  <!-- /FILL -->
+  <div class="page__foot"><span>Weybourne</span><span>Prepared __DATE__</span></div>
+</section>
+
+<!-- ================================================ 1. MEETING CONTEXT -->
+<section class="page">
+  <div class="lockup lockup--sm">Weybourne</div>
+  <hr class="rule--brass" style="margin-top:14px">
+  <p class="eyebrow">Section one</p>
+  <h2>Historical meeting context</h2>
+
+  <!-- FILL: qualifying meetings, reverse-chronological. Delete if none and
+       replace with a plain statement that this is a new relationship. -->
+  <article class="entry">
+    <div class="entry__head">
+      <h3><a href="https://app.notion.com/p/__UUID__">__Meeting title__</a></h3>
+      <span class="entry__date">__2026-03-14__</span>
+    </div>
+    <p class="entry__meta">__London, in person__ · __Attendees__</p>
+    <div class="prose"><p>__Topics, conclusions, outstanding follow-ups.__</p></div>
+  </article>
+  <!-- /FILL -->
+
+  <hr class="rule">
+  <h3>Other mentions</h3>
+  <!-- FILL: always present, even when there are no qualifying meetings.
+       Notion and Outlook only. Never Teams. -->
+  <article class="entry">
+    <div class="entry__head">
+      <h3><a href="__url__">__Source note__</a></h3>
+      <span class="entry__date">__date__</span>
+    </div>
+    <p class="entry__meta">__context__</p>
+    <div class="prose"><p>__what was said__</p></div>
+  </article>
+  <!-- /FILL -->
+
+  <div class="page__foot"><span>Historical context</span><span>__ENTITY__</span></div>
+</section>
+
+<!-- ============================================ 2. BACKGROUND RESEARCH -->
+<section class="page">
+  <div class="lockup lockup--sm">Weybourne</div>
+  <hr class="rule--brass" style="margin-top:14px">
+  <p class="eyebrow">Section two</p>
+  <h2>Background research</h2>
+
+  <!-- FILL -->
+  <h3>Sector &amp; market landscape</h3>
+  <div class="prose"><p>__Tie every factor to this manager's strategy or portfolio.__</p></div>
+
+  <hr class="rule">
+  <h3>Manager background</h3>
+  <div class="prose"><p>__</p></div>
+
+  <hr class="rule">
+  <h3>Potential red flags</h3>
+  <div class="prose"><p>__State findings plainly and proportionately. Where nothing
+    concerning is found, say so. Where a person has no meaningful public record,
+    say that explicitly — absence of information is not a clean bill of health.__</p></div>
+  <!-- /FILL -->
+
+  <div class="page__foot"><span>Background &amp; red flags</span><span>__ENTITY__</span></div>
+</section>
+
+<!-- =================================================== 3. STRATEGY -->
+<section class="page">
+  <div class="lockup lockup--sm">Weybourne</div>
+  <hr class="rule--brass" style="margin-top:14px">
+  <p class="eyebrow">Section three</p>
+  <h2>Strategy</h2>
+  <!-- FILL -->
+  <div class="prose"><p>__</p></div>
+  <!-- /FILL -->
+  <div class="page__foot"><span>Strategy</span><span>__ENTITY__</span></div>
+</section>
+
+<!-- =================================================== 4. QUESTIONS -->
+<section class="page">
+  <div class="lockup lockup--sm">Weybourne</div>
+  <hr class="rule--brass" style="margin-top:14px">
+  <p class="eyebrow">Section four</p>
+  <h2>Questions for the manager</h2>
+
+  <h3>A. Strategy &amp; direction</h3>
+  <!-- FILL: every question ends with a .src line. Never a Teams message. -->
+  <ol class="qlist">
+    <li>__Question — cite the deck figure and the contradicting external data point.__
+      <span class="src"><a href="#source-pdf">Deck, slide __</a> · <a href="__url__">__external source__</a></span></li>
+  </ol>
+  <!-- /FILL -->
+
+  <hr class="rule">
+  <h3>B. Manager-level &amp; structural</h3>
+  <!-- FILL -->
+  <ol class="qlist">
+    <li>__<span class="src"><a href="__url__">__source__</a></span></li>
+  </ol>
+  <!-- /FILL -->
+
+  <div class="page__foot"><span>Questions</span><span>__ENTITY__</span></div>
+</section>
+
+<!-- ================================================ 5. DEAL SUMMARY -->
+<!-- Managers only. For a non-manager relationship delete both deal pages and
+     leave a single .note stating the section is omitted because the
+     relationship is not an investment manager or fund. -->
+<section class="page">
+  <div class="lockup lockup--sm">Weybourne</div>
+  <hr class="rule--brass" style="margin-top:14px">
+  <p class="eyebrow">Section five (a)</p>
+  <h2>Deal summary</h2>
+
+  <!-- FILL: every position, sorted by gross MoIC descending.
+       Add class="is-flagged" to rows that materially drive reported
+       performance or carry a flag below. -->
+  <table class="ledger">
+    <caption>All positions, gross of fees. As at __DATE__.</caption>
+    <thead><tr>
+      <th style="width:24mm">Company</th>
+      <th style="width:26mm">Fund · sector</th>
+      <th style="width:17mm">Entry</th>
+      <th class="num" style="width:17mm">Cost</th>
+      <th class="num" style="width:14mm">Own.</th>
+      <th class="num" style="width:14mm">MoIC</th>
+      <th class="num" style="width:14mm">IRR</th>
+      <th>Business</th>
+    </tr></thead>
+    <tbody>
+      <tr class="is-flagged">
+        <td>__Company__</td><td>__Fund I · Software__</td><td class="fig">__2021-06__</td>
+        <td class="num">__$12.0m__</td><td class="num">__64%__</td>
+        <td class="num">__3.4x__</td><td class="num">__41%__</td>
+        <td class="desc">__One line.__</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="note">Shaded rows materially influence reported performance or carry a flag overleaf.</p>
+  <!-- /FILL -->
+
+  <div class="page__foot"><span>Deal summary</span><span>__ENTITY__</span></div>
+</section>
+
+<!-- ================================================ 5b. DEAL-BY-DEAL -->
+<section class="page">
+  <div class="lockup lockup--sm">Weybourne</div>
+  <hr class="rule--brass" style="margin-top:14px">
+  <p class="eyebrow">Section five (b)</p>
+  <h2>__Fund I__ · deal-by-deal</h2>
+
+  <!-- FILL: one .card per position, grouped fund by fund in chronological
+       fund order. Omit .flag on clean or immaterial positions — the
+       omission is the signal. -->
+  <article class="card">
+    <div class="card__head">
+      <h3>__Company__</h3>
+      <span class="card__figs">__$12.0m cost · 64% · 3.4x · 41% IRR__</span>
+    </div>
+
+    <p class="card__label">Business</p>
+    <p>__One or two sentences.__</p>
+
+    <p class="card__label">What the manager did</p>
+    <p>__Thesis and concrete value-creation actions. Where the deck gives no
+       detail, say so rather than inventing it.__</p>
+
+    <p class="card__label">Latest newsflow</p>
+    <p>__Most recent public developments since entry, then a light read on
+       whether it tracks the deck's narrative. Where no public information
+       exists, say so plainly.__</p>
+
+    <p class="card__label">Questions</p>
+    <ol class="qlist">
+      <li>__Thesis question first.__<span class="src"><a href="#source-pdf">Deck, slide __</a></span></li>
+    </ol>
+
+    <div class="flag"><b>Key flag</b>__Short reason this deal warrants a deeper look.__</div>
+  </article>
+  <!-- /FILL -->
+
+  <hr class="rule">
+  <h3>Standouts</h3>
+  <!-- FILL -->
+  <div class="prose"><p>__Positions that performed exceptionally well or poorly, are
+    unusually large, look inconsistent with the stated strategy, or carry unusual
+    concentration, governance or execution risk.__</p></div>
+  <!-- /FILL -->
+
+  <div class="page__foot"><span>Deal-by-deal</span><span>__ENTITY__</span></div>
+</section>
+
+<!-- ===================================================== 6. SOURCES -->
+<section class="page">
+  <div class="lockup lockup--sm">Weybourne</div>
+  <hr class="rule--brass" style="margin-top:14px">
+  <p class="eyebrow">Section six</p>
+  <h2>Sources &amp; supporting materials</h2>
+
+  <!-- PDF SWAP: write the file with __PDF__ in place, then run one Python
+       str.replace pass to substitute the base64 string before saving.
+       Never use a relative path or a separate attachment. -->
+  <a class="deck" id="source-pdf" href="data:application/pdf;base64,__PDF__" download="__DECKFILE__">
+    __Deck title__<span>Source deck · PDF · download</span>
+  </a>
+
+  <hr class="rule">
+  <!-- FILL -->
+  <ul class="srclist">
+    <li><span class="k">Notion</span><a href="https://app.notion.com/p/__UUID__">__page title__</a></li>
+    <li><span class="k">Outlook</span><a href="__OWA ItemID URL__">__thread subject__</a> <span class="muted">(snippet only)</span></li>
+    <li><span class="k">External</span><a href="__url__">__title, publisher, date__</a></li>
+  </ul>
+  <!-- /FILL -->
+
+  <p class="note">Internal chat is excluded as a source by standing instruction.
+    Figures are as disclosed by the manager as at __DATE__ unless otherwise stated.</p>
+
+  <div class="page__foot"><span>Sources</span><span>__ENTITY__</span></div>
+</section>
+
+</body>
+</html>

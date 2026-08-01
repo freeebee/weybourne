@@ -52,20 +52,32 @@ most change the conclusion."""
 
 
 def _load_preference_text(notion: NotionConnector, sleeve: str) -> dict[str, str]:
-    """Load General + Learnings always, plus the relevant sleeve page."""
+    """Load General + Learnings always, plus the relevant sleeve page.
+
+    A page the integration cannot read (not shared with it → Notion 404) is
+    skipped with a note rather than failing the whole screen; the screen then
+    runs on whatever preference pages are accessible.
+    """
+    def safe(page_id: str, label: str) -> str:
+        try:
+            return notion.get_page_text(page_id)
+        except Exception:  # noqa: BLE001 - typically a 404: page not shared
+            return (f"[The '{label}' preference page could not be read — share it "
+                    "with the Notion integration to include it in screening.]")
+
     text = {
-        "general": notion.get_page_text(CHAO_PAGES["general"]),
-        "learnings": notion.get_page_text(CHAO_PAGES["learnings"]),
+        "general": safe(CHAO_PAGES["general"], "General"),
+        "learnings": safe(CHAO_PAGES["learnings"], "Learnings"),
     }
     page_id = sleeve_page_id(sleeve)
     if page_id:
-        text[sleeve] = notion.get_page_text(page_id)
+        text[sleeve] = safe(page_id, sleeve)
     else:
         # Sleeve unclear: load all three so the screen can reason about placement.
         for name, key in (("Private Growth", "private_growth"),
                           ("Public Growth", "public_growth"),
                           ("Diversifiers", "diversifiers")):
-            text[name] = notion.get_page_text(CHAO_PAGES[key])
+            text[name] = safe(CHAO_PAGES[key], name)
     return text
 
 

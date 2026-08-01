@@ -214,6 +214,10 @@ class ClaudeCodeClient:
                 argv,
                 capture_output=True,
                 text=True,
+                # The CLI emits UTF-8; without this Windows decodes as cp1252
+                # and em-dashes arrive as "â€”" in every downstream surface.
+                encoding="utf-8",
+                errors="replace",
                 timeout=self.timeout,
                 stdin=subprocess.DEVNULL,  # else the CLI waits ~3s for stdin
                 cwd=str(_scratch_dir()),

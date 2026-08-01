@@ -1,0 +1,76 @@
+/* Weybourne design tokens — from the Weybourne Design System (Claude Design). */
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --ink-900:#0A2230; --ink-800:#0F2E42; --ink-700:#16415C; --ink-600:#21536F;
+  --paper-000:#FCFAF5; --paper-050:#F7F3EA; --paper-100:#EFE9DC; --paper-200:#E4DCCB; --paper-300:#D3C9B4;
+  --stone-600:#5F5A51; --stone-500:#7A7468; --stone-400:#9A9385; --stone-300:#BDB6A6;
+  --teal-800:#114E4A; --teal-700:#176B66; --teal-600:#1C807A; --teal-500:#249692; --teal-300:#84C7C2; --teal-100:#DBEDEB;
+  --brass-700:#8A6A33; --brass-500:#B0894E; --brass-100:#F0E6D2;
+  --positive-600:#3C6A48; --positive-100:#E0EBE1;
+  --caution-600:#9A6B22; --caution-500:#BC8A33; --caution-100:#F4E8CF;
+  --critical-600:#8C3A2F; --critical-500:#AE4A3C; --critical-100:#F1DAD3;
+
+  --serif:"Newsreader",Georgia,"Times New Roman",serif;
+  --sans:"Hanken Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono","SF Mono",ui-monospace,monospace;
+
+  --radius-sm:3px; --radius-md:5px; --radius-lg:8px;
+  --shadow-sm:0 1px 2px rgba(22,32,43,.06),0 2px 6px rgba(22,32,43,.05);
+  --shadow-md:0 2px 4px rgba(22,32,43,.06),0 8px 20px rgba(22,32,43,.07);
+  --ease:cubic-bezier(.2,0,0,1);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-font-smoothing:antialiased;scroll-behavior:smooth}
+body{margin:0;background:var(--paper-050);color:var(--ink-700);
+  font:400 15px/1.5 var(--sans)}
+h1,h2,h3,h4{font-family:var(--serif);font-weight:400;color:var(--ink-800);
+  margin:0 0 .5em;letter-spacing:-.01em;line-height:1.2}
+a{color:var(--teal-700);text-decoration:none}
+a:hover{text-decoration:underline}
+button{font-family:var(--sans)}
+::selection{background:var(--teal-100)}
+
+.fade-in{animation:fade .28s var(--ease)}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* Mascot motion — the exported SVGs are static; these bring them to life. */
+@keyframes wb-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes wb-wiggle{0%,100%{transform:rotate(-1.6deg)}50%{transform:rotate(1.6deg)}}
+@keyframes wb-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.035)}}
+@keyframes wb-wave{0%,100%{transform:rotate(-2.5deg) translateY(0)}50%{transform:rotate(2.5deg) translateY(-3px)}}
+@keyframes wb-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+@media (prefers-reduced-motion: reduce){.fade-in,[aria-label^="mascot"]{animation:none!important}}
+
+/* App shell */
+.shell{display:flex;min-height:100vh}
+.sidebar{width:250px;flex:none;background:var(--ink-800);color:var(--paper-050);
+  padding:1.2rem .8rem;display:flex;flex-direction:column;gap:.2rem;
+  position:sticky;top:0;height:100vh}
+.sidebar img.mark{width:44px;margin:0 .5rem 1.4rem}
+.sidebar a.nav{display:block;padding:.5rem .8rem;border-radius:var(--radius-md);
+  color:var(--paper-050);font-size:.95rem;transition:background .15s ease}
+.sidebar a.nav:hover{background:rgba(255,255,255,.07);text-decoration:none}
+.sidebar a.nav.active{background:rgba(255,255,255,.12);font-weight:600}
+.main{flex:1;min-width:0;padding:2.6rem 3rem 5rem;max-width:1220px}
+
+/* Type helpers */
+.eyebrow{font:500 .68rem/1.2 var(--mono);letter-spacing:.18em;text-transform:uppercase;
+  color:var(--stone-500);display:block;margin-bottom:.4rem}
+.hero{border-bottom:1px solid var(--paper-200);padding-bottom:1.4rem;margin-bottom:1.6rem}
+.hero h1{font-size:2.3rem;font-weight:300;margin-bottom:.3rem}
+.hero p{color:var(--stone-500);margin:.6rem 0 0;max-width:56em}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--stone-500)}
+.small{font-size:.85rem}
+
+a.feature-card:hover > div{box-shadow:var(--shadow-md);transform:translateY(-2px);
+  border-color:var(--paper-300)}
+a.feature-card:hover h3{color:var(--teal-700)}
+
+/* Layout helpers */
+.row{display:flex;gap:1rem;align-items:center;flex-wrap:wrap}
+.grid{display:grid;gap:1rem}
+.spread{display:flex;justify-content:space-between;align-items:baseline;gap:1rem}
+hr.rule{border:0;border-top:1px solid var(--paper-200);margin:1.6rem 0}

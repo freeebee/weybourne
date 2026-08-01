@@ -1,0 +1,1264 @@
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Live questions</title>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+.gva-root {
+  --ink: #101d1b;
+  --ink-soft: #43524f;
+  --paper: #fbfaf7;
+  --rule: #d9d6cd;
+  --teal: #0f5c55;
+  --teal-bright: #1b8c7e;
+  --flag: #9a5b12;
+  --flag-bg: #fdf3e3;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Newsreader', Georgia, serif;
+  font-size: 16px;
+  line-height: 1.5;
+  min-height: 100%;
+  padding: 20px;
+}
+body { margin: 0; background: #fbfaf7; }
+.gva-root *, .gva-root *::before, .gva-root *::after { box-sizing: border-box; }
+
+.mono {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft);
+}
+
+.head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 16px; border-bottom: 1px solid var(--ink); padding-bottom: 10px; }
+.head h1 { font-size: 25px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.head .sub { font-style: italic; color: var(--ink-soft); font-size: 15px; }
+.tally { margin-left: auto; display: flex; gap: 14px; }
+.tally b { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500; color: var(--ink); }
+
+.pulse {
+  margin: 14px 0 18px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  border: 1px solid var(--rule); border-left: 3px solid var(--teal); background: #fff; padding: 10px 14px;
+}
+.pulse .dot, .watch .dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--teal-bright);
+  flex: none; animation: breathe 2.4s ease-in-out infinite;
+}
+.pulse.idle .dot { background: var(--rule); animation: none; }
+.pulse.err { border-left-color: var(--flag); }
+.pulse.err .dot { background: var(--flag); animation: none; }
+@keyframes breathe { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.8); } }
+@media (prefers-reduced-motion: reduce) { .pulse .dot, .watch .dot { animation: none; } }
+.pulse .txt { flex: 1 1 220px; min-width: 0; }
+.meter { position: relative; width: 78px; height: 2px; background: var(--rule); overflow: hidden; flex: none; }
+.meter i { position: absolute; top: 0; bottom: 0; left: 0; width: 0; display: block; background: var(--teal); transition: width 1s linear; }
+.meter.idle i { background: var(--rule); }
+.meter.busy i { width: 34%; transition: none; animation: sweep 1.15s ease-in-out infinite; }
+@keyframes sweep { from { transform: translateX(-120%); } to { transform: translateX(320%); } }
+@media (prefers-reduced-motion: reduce) { .meter.busy i { animation: none; width: 100%; } }
+.pulse .status { font-size: 15px; color: var(--ink-soft); }
+.pulse.err .status { color: var(--flag); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button {
+  font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em;
+  text-transform: uppercase; padding: 7px 12px; border: 1px solid var(--ink);
+  background: #fff; color: var(--ink); cursor: pointer;
+}
+button:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
+button:disabled { opacity: .4; cursor: default; }
+button.primary { background: var(--teal); border-color: var(--teal); color: #fff; }
+button.primary:hover:not(:disabled) { background: var(--ink); border-color: var(--ink); }
+button.big { font-size: 13px; padding: 11px 18px; }
+button.on { background: var(--ink); color: var(--paper); }
+button.quiet { border-color: var(--rule); color: var(--ink-soft); }
+button.quiet:hover:not(:disabled) { border-color: var(--ink); background: #fff; color: var(--ink); }
+:focus-visible { outline: 2px solid var(--teal-bright); outline-offset: 2px; }
+select, input[type=text] {
+  font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 6px 8px;
+  border: 1px solid var(--rule); background: #fff; color: var(--ink);
+}
+
+.batch { border-top: 1px solid var(--rule); padding: 18px 0 4px; }
+.batch:first-of-type { border-top: 1px solid var(--ink); }
+.batch-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.recap { margin: 8px 0 14px; font-size: 16.5px; }
+.recap .lead { font-variant-caps: all-small-caps; letter-spacing: 0.06em; color: var(--teal); margin-right: 6px; }
+
+ol.qs { list-style: none; margin: 0; padding: 0; }
+ol.qs li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; padding: 8px 10px 8px 0; border-bottom: 1px dotted var(--rule); }
+ol.qs li:last-child { border-bottom: none; }
+ol.qs li .n { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink-soft); padding-top: 3px; }
+ol.qs li.flag { background: var(--flag-bg); padding-left: 10px; }
+ol.qs li.flag .n { color: var(--flag); font-weight: 500; }
+ol.qs li.done .qtext { text-decoration: line-through; text-decoration-thickness: 1px; color: #8d9996; }
+ol.qs li.done .n { color: var(--teal); }
+.answer { margin-top: 5px; padding-left: 10px; border-left: 2px solid var(--teal-bright); font-size: 15.5px; color: var(--ink); }
+.answer .lead { font-variant-caps: all-small-caps; letter-spacing: 0.06em; color: var(--teal); margin-right: 6px; }
+
+.compose { border: 1px solid var(--rule); background: #fff; padding: 12px 14px; margin-bottom: 18px; }
+.compose textarea, .stage textarea {
+  width: 100%; min-height: 54px; resize: vertical; margin: 6px 0 8px;
+  font-family: 'Newsreader', Georgia, serif; font-size: 16px; color: var(--ink);
+  border: none; border-bottom: 1px solid var(--rule); background: none; padding: 4px 0;
+}
+.compose textarea:focus, .stage textarea:focus { outline: none; border-bottom-color: var(--teal); }
+.compose textarea::placeholder, .stage textarea::placeholder, .stage input::placeholder { color: #a3aca9; font-style: italic; }
+.result { margin-top: 12px; border-top: 1px dotted var(--rule); padding-top: 12px; }
+.result .polished { font-size: 17.5px; }
+.pill {
+  display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 9px;
+  letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 7px; margin-bottom: 7px; border: 1px solid currentColor;
+}
+.pill.open { color: var(--teal); }
+.pill.partial { color: var(--flag); background: var(--flag-bg); }
+.pill.answered { color: #6b7875; }
+.why { margin-top: 6px; font-style: italic; color: var(--ink-soft); font-size: 15px; }
+
+.switch { display: inline-flex; }
+.switch button { border-right-width: 0; }
+.switch button:last-child { border-right-width: 1px; }
+
+ol.qs.standing li { padding-top: 11px; padding-bottom: 11px; }
+ol.qs.standing .qtext { font-size: 17px; }
+.raised { margin-top: 4px; font-size: 9px; opacity: .75; }
+
+.empty { border: 1px dashed var(--rule); padding: 22px; text-align: center; color: var(--ink-soft); font-style: italic; }
+.foot { margin-top: 18px; border-top: 1px solid var(--rule); padding-top: 10px; }
+.hide { display: none !important; }
+
+.stage { max-width: 660px; }
+.stage h1 { font-size: 27px; font-weight: 600; margin: 0 0 4px; }
+.stage .lede { font-style: italic; color: var(--ink-soft); margin: 0 0 24px; font-size: 16px; }
+.watch { border: 1px solid var(--rule); border-left: 3px solid var(--teal); background: #fff; padding: 14px 16px; margin-bottom: 22px; display: flex; gap: 12px; align-items: flex-start; }
+.watch.down { border-left-color: var(--flag); }
+.watch.down .dot { background: var(--flag); animation: none; }
+.watch .body { flex: 1 1 auto; min-width: 0; }
+.watch .headline { font-size: 18px; }
+.checks { margin-top: 10px; }
+.checks .ck { display: grid; grid-template-columns: 16px 1fr; gap: 8px; padding: 3px 0; align-items: baseline; }
+.checks .mark { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink-soft); }
+.checks .ck.ok .mark { color: var(--teal); }
+.checks .ck.no .mark { color: var(--flag); font-weight: 500; }
+.checks .what { font-size: 15px; color: var(--ink-soft); }
+.checks .ck.no .what { color: var(--flag); }
+.checks .raw { font-family: 'IBM Plex Mono', monospace; font-size: 11px; line-height: 1.5; color: var(--ink-soft); word-break: break-word; margin-top: 2px; user-select: text; }
+.checks .verdict { margin-top: 8px; font-size: 15px; }
+.watch .detail { font-size: 15px; color: var(--ink-soft); margin-top: 3px; }
+.watch.down .detail { color: var(--flag); }
+
+.field { margin-bottom: 18px; }
+.field > label { display: block; margin-bottom: 3px; }
+.field input[type=text] { width: 100%; font-family: 'Newsreader', Georgia, serif; font-size: 16px; padding: 5px 0; border: none; border-bottom: 1px solid var(--rule); }
+.field input[type=text]:focus { outline: none; border-bottom-color: var(--teal); }
+.hint { font-size: 14px; font-style: italic; color: var(--ink-soft); margin-top: 4px; }
+.orient { margin: 0 0 16px; font-size: 15.5px; color: var(--ink-soft); font-style: italic; border-left: 2px solid var(--rule); padding-left: 10px; }
+
+.chips { display: grid; gap: 7px; margin: 8px 0 4px; }
+.chip {
+  display: block; width: 100%; text-align: left; padding: 9px 12px;
+  border: 1px solid var(--rule); border-left: 3px solid var(--rule); background: #fff;
+  font-family: 'Newsreader', Georgia, serif; font-size: 16.5px; letter-spacing: 0;
+  text-transform: none; color: var(--ink); cursor: pointer;
+}
+.chip:hover:not(:disabled) { background: #fff; color: var(--ink); border-color: var(--ink-soft); }
+.chip.on { border-left-color: var(--teal); border-color: var(--ink-soft); }
+.chip .meta { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-soft); margin-top: 3px; }
+.chip.on .meta { color: var(--teal); }
+
+/* ---- wrap up ---- */
+.ended { border: 1px solid var(--rule); border-left: 3px solid var(--flag); background: var(--flag-bg); padding: 12px 14px; margin-bottom: 18px; }
+.ended .line { font-size: 16px; }
+.sheet { border: 1px solid var(--ink); background: #fff; padding: 16px 18px; margin-bottom: 18px; }
+.sheet h2 { font-size: 20px; font-weight: 600; margin: 0 0 12px; }
+.row { display: grid; grid-template-columns: 130px 1fr; gap: 10px; padding: 7px 0; border-bottom: 1px dotted var(--rule); align-items: baseline; }
+.row:last-of-type { border-bottom: none; }
+.row .val { font-size: 16px; }
+.tag {
+  display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px;
+  padding: 2px 7px; margin: 2px 4px 2px 0; border: 1px solid var(--rule); background: var(--paper);
+}
+.tag.ok { border-color: var(--teal); color: var(--teal); }
+.tag.miss { border-color: var(--flag); color: var(--flag); background: var(--flag-bg); }
+.dupe { border: 1px solid var(--flag); background: var(--flag-bg); padding: 10px 12px; margin-bottom: 12px; }
+.dupe .mono { color: var(--flag); }
+.dupe a, .sheet a { color: var(--teal); }
+.progress { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ink-soft); margin-top: 10px; }
+</style>
+
+<div class="gva-root">
+  <!-- ---------------------------------------------------------------- -->
+  <div class="stage" id="stage">
+    <h1>Live questions</h1>
+    <p class="lede">Hit record in Notion. This picks up whatever is being transcribed, feeds you questions through the call, and writes the note at the end.</p>
+
+    <div class="watch" id="watch">
+      <span class="dot"></span>
+      <div class="body">
+        <div class="headline" id="watch-head">Checking what this page can reach</div>
+        <div class="detail" id="watch-detail">One moment.</div>
+        <div class="checks" id="checks"></div>
+      </div>
+      <button class="quiet" id="btn-watch">Pause</button>
+    </div>
+
+    <div class="controls" style="margin-bottom:24px">
+      <button class="primary big" id="btn-start">Start now</button>
+      <button class="big quiet" id="btn-recheck">Check again</button>
+    </div>
+
+    <div class="field">
+      <label class="mono">Who you are meeting</label>
+      <div class="chips" id="chips"></div>
+      <div class="controls" style="margin-top:8px">
+        <button id="btn-cal">Refresh from calendar</button>
+        <button id="btn-other">Someone else</button>
+      </div>
+    </div>
+
+    <div class="field hide" id="f-who">
+      <label class="mono" for="who">Counterparty</label>
+      <input type="text" id="who" placeholder="Axiom Asia, Fund VII" spellcheck="false" />
+    </div>
+
+    <div class="field">
+      <label class="mono" for="ctx">What you want out of it</label>
+      <textarea id="ctx" placeholder="Optional. e.g. re-up decision, want to test whether the capacity story holds and who actually ran the winners."></textarea>
+      <div class="hint">Steers which questions get asked, and what the note judges the meeting against.</div>
+    </div>
+
+    <div class="field">
+      <label class="mono" for="page">Notion page, if you want to pin one</label>
+      <input type="text" id="page" placeholder="Leave blank to use whatever is recording" spellcheck="false" />
+    </div>
+
+    <div class="field controls">
+      <label class="mono" for="cad" style="margin:0">Read every</label>
+      <select id="cad">
+        <option value="30" selected>30s</option>
+        <option value="45">45s</option>
+        <option value="60">60s</option>
+        <option value="90">90s</option>
+      </select>
+    </div>
+
+    <p class="hint">The transcript trails the room by a few seconds, so the questions do too. Tell the other side you are recording.</p>
+  </div>
+
+  <!-- ---------------------------------------------------------------- -->
+  <div id="live" class="hide">
+    <div class="head">
+      <h1 id="h-title">Live questions</h1>
+      <span class="sub" id="h-sub"></span>
+      <span class="tally">
+        <span class="mono">open <b id="t-open">0</b></span>
+        <span class="mono">answered <b id="t-done">0</b></span>
+        <span class="mono">reads <b id="t-reads">0</b></span>
+      </span>
+    </div>
+
+    <div class="pulse" id="pulse">
+      <span class="dot"></span>
+      <div class="txt">
+        <div class="mono" id="p-state">starting</div>
+        <div class="status" id="p-status"></div>
+      </div>
+      <div class="meter" id="p-meter" aria-hidden="true"><i id="p-fill"></i></div>
+      <div class="controls">
+        <button class="primary" id="btn-now">Check now</button>
+        <button id="btn-pause">Pause</button>
+        <span class="switch">
+          <button id="btn-timeline" class="on">Timeline</button>
+          <button id="btn-outstanding">Outstanding <span id="b-open">0</span></button>
+        </span>
+        <select id="cad2">
+          <option value="30" selected>30s</option>
+          <option value="45">45s</option>
+          <option value="60">60s</option>
+          <option value="90">90s</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="ended hide" id="ended">
+      <div class="line" id="ended-line">The transcript has stopped growing, so the call looks finished.</div>
+      <div class="controls" style="margin-top:10px">
+        <button class="primary" id="btn-wrap">Draft the note</button>
+        <button class="quiet" id="btn-keep-going">Still talking</button>
+      </div>
+    </div>
+
+    <div id="sheet-out"></div>
+
+    <p class="orient hide" id="orient"></p>
+
+    <div class="compose">
+      <div class="mono">Sketch a question</div>
+      <textarea id="draft" placeholder="rough is fine. e.g. fees? and lockup terms"></textarea>
+      <div class="controls">
+        <button class="primary" id="btn-sharpen">Sharpen and check</button>
+        <span class="mono">Cmd or Ctrl + Enter</span>
+      </div>
+      <div id="draft-out"></div>
+    </div>
+
+    <div id="body"></div>
+
+    <div class="foot controls">
+      <button id="btn-note">Draft the note</button>
+      <button id="btn-new">New session</button>
+      <span class="mono">Struck rows are covered. Highlighted rows are the risk items to ask first.</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var MCP = "https://mcp.notion.com/mcp";
+  var M365 = "https://microsoft365.mcp.claude.com/mcp";
+  var API = "https://api.anthropic.com/v1/messages";
+
+  // Weybourne's databases.
+  var DS = {
+    notes: "collection://2038387e-c92d-818f-bdf7-000b13759666",
+    contacts: "collection://2038387e-c92d-8177-8a3c-000b17cbc5b4",
+    funds: "collection://2038387e-c92d-8189-8b5e-000b89f38460",
+    companies: "collection://2038387e-c92d-81da-a04b-000ba88be711",
+  };
+  var NOTE_TYPES = "Reference call, LP Meeting, GP Meeting, 3rd Party Marketer, Event, Email, Internal, Service Provider";
+
+  // Whoever opens this page: read on load, never baked in.
+  var CALENDAR = [];
+  var CAL = { state: "loading", error: "", owner: "", showingAll: false, ctrl: null, tick: null, since: 0 };
+
+  var S = {
+    pageUrl: "", who: "", people: "", ctx: "",
+    probes: "capacity, economics and fees, valuation and marks, team lineage and attribution, process, key person risk, and any contradiction with what was said earlier",
+    tail: "", batches: [], items: [], seq: 1,
+    running: false, cadence: 30, countdown: 3, busy: false, error: null, reads: 0,
+    view: "timeline", orientation: "",
+    quiet: 0, ended: false,
+    timer: null, watchTimer: null, autoStart: null, watching: true, watchBusy: false,
+    seen: {}, picked: -1, watchFails: 0,
+    plan: null, writing: false,
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function clock(d) { return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
+  function pad(n) { return n < 10 ? "0" + n : String(n); }
+  function today() {
+    var d = new Date(), m = d.getMonth() + 1, day = d.getDate();
+    return d.getFullYear() + "-" + pad(m) + "-" + pad(day);
+  }
+
+  // ---------------------------------------------------------------------
+  // API
+  // ---------------------------------------------------------------------
+
+  // A request blocked by the browser never reaches Anthropic, so it is not a
+  // Notion problem and not worth giving up over.
+  function isNetworkFail(msg) {
+    return /never reached the API|Failed to fetch|NetworkError|Load failed|network error/i.test(String(msg || ""));
+  }
+
+  // origin "null" means an opaque origin: a sandboxed frame with no origin of its
+  // own. Every cross-origin request from here is refused before it is sent, so
+  // there is nothing to wait for and nothing the page can do about it.
+  function opaqueOrigin() {
+    return location.protocol === "file:" || String(location.origin) === "null" || !location.origin;
+  }
+
+  function whereAmI() {
+    if (opaqueOrigin()) {
+      return "This frame has no origin of its own, which the browser reports as null, so it refuses every request to " +
+        "api.anthropic.com before sending one. That is what a file preview looks like. An artifact is given a route to the " +
+        "API; a preview of the same HTML is not. Attach this file in a new chat, ask for it back as an artifact, and run it " +
+        "there. Nothing about your network or your extensions is involved, so there is nothing to change on your machine.";
+    }
+    return "The request was blocked before it left the browser. This page is at " + location.origin +
+      ", so if it is a genuine artifact the likely cause is an extension, VPN or corporate network filtering " +
+      "api.anthropic.com. If it is a file preview rather than an artifact, that alone explains it: ask for the file " +
+      "back as an artifact in a new chat and run it there.";
+  }
+
+  // Every call is bounded. Without this, one request that never returns leaves a
+  // loop stuck on its busy flag and the whole tool goes quiet.
+  var T = (typeof window !== "undefined" && window.__T) || { cal: 60000, watch: 45000, read: 90000, write: 150000, watchEvery: 20000 };
+  if (!T.watchEvery) T.watchEvery = 20000;
+
+  function callApi(payload, ms, ctrl) {
+    ms = ms || T.read;
+    ctrl = ctrl || (typeof AbortController !== "undefined" ? new AbortController() : null);
+    var timer = ctrl ? setTimeout(function () { try { ctrl.abort(); } catch (_) {} }, ms) : null;
+    var opts = { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) };
+    if (ctrl) opts.signal = ctrl.signal;
+    return fetch(API, opts).then(function (res) {
+      if (timer) clearTimeout(timer);
+      return res;
+    }, function (e) {
+      if (timer) clearTimeout(timer);
+      if (e && (e.name === "AbortError" || /abort/i.test(e.message || ""))) {
+        throw new Error("No reply after " + Math.round(ms / 1000) + " seconds, so the request was given up on. Try again.");
+      }
+      throw new Error("The request never reached the API (" + (e.message || "network error") + "). Nothing was sent.");
+    });
+  }
+
+  function payloadFor(prompt, mcp) {
+    var p = { model: "claude-sonnet-4-6", max_tokens: 1000, messages: [{ role: "user", content: prompt }] };
+    if (mcp) p.mcp_servers = [{ type: "url", url: mcp, name: mcp === MCP ? "notion" : "microsoft365" }];
+    return p;
+  }
+
+  function askClaude(prompt, mcp, ms, ctrl) {
+    return callApi(payloadFor(prompt, mcp), ms, ctrl).then(function (res) {
+      return res.text().then(function (raw) {
+        if (!res.ok) {
+          var detail = raw.slice(0, 240);
+          try { var j = JSON.parse(raw); if (j.error && j.error.message) detail = j.error.message; } catch (_) {}
+          if (mcp && /mcp_server/i.test(raw)) {
+            throw new Error("This page cannot use the " + (mcp === MCP ? "Notion" : "Microsoft") +
+              " connector here (HTTP " + res.status + "). " + detail);
+          }
+          throw new Error("Read failed, HTTP " + res.status + ". " + detail);
+        }
+        var data;
+        try { data = JSON.parse(raw); } catch (_) { throw new Error("Unreadable reply. " + raw.slice(0, 200)); }
+        if (data.type === "error") throw new Error("API error. " + ((data.error && data.error.message) || "no detail"));
+
+        var blocks = data.content || [];
+        var text = blocks.filter(function (b) { return b.type === "text"; })
+          .map(function (b) { return b.text; }).join("\n").replace(/```json|```/g, "").trim();
+        var s = text.indexOf("{"), e = text.lastIndexOf("}");
+        if (s === -1 || e === -1) {
+          var ran = blocks.some(function (b) { return b.type === "mcp_tool_use"; });
+          var bad = blocks.some(function (b) { return b.type === "mcp_tool_result" && b.is_error; });
+          if (bad) throw new Error("The connector call itself failed. The page may not be shared with the connector, or it needs reconnecting.");
+          if (data.stop_reason === "max_tokens") throw new Error("The reply was cut off. The transcript is long, so widen the read interval.");
+          if (mcp && !ran) throw new Error("The connector was never called. " + (text.slice(0, 160) || "(empty reply)"));
+          throw new Error("No JSON in the reply. Starts: " + (text.slice(0, 160) || "(empty)"));
+        }
+        try { return JSON.parse(text.slice(s, e + 1)); } catch (_) {
+          throw new Error("The reply came back malformed. Starts: " + text.slice(s, s + 160));
+        }
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Prompts
+  // ---------------------------------------------------------------------
+
+  function stance() {
+    var who = S.who || "the counterparty";
+    var lines = ["You are helping an investor at Weybourne, a single family office, during a live meeting with " + who + "."];
+    if (S.people) lines.push("On their side: " + S.people + ".");
+    lines.push("Weybourne is on the LP side: they allocate, and they are probing " + who +
+      ", so every question must be answerable by " + who + " in the room, not by the note taker.");
+    if (S.ctx) lines.push("What the investor wants out of this call: " + S.ctx + ".");
+    if (S.orientation) lines.push("Your read of this call so far: " + S.orientation);
+    return lines.join(" ");
+  }
+
+  // A live recording is an untitled child page whose body is the raw transcript.
+  // Only once it finishes does it become a <transcript> tag in a meeting-notes block,
+  // and sometimes that tag just points at a block url to fetch instead.
+  function transcriptRules() {
+    return "The transcript appears in three different shapes and you must handle all three:\n" +
+      "1. While the recording is still running, the note is usually an untitled page whose body simply is the raw transcript text, " +
+      "with no <transcript> tag anywhere. Use that body text as the transcript.\n" +
+      "2. Once the recording has finished, it sits inside a <transcript> tag within a <meeting-notes> block. Use that.\n" +
+      "3. Sometimes that <transcript> tag says the transcript was omitted and gives a url containing a # fragment. " +
+      "Call notion-fetch again on that exact url and use what comes back.\n" +
+      "Never report an empty transcript just because you only looked in one of those places.";
+  }
+
+  function fetchStep(verb) {
+    return (S.pageUrl
+      ? 'call the Notion notion-fetch tool with id "' + S.pageUrl + '" and include_transcript set to true, then ' + verb + " the transcript"
+      : "call notion-query-meeting-notes filtered to notes last edited within the past day, take the one created most recently, " +
+        'return its URL in "pageUrl", then call notion-fetch on it with include_transcript set to true and ' + verb + " the transcript"
+      ) + ".\n\n" + transcriptRules();
+  }
+
+  function readPrompt(openList, priorRecaps) {
+    return stance() + "\n\nStep 1: " + fetchStep("read") + ".\n\n" +
+      "Step 2: the tail of the transcript as of the previous check was:\n\"\"\"" + (S.tail || "(nothing seen yet)") + "\"\"\"\n" +
+      "Everything after that point is new speech. Speaker labels are not reliable, so infer who is talking.\n\n" +
+      "Step 3: these questions are still open. If the new speech answers one, even partly, report it:\n" + (openList || "(none open)") + "\n\n" +
+      "Step 4: reply with ONLY a JSON object. No preamble, no fences, no commentary.\n" +
+      '{"changed": true or false,\n' +
+      ' "pageUrl": "the page you read, only if you had to find it",\n' +
+      ' "tail": "the final 240 characters of the transcript, verbatim",\n' +
+      ' "read": "one short line naming what kind of call this is and who the counterparty appears to be, only on your first reply or if your earlier read was wrong, otherwise an empty string",\n' +
+      ' "recap": "one tight paragraph on the concrete points the counterparty made in the new speech: figures, names, terms, claims, commitments. No filler.",\n' +
+      ' "answered": [{"id": <open question id>, "answer": "what they actually said, under 30 words, with the figure or name. If half answered, say what is missing."}],\n' +
+      ' "questions": [{"q": "a pointed follow-up referencing the actual figure, name or claim just stated", "flag": true or false}]}\n\n' +
+      "Rules: only put an id in \"answered\" if the new speech genuinely addresses it, and never invent an answer. A vague or dodged reply does not count, so leave it open and re-pose it sharper as a new question. " +
+      "Give 3 to 5 new questions, most useful first, flag true for the one or two sharpest risk items only. Probe " + S.probes + ". " +
+      "The transcript is machine generated, so if a figure looks mistranscribed, ask them to confirm it rather than treating it as fact. " +
+      "If no meaningful new speech has appeared, set changed to false, recap to \"\", answered to [] and questions to [], but still return the tail. Never use em dashes.\n\n" +
+      "Earlier in this call: \"\"\"" + (priorRecaps || "(nothing yet)") + "\"\"\"";
+  }
+
+  function sharpenPrompt(rough) {
+    return stance() + "\n\nStep 1: " + fetchStep("read") + ".\n\n" +
+      "The investor has sketched a rough question mid-call and wants it sharpened and checked against what has been said.\n\n" +
+      "Their sketch, possibly in shorthand:\n\"\"\"" + rough + "\"\"\"\n\n" +
+      "Rewrite it as one sharp question the counterparty can answer. Keep the intent, make it specific, anchor it to figures, names or claims they have actually made, and cut hedging. One question, under 45 words.\n\n" +
+      "Then decide whether the transcript already covers it: \"answered\", \"partial\" or \"open\".\n\n" +
+      "Reply with ONLY a JSON object, no fences:\n" +
+      '{"question": "the rewritten question", "status": "answered" or "partial" or "open", ' +
+      '"evidence": "if answered or partial, what they said, under 30 words, with their figure or name. Otherwise empty.", ' +
+      '"why": "one short clause on what the rewrite sharpened, under 15 words."}\n\n' +
+      "Never invent an answer or a figure they did not say. Never use em dashes.";
+  }
+
+  // ---- the note ----
+
+  function planPrompt() {
+    var attendeeHint = (S.people ? "Their side, from the calendar: " + S.people + ". " : "") +
+      "Weybourne colleagues on the invitation should be included as attendees too.";
+    return "You are preparing a Weybourne meeting note in Notion, working from a live transcript. " +
+      "This step is read only: do not create or update anything yet.\n\n" +
+      (S.ctx ? "What the investor wanted out of this call, in their own words: " + S.ctx +
+        ". Judge the meeting against that, and let it steer which topics deserve a section.\n\n" : "") +
+      "Step 1: " + fetchStep("read all of") + ".\n\n" +
+      "Step 2: work out where the note should live. Walk the transcript page's ancestor path. A recording in progress is often a nested " +
+      "untitled child page sitting inside a \"Rough notes\" toggle on a page that already belongs to " + DS.notes + ". " +
+      "If any ancestor page belongs to that data source, THAT ancestor is the note: report its URL in \"targetPage\", set " +
+      '"targetIsExisting" to true, and it must be updated in place rather than duplicated. Only if no ancestor belongs to that ' +
+      "data source should targetPage be empty.\n\n" +
+      "Step 3: duplicate check. Query " + DS.notes + " for notes dated within a day of " + today() +
+      " whose title mentions the counterparty, or which relate to the same fund. Report every candidate you find in \"duplicates\". " +
+      "This matters: the user does not want a second note for the same meeting.\n\n" +
+      "Step 4: resolve the relations, searching by name.\n" +
+      "- Attendees: query " + DS.contacts + " for each person on the call. " + attendeeHint + "\n" +
+      "- Fund: query " + DS.funds + " for the fund actually discussed, including its vintage or number if stated.\n" +
+      "For each one report how many rows matched. Return a URL only when exactly one row matched, or when one is clearly right because its company matches the counterparty. " +
+      "If a name is ambiguous or absent, leave the url empty and say why in \"note\". Never guess a relation, and never create new contacts or funds.\n\n" +
+      "Step 5: draft the note's frame. Titles in this database read like \"Call with Nephila\", \"Meeting with REVA\", or just the manager name.\n\n" +
+      "Note Type must be exactly one of: " + NOTE_TYPES + ". Work it out from what was actually said, and always choose one rather than leaving it blank:\n" +
+      "- GP Meeting: a manager pitching or updating Weybourne on their own fund. The usual case.\n" +
+      "- LP Meeting: another allocator, family office or fund of funds, talking as a peer rather than raising from you.\n" +
+      "- Reference call: someone speaking about a third party manager or person, typically an existing investor or former colleague.\n" +
+      "- 3rd Party Marketer: a placement agent or capital raiser representing someone else's fund.\n" +
+      "- Event: a conference, webinar or group session rather than a meeting held for Weybourne.\n" +
+      "- Internal: Weybourne people only, no outside party.\n" +
+      "- Service Provider: lawyers, fund administrators, auditors, banks, data or software vendors.\n" +
+      "- Email: only for correspondence, so not for a recorded call.\n" +
+      "Signals worth weighting: who is selling to whom, whether a fund of theirs is being raised, whether the subject is a third party, and whether anyone outside Weybourne is present at all.\n\n" +
+      "Reply with ONLY a JSON object, no fences:\n" +
+      '{"targetPage": "", "targetIsExisting": false, "pageUrl": "the transcript page you read",\n' +
+      ' "duplicates": [{"title": "", "url": "", "date": ""}],\n' +
+      ' "title": "", "noteType": "", "noteTypeWhy": "one short clause on what made you pick that type",\n' +
+      ' "date": "' + today() + '",\n' +
+      ' "attendees": [{"name": "", "url": "", "matched": 0, "note": ""}],\n' +
+      ' "funds": [{"name": "", "url": "", "matched": 0, "note": ""}],\n' +
+      ' "thoughts": "three sentences of qualitative judgement on what the manager presented, what stood up and what did not, and the state of any live decision. Insight led, not a list of metrics.",\n' +
+      ' "sections": ["Meeting Overview", "then one heading per substantive topic in the order discussed"],\n' +
+      ' "qaCount": <how many question and answer pairs the Q&A section will need, at most 10>}\n\n' +
+      "Never use em dashes anywhere.";
+  }
+
+  function createPrompt(p) {
+    var props = [
+      'Name: "' + p.title + '"',
+      'Note Type: "' + p.noteType + '"',
+      "Date: " + p.date,
+      "Attendees: " + JSON.stringify((p.attendees || []).filter(function (a) { return a.url; }).map(function (a) { return a.url; })),
+      "Fund: " + JSON.stringify((p.funds || []).filter(function (f) { return f.url; }).map(function (f) { return f.url; })),
+      'Thoughts / Considerations: "' + String(p.thoughts || "").replace(/"/g, "'") + '"',
+    ].join("\n  ");
+
+    var aim = S.ctx ? " The investor came in wanting: " + S.ctx + ". Judge the meeting against that." : "";
+    if (p.targetIsExisting && p.targetPage) {
+      return "Update the existing Notion page " + p.targetPage + " in place. Do not create a new page: this page is already the note, and a second one would be a duplicate.\n\n" +
+        "Set these properties:\n  " + props + "\n\n" +
+        "The body carries a placeholder line reading \"Insert Cleaned Note Here\". Delete that line and put the note where it stood. " +
+        "The placeholder must not survive, and neither should the blank blocks around it. If there is no placeholder, insert the note above the \"Rough notes\" toggle instead.\n\n" +
+        "Write this and nothing else:\n" +
+        "### Meeting Overview\n---\n- **Overall Impression** - one paragraph of judgement on what they presented and how it held up.\n" +
+        "- **Next Stage** - what happens next and by when." + aim + "\n\n" +
+        "Read the transcript first if you need it: " + (p.pageUrl || p.targetPage) + " with include_transcript true.\n\n" +
+        'Reply with ONLY a JSON object, no fences: {"ok": true, "url": "the page url", "detail": "one short line on what you did"}';
+    }
+    return "Create one new page in the Notion data source " + DS.notes + ".\n\n" +
+      "Properties:\n  " + props + "\n\n" +
+      "Body, exactly this shape and nothing else yet. If the database template drops in a placeholder line reading " +
+      "\"Insert Cleaned Note Here\", delete it rather than writing around it:\n" +
+      "### Meeting Overview\n---\n- **Overall Impression** - one paragraph of judgement on what they presented and how it held up.\n" +
+      "- **Next Stage** - what happens next and by when." + aim + "\n\n" +
+      "Read the transcript for the content: call notion-fetch on " + p.pageUrl + " with include_transcript true.\n" +
+      "Then add a final line linking to that transcript page.\n\n" +
+      'Reply with ONLY a JSON object, no fences: {"ok": true, "url": "the new page url", "detail": "one short line on what you did"}';
+  }
+
+  function sectionPrompt(p, heading, isQa) {
+    var target = p.writtenUrl;
+    var shape = isQa
+      ? "### Q&A\n---\n**Q**: the question as asked\n**A** - what they answered, in full sentences\n\n" +
+        "Cover the " + (p.qaCount || 8) + " most consequential exchanges. Where a question was dodged, say so plainly in the answer."
+      : "### " + heading + "\n---\n- **Short Label** - a full sentence or two of substance. Figures, names, terms, mechanisms.\n" +
+        "Use six to eight bullets where the material supports it, fewer if it does not.";
+    return "Append one section to the Notion page " + target + ", after the sections already there and before any \"Rough notes\" toggle. " +
+      "If a placeholder line reading \"Insert Cleaned Note Here\" is still sitting in the body, delete it.\n\n" +
+      "First read the transcript: call notion-fetch on " + p.pageUrl + " with include_transcript true.\n\n" +
+      "Write exactly this section and nothing else:\n" + shape + "\n\n" +
+      "House style: third person, past tense, plain institutional English. State what the manager said as their claim, not as fact. " +
+      "Keep every figure, name and date they gave. Never invent anything not in the transcript. Never use em dashes.\n\n" +
+      'Reply with ONLY a JSON object, no fences: {"ok": true, "detail": "one short line"}';
+  }
+
+  // ---------------------------------------------------------------------
+  // Watching
+  // ---------------------------------------------------------------------
+
+  var CHECKS = { api: null, notion: null, m365: null, running: false };
+
+  function probeOnce(prompt, mcp, ms) {
+    return askClaude(prompt, mcp, ms).then(function () { return { ok: true }; },
+      function (e) { return { ok: false, why: e.message || String(e) }; });
+  }
+
+  function ck(state, what, raw) {
+    return '<div class="ck ' + state + '"><span class="mark">' +
+      (state === "ok" ? "\u2713" : state === "no" ? "\u00d7" : "\u00b7") + "</span><span>" +
+      '<span class="what">' + esc(what) + "</span>" +
+      (raw ? '<div class="raw">' + esc(raw) + "</div>" : "") + "</span></div>";
+  }
+
+  function paintChecks() {
+    var out = "";
+    out += CHECKS.api === null ? ck("", "Reaching Claude") 
+      : CHECKS.api.ok ? ck("ok", "Reaching Claude")
+      : ck("no", "Cannot reach Claude. " + whereAmI(), CHECKS.api.why);
+
+    if (CHECKS.api && CHECKS.api.ok) {
+      out += CHECKS.notion === null ? ck("", "Notion connector")
+        : CHECKS.notion.ok ? ck("ok", "Notion connector answering")
+        : ck("no", "Notion connector not answering", CHECKS.notion.why);
+      out += CHECKS.m365 === null ? ck("", "Microsoft connector")
+        : CHECKS.m365.ok ? ck("ok", "Microsoft connector answering")
+        : ck("no", "Microsoft connector not answering, so the calendar list will be empty", CHECKS.m365.why);
+    }
+
+    var bothOut = CHECKS.notion && CHECKS.m365 && !CHECKS.notion.ok && !CHECKS.m365.ok;
+    if (bothOut) {
+      var mcpish = /connector here|mcp_server|never called/i.test((CHECKS.notion.why || "") + (CHECKS.m365.why || ""));
+      out += '<div class="verdict">' + (mcpish
+        ? "Neither connector is available to this page, which is what stops it working. It needs to run as an artifact inside Claude, on an account with Notion connected."
+        : "Both connectors failed the same way, so this is the connection between Claude and this page rather than either service.") + "</div>";
+    }
+    $("checks").innerHTML = out;
+  }
+
+  function runChecks() {
+    if (CHECKS.running) return Promise.resolve();
+    CHECKS.running = true;
+    CHECKS.api = CHECKS.notion = CHECKS.m365 = null;
+    stopWatching();
+    $("watch").className = "watch";
+    $("watch-head").textContent = "Checking what this page can reach";
+    $("watch-detail").textContent = "Three quick calls, then it starts watching.";
+    paintChecks();
+
+    if (opaqueOrigin()) {
+      CHECKS.api = { ok: false, why: "Blocked by the browser, not by Anthropic: this frame reports its origin as " +
+        String(location.origin) + ", so no cross-origin request can leave it." };
+      CHECKS.running = false;
+      paintChecks();
+      $("watch").className = "watch down";
+      $("watch-head").textContent = "Not watching";
+      $("watch-detail").textContent = "Nothing works until this page can reach Claude.";
+      CALENDAR = [];
+      CAL.state = "failed";
+      CAL.error = "Not tested, because the page cannot reach Claude at all.";
+      paintChips();
+      return Promise.resolve();
+    }
+
+    return probeOnce('Reply with only {"ok":true}', null, 25000).then(function (r) {
+      CHECKS.api = r; paintChecks();
+      if (!r.ok) return;
+      return probeOnce('List the names of the Notion tools you can call. Reply with only {"tools":"comma separated names"}', MCP, 30000)
+        .then(function (n) {
+          CHECKS.notion = n; paintChecks();
+          return probeOnce('List the names of the Microsoft tools you can call. Reply with only {"tools":"comma separated names"}', M365, 30000);
+        }).then(function (m) { CHECKS.m365 = m; paintChecks(); });
+    }).then(function () {
+      CHECKS.running = false;
+      paintChecks();
+      if (CHECKS.notion && CHECKS.notion.ok) {
+        var armed = false;
+        var arm = function () { if (!armed) { armed = true; startWatching(); } };
+        setTimeout(arm, 9000);
+        if (CHECKS.m365 && CHECKS.m365.ok) { refreshCalendar().then(arm, arm); } else { arm(); }
+      } else {
+        $("watch").className = "watch down";
+        $("watch-head").textContent = "Not watching";
+        $("watch-detail").textContent = CHECKS.api && !CHECKS.api.ok
+          ? "Nothing works until this page can reach Claude."
+          : "Without Notion it cannot see your transcript. Fix that and press Check again.";
+      }
+      if (!(CHECKS.m365 && CHECKS.m365.ok)) {
+        CALENDAR = [];
+        CAL.state = "failed";
+        CAL.error = CHECKS.m365 ? "The Microsoft connector is not answering." : "Not tested.";
+        paintChips();
+      }
+    });
+  }
+
+  function lookForRecording() {
+    if (S.running) { stopWatching(); return Promise.resolve(); }
+    if (S.watchBusy || !S.watching) return Promise.resolve();
+    S.watchBusy = true;
+    return askClaude(
+      "Call notion-query-meeting-notes filtered to notes last edited within the past day, then take the one that was CREATED most " +
+      "recently, because a recording in progress creates a fresh page and its title is usually still empty. " +
+      "Call notion-fetch on it with include_transcript set to true.\n\n" + transcriptRules() + "\n\n" +
+      "Its own title may be empty while recording, so also report the title of the nearest ancestor page from the ancestor path.\n\n" +
+      'Reply with ONLY a JSON object, no fences: {"url": "the page url", "title": "its title or empty", ' +
+      '"parentTitle": "nearest ancestor page title, or empty", ' +
+      '"chars": <how many characters of transcript text you actually found, 0 if none>, ' +
+      '"shape": "body" or "transcript-tag" or "fetched-block" or "none", ' +
+      '"created": "created time in ISO 8601", "lastEdited": "last edited time in ISO 8601"}',
+      MCP
+    ).then(function (r) {
+      if (!r || !r.url) throw new Error("No meeting note came back.");
+      S.watchFails = 0;
+      var chars = Number(r.chars) || 0, known = S.seen[r.url];
+      S.seen[r.url] = chars;
+      function minsSince(iso) {
+        if (!iso) return null;
+        var t = Date.parse(iso);
+        return isNaN(t) ? null : (Date.now() - t) / 60000;
+      }
+      // Notion does not touch last_edited_time while a recording runs, so age of
+      // the page and growth of the text are the signals that mean anything.
+      var born = minsSince(r.created), ago = minsSince(r.lastEdited);
+      var grew = known != null && chars > known;
+      var live = chars > 40 && (grew || (born != null && born < 20) || (ago != null && ago < 5));
+
+      if (live) {
+        S.pageUrl = r.url;
+        matchCounterparty(r.title || r.parentTitle);
+        $("watch").className = "watch";
+        $("watch-head").textContent = "Recording found: " + (r.title || "untitled note");
+        $("watch-detail").textContent = "Starting on this one.";
+        stopWatching();
+        S.autoStart = setTimeout(function () { S.autoStart = null; start(); }, 400);
+        return;
+      }
+      $("watch").className = "watch";
+      $("watch-head").textContent = "Watching for a recording";
+      $("watch-detail").textContent = chars
+        ? "Newest note is " + (r.title || r.parentTitle || "untitled") + ", holding " + chars +
+          " characters, found in the " + (r.shape || "page") + ". Not growing and not recent, so it looks finished. " +
+          "Start now if this is the one you want."
+        : "Newest note holds no transcript text yet" + (r.shape === "none" ? "" : " (" + r.shape + ")") +
+          ". Hit record and this will pick it up.";
+    }).catch(function (e) {
+      var msg = e.message || String(e);
+      $("watch").className = "watch down";
+      if (isNetworkFail(msg)) {
+        S.watchFails += 1;
+        $("watch-head").textContent = "Cannot reach the API";
+        $("watch-detail").textContent = whereAmI() +
+          " Still trying every " + Math.round(T.watchEvery / 1000) + " seconds, " +
+          S.watchFails + " attempt" + (S.watchFails === 1 ? "" : "s") + " so far.";
+        return;   // transient by nature, so keep watching
+      }
+      $("watch-head").textContent = "Cannot read your meeting notes";
+      $("watch-detail").textContent = msg + " Watching has stopped.";
+      stopWatching();
+    }).then(function () { S.watchBusy = false; });
+  }
+
+  function matchCounterparty(title) {
+    if (S.who) return;
+    var t = String(title || "").toLowerCase();
+    for (var i = 0; i < CALENDAR.length; i++) {
+      var org = String(CALENDAR[i].org || ""), first = org.split(/\s+/)[0].toLowerCase();
+      if (first.length > 2 && t.indexOf(first) !== -1) {
+        S.who = org; S.people = CALENDAR[i].who || ""; S.picked = i;
+        paintChips(); $("who").value = org;
+        return;
+      }
+    }
+    if (title) S.who = String(title).replace(/\s*[-–:|].*$/, "").trim().slice(0, 60);
+  }
+
+  function startWatching() {
+    S.watching = true;
+    $("btn-watch").textContent = "Pause";
+    if (S.watchTimer) clearInterval(S.watchTimer);
+    S.watchTimer = setInterval(lookForRecording, T.watchEvery);
+    lookForRecording();
+  }
+  function stopWatching() {
+    S.watching = false;
+    $("btn-watch").textContent = "Resume";
+    if (S.autoStart) { clearTimeout(S.autoStart); S.autoStart = null; }
+    if (S.watchTimer) { clearInterval(S.watchTimer); S.watchTimer = null; }
+  }
+
+  // ---------------------------------------------------------------------
+  // Reads
+  // ---------------------------------------------------------------------
+
+  function openItems() { return S.items.filter(function (i) { return !i.answer; }); }
+
+  function poll() {
+    if (S.busy) return Promise.resolve();
+    S.busy = true; S.error = null; paint();
+    var openList = openItems().map(function (it) { return "[" + it.id + "] " + it.q; }).join("\n");
+    var prior = S.batches.filter(function (b) { return b.recap; }).slice(0, 3).map(function (b) { return b.recap; }).join(" | ");
+
+    return askClaude(readPrompt(openList, prior), MCP, T.read).then(function (parsed) {
+      S.reads += 1;
+      if (!parsed) return;
+      if (parsed.pageUrl && !S.pageUrl) S.pageUrl = parsed.pageUrl;
+      if (parsed.tail) S.tail = parsed.tail;
+      if (parsed.read && String(parsed.read).trim()) S.orientation = String(parsed.read).trim();
+
+      var answered = Array.isArray(parsed.answered) ? parsed.answered : [];
+      if (answered.length) {
+        S.items.forEach(function (it) {
+          var hit = answered.filter(function (a) { return Number(a.id) === it.id; })[0];
+          if (hit && hit.answer && !it.answer) it.answer = hit.answer;
+        });
+      }
+      var fresh = Array.isArray(parsed.questions) ? parsed.questions : [];
+      var moved = parsed.changed !== false && (fresh.length || parsed.recap);
+      if (moved) {
+        S.quiet = 0;
+        var bid = Date.now();
+        S.batches.unshift({ id: bid, at: new Date(), recap: parsed.recap || "" });
+        fresh.forEach(function (f) {
+          if (!f || !f.q) return;
+          S.items.push({ id: S.seq++, batchId: bid, q: f.q, flag: !!f.flag, answer: null });
+        });
+      } else {
+        S.quiet += 1;
+        if (S.quiet >= 3 && !S.ended && S.items.length) {
+          S.ended = true;
+          $("ended").className = "ended";
+          $("ended-line").textContent = "Nothing new for " + S.quiet + " reads, so the call looks finished. " +
+            (S.items.length ? openItems().length + " questions never got answered, and they go into the note." : "");
+        }
+      }
+    }).catch(function (err) {
+      S.error = err.message || String(err);
+    }).then(function () {
+      S.busy = false; S.countdown = S.cadence; paintAll();
+    });
+  }
+
+  function sharpen() {
+    var rough = $("draft").value.trim();
+    if (!rough) return;
+    var out = $("draft-out");
+    out.innerHTML = '<div class="result mono">Checking against the transcript</div>';
+    $("btn-sharpen").disabled = true;
+    askClaude(sharpenPrompt(rough), MCP, T.read).then(function (res) {
+      if (!res || !res.question) throw new Error("No usable rewrite came back. Try again.");
+      var label = res.status === "answered" ? "already answered" : res.status === "partial" ? "partly answered" : "not covered yet";
+      out.innerHTML = '<div class="result">' +
+        '<div class="pill ' + esc(res.status) + '">' + esc(label) + "</div>" +
+        '<div class="polished">' + esc(res.question) + "</div>" +
+        (res.evidence ? '<div class="answer"><span class="lead">They said</span>' + esc(res.evidence) + "</div>" : "") +
+        (res.why ? '<div class="why">' + esc(res.why) + "</div>" : "") +
+        '<div class="controls" style="margin-top:10px"><button id="btn-keep">' +
+        (res.status === "answered" ? "File as answered" : "Add to outstanding") + '</button>' +
+        '<button id="btn-drop">Discard</button></div></div>';
+      $("btn-keep").onclick = function () {
+        if (!S.batches.some(function (b) { return b.id === -1; })) {
+          S.batches.push({ id: -1, at: null, label: "your questions", recap: "" });
+        }
+        S.items.push({ id: S.seq++, batchId: -1, q: res.question, flag: false,
+          answer: res.status === "answered" && res.evidence ? res.evidence : null });
+        $("draft").value = ""; out.innerHTML = ""; paintAll();
+      };
+      $("btn-drop").onclick = function () { out.innerHTML = ""; };
+    }).catch(function (e) {
+      out.innerHTML = '<div class="result" style="color:var(--flag)">' + esc(e.message || e) + "</div>";
+    }).then(function () { $("btn-sharpen").disabled = false; });
+  }
+
+  // ---------------------------------------------------------------------
+  // The note
+  // ---------------------------------------------------------------------
+
+  function pageId(u) {
+    var m = String(u || "").replace(/-/g, "").match(/([0-9a-f]{32})/i);
+    return m ? m[1].toLowerCase() : "";
+  }
+
+  function relTag(r) {
+    if (r.url) return '<span class="tag ok">' + esc(r.name) + "</span>";
+    return '<span class="tag miss">' + esc(r.name) + (r.matched > 1 ? " (" + r.matched + " matches)" : " (no match)") + "</span>";
+  }
+
+  function draftNote() {
+    S.running = false;
+    var out = $("sheet-out");
+    out.innerHTML = '<div class="sheet"><h2>Drafting the note</h2><div class="progress">Reading the transcript, checking for duplicates, matching contacts and funds.</div></div>';
+    askClaude(planPrompt(), MCP, T.write).then(function (p) {
+      if (!p) throw new Error("Nothing came back.");
+      p.sections = (p.sections || []).filter(function (h) { return h && !/^\s*action items\s*$/i.test(h); });
+      S.plan = p;
+      var unresolved = (p.attendees || []).concat(p.funds || []).filter(function (r) { return !r.url; });
+      var dupes = (p.duplicates || []).filter(function (d) { return d && d.url && d.url !== p.targetPage; });
+
+      out.innerHTML = '<div class="sheet">' +
+        "<h2>" + esc(p.title || "Untitled note") + "</h2>" +
+        (p.targetIsExisting
+          ? '<div class="dupe"><div class="mono">Updating in place</div>The transcript page already sits in your Notes database, so this fills that page in rather than creating a second one. <a href="' + esc(p.targetPage) + '" target="_blank">Open it</a></div>'
+          : "") +
+        (dupes.length
+          ? '<div class="dupe"><div class="mono">Possible duplicate' + (dupes.length > 1 ? "s" : "") + '</div>' +
+            dupes.map(function (d) {
+              return '<div><a href="' + esc(d.url) + '" target="_blank">' + esc(d.title || d.url) + "</a>" +
+                (d.date ? " &middot; " + esc(d.date) : "") + "</div>";
+            }).join("") + "<div style='margin-top:6px'>Check these before writing.</div></div>"
+          : "") +
+        '<div class="row"><span class="mono">note type</span><span class="val">' + esc(p.noteType || "not set") +
+          (p.noteTypeWhy ? ' <span class="why" style="display:inline; margin:0">' + esc(p.noteTypeWhy) + "</span>" : "") + "</span></div>" +
+        '<div class="row"><span class="mono">date</span><span class="val">' + esc(p.date || today()) + "</span></div>" +
+        '<div class="row"><span class="mono">attendees</span><span class="val">' +
+          ((p.attendees || []).length ? (p.attendees || []).map(relTag).join("") : "none found") + "</span></div>" +
+        '<div class="row"><span class="mono">fund</span><span class="val">' +
+          ((p.funds || []).length ? (p.funds || []).map(relTag).join("") : "none found") + "</span></div>" +
+        '<div class="row"><span class="mono">thoughts</span><span class="val">' + esc(p.thoughts || "") + "</span></div>" +
+        '<div class="row"><span class="mono">sections</span><span class="val">' +
+          (p.sections || []).map(function (h) { return '<span class="tag">' + esc(h) + "</span>"; }).join("") +
+          '<span class="tag">Q&amp;A</span></span></div>' +
+        (unresolved.length
+          ? '<div class="hint">Amber tags did not resolve to exactly one row, so they will be left off rather than guessed. Add them by hand, or fix the name and draft again.</div>'
+          : "") +
+        '<div class="controls" style="margin-top:14px">' +
+          '<button class="primary" id="btn-write">' + (p.targetIsExisting ? "Fill in that page" : "Create the note") + "</button>" +
+          '<button class="quiet" id="btn-redraft">Draft again</button>' +
+          '<button class="quiet" id="btn-cancel">Cancel</button>' +
+        "</div><div class='progress' id='write-progress'></div></div>";
+
+      $("btn-write").onclick = writeNote;
+      $("btn-redraft").onclick = draftNote;
+      $("btn-cancel").onclick = function () { out.innerHTML = ""; S.plan = null; };
+    }).catch(function (e) {
+      out.innerHTML = '<div class="sheet"><h2>Could not draft the note</h2><div class="val" style="color:var(--flag)">' +
+        esc(e.message || e) + '</div><div class="controls" style="margin-top:12px">' +
+        '<button id="btn-redraft2">Try again</button><button class="quiet" id="btn-cancel2">Cancel</button></div></div>';
+      $("btn-redraft2").onclick = draftNote;
+      $("btn-cancel2").onclick = function () { out.innerHTML = ""; };
+    });
+  }
+
+  function writeNote() {
+    if (S.writing || !S.plan) return;
+    S.writing = true;
+    var p = S.plan;
+    var prog = $("write-progress");
+    $("btn-write").disabled = true; $("btn-redraft").disabled = true;
+    prog.textContent = p.targetIsExisting ? "Filling in the page" : "Creating the page";
+
+    askClaude(createPrompt(p), MCP, T.write).then(function (r) {
+      if (!r || r.ok === false) throw new Error((r && r.detail) || "The page was not written.");
+      var returned = r.url || "";
+      if (p.targetIsExisting && p.targetPage) {
+        p.writtenUrl = p.targetPage;
+        // If it reports a different page, it may have created a second note after all.
+        if (returned && pageId(returned) && pageId(returned) !== pageId(p.targetPage)) p.stray = returned;
+      } else {
+        p.writtenUrl = returned || p.targetPage;
+      }
+      if (!p.writtenUrl) throw new Error("The page was written but no URL came back, so the sections cannot be appended. Check Notion.");
+
+      var headings = (p.sections || []).filter(function (h) {
+        return h && !/^meeting overview$/i.test(h.trim());
+      });
+      var i = 0;
+      function next() {
+        if (i >= headings.length) {
+          prog.textContent = "Adding the Q&A";
+          return askClaude(sectionPrompt(p, "Q&A", true), MCP, T.write);
+        }
+        var h = headings[i++];
+        prog.textContent = "Adding section " + i + " of " + headings.length + ": " + h;
+        return askClaude(sectionPrompt(p, h, false), MCP, T.write).then(next);
+      }
+      return next();
+    }).then(function () {
+      var open = openItems();
+      prog.innerHTML = "";
+      $("sheet-out").innerHTML = '<div class="sheet"><h2>Note written</h2>' +
+        '<div class="val"><a href="' + esc(p.writtenUrl) + '" target="_blank">' + esc(p.title) + "</a> is in your Notes database" +
+        (p.targetIsExisting ? ", filled in on the page that already held the transcript." : ".") + "</div>" +
+        (p.stray
+          ? '<div class="dupe"><div class="mono">Check for a stray page</div>It reported writing to <a href="' + esc(p.stray) +
+            '" target="_blank">a different page</a> from the one that held the transcript, so a second note may have been created.</div>'
+          : "") +
+        (open.length
+          ? '<div class="hint">' + open.length + " question" + (open.length === 1 ? "" : "s") +
+            " never got a straight answer. They are in the Outstanding list here, worth carrying into the follow up.</div>"
+          : "") +
+        '<div class="controls" style="margin-top:12px"><button id="btn-new2">New session</button></div></div>';
+      $("btn-new2").onclick = reset;
+    }).catch(function (e) {
+      prog.innerHTML = '<span style="color:var(--flag)">' + esc(e.message || e) + "</span>";
+      if ($("btn-write")) { $("btn-write").disabled = false; $("btn-redraft").disabled = false; }
+    }).then(function () { S.writing = false; });
+  }
+
+  // ---------------------------------------------------------------------
+  // Painting
+  // ---------------------------------------------------------------------
+
+  function paint() {
+    var open = openItems().length;
+    $("t-open").textContent = open;
+    $("t-done").textContent = S.items.length - open;
+    $("t-reads").textContent = S.reads;
+    $("b-open").textContent = open;
+
+    $("pulse").className = "pulse" + (S.error ? " err" : S.running ? "" : " idle");
+    $("p-state").textContent = S.error ? "read failed" : S.busy ? "reading the transcript"
+      : S.running ? "next read in " + S.countdown + "s" : "paused";
+
+    var status;
+    if (S.error) status = isNetworkFail(S.error) ? S.error + " " + whereAmI() : S.error;
+    else if (!S.items.length) status = "Watching the transcript. Questions appear once there is speech to read.";
+    else status = "Answered questions get struck through with what they said. The transcript trails the room slightly.";
+    $("p-status").textContent = status;
+
+    // A plain hairline: filling while it counts down, sweeping while it reads.
+    $("p-meter").className = "meter" + (S.busy ? " busy" : S.running ? "" : " idle");
+    $("p-fill").style.width = S.busy ? "34%"
+      : S.running ? Math.round(((S.cadence - S.countdown) / S.cadence) * 100) + "%" : "0";
+    $("btn-pause").textContent = S.running ? "Pause" : "Resume";
+    $("btn-now").disabled = S.busy;
+    $("btn-timeline").className = S.view === "timeline" ? "on" : "";
+    $("btn-outstanding").className = S.view === "outstanding" ? "on" : "";
+    if (S.orientation) { $("orient").className = "orient"; $("orient").textContent = S.orientation; }
+  }
+
+  function paintBody() { $("body").innerHTML = S.view === "timeline" ? timelineHtml() : outstandingHtml(); }
+  function paintAll() { paint(); paintBody(); }
+  function rank(b) { return b.id > 0 ? 0 : b.id === -1 ? 1 : 2; }
+
+  function timelineHtml() {
+    var ordered = S.batches.slice().sort(function (a, b) { return rank(a) - rank(b) || b.id - a.id; }), out = "";
+    ordered.forEach(function (b) {
+      var list = S.items.filter(function (i) { return i.batchId === b.id; });
+      if (!list.length && !b.recap) return;
+      var stillOpen = list.filter(function (i) { return !i.answer; }).length;
+      out += '<div class="batch"><div class="batch-head"><span class="mono">' +
+        esc(b.at ? clock(b.at) : (b.label || "opening set")) + '</span><span class="mono">' + stillOpen + " still open</span></div>" +
+        (b.recap ? '<p class="recap"><span class="lead">Just said</span>' + esc(b.recap) + "</p>" : "") +
+        '<ol class="qs">' + list.map(function (it, i) {
+          return '<li class="' + (it.flag && !it.answer ? "flag " : "") + (it.answer ? "done" : "") + '">' +
+            '<span class="n">' + (it.answer ? "\u2713" : it.flag ? "!" : pad(i + 1)) + "</span>" +
+            '<span><span class="qtext">' + esc(it.q) + "</span>" +
+            (it.answer ? '<div class="answer"><span class="lead">They said</span>' + esc(it.answer) + "</div>" : "") +
+            "</span></li>";
+        }).join("") + "</ol></div>";
+    });
+    return out || '<div class="empty">Nothing yet. The first questions land after the first read of the transcript.</div>';
+  }
+
+  function outstandingHtml() {
+    var list = S.items.filter(function (i) { return !i.answer; }).map(function (i) {
+      var b = S.batches.filter(function (x) { return x.id === i.batchId; })[0];
+      var label = b && b.at ? "raised " + b.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        : b && b.label ? b.label : "opening set";
+      var copy = {}; for (var k in i) copy[k] = i[k];
+      copy.raisedLabel = label; return copy;
+    }).sort(function (a, b) { return (b.flag ? 1 : 0) - (a.flag ? 1 : 0) || b.batchId - a.batchId; });
+    if (!list.length) return '<div class="empty">Nothing outstanding. Every question raised so far has been answered.</div>';
+    return '<div class="batch"><div class="batch-head"><span class="mono">still to ask, risk items first</span>' +
+      '<span class="mono">' + list.length + " open</span></div><ol class=\"qs standing\">" +
+      list.map(function (it, i) {
+        return '<li class="' + (it.flag ? "flag" : "") + '"><span class="n">' + (it.flag ? "!" : pad(i + 1)) + "</span>" +
+          '<span><span class="qtext">' + esc(it.q) + '</span><div class="raised mono">' + esc(it.raisedLabel) + "</div></span></li>";
+      }).join("") + "</ol></div>";
+  }
+
+  function paintChips() {
+    if (CAL.state !== "ready" || !CALENDAR.length) {
+      var line = CAL.state === "loading" ? "Reading your calendar."
+        : CAL.state === "failed"
+          ? "Could not read your calendar. " + CAL.error + " Try refresh again, or use Someone else and type the counterparty below."
+          : "Nothing on your calendar for the next day. Use Someone else, or type the counterparty below.";
+      $("chips").innerHTML = '<div class="hint"' + (CAL.state === "failed" ? ' style="color:var(--flag)"' : "") +
+        ">" + esc(line) + "</div>";
+      return;
+    }
+    $("chips").innerHTML = '<div class="mono" style="margin-bottom:4px">' +
+      (CAL.owner ? "from " + esc(CAL.owner) + "'s calendar" : "from your calendar") +
+      (CAL.showingAll ? ", nothing looked external so everything is listed" : "") + "</div>" +
+      CALENDAR.map(function (c, i) {
+      return '<button class="chip' + (S.picked === i ? " on" : "") + '" data-i="' + i + '">' + esc(c.org) +
+        '<span class="meta">' + esc(c.when) + (c.who ? " &middot; " + esc(c.who) : "") + (c.note ? " &middot; " + esc(c.note) : "") +
+        "</span></button>";
+    }).join("") || '<div class="hint">Nothing on the calendar for the next day. Use someone else.</div>';
+    Array.prototype.forEach.call($("chips").querySelectorAll(".chip"), function (el) {
+      el.onclick = function () {
+        var i = Number(el.getAttribute("data-i"));
+        S.picked = i; S.who = CALENDAR[i].org; S.people = CALENDAR[i].who || "";
+        $("who").value = CALENDAR[i].org; $("f-who").className = "field hide";
+        paintChips();
+      };
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Wiring
+  // ---------------------------------------------------------------------
+
+  function start() {
+    if (S.autoStart) { clearTimeout(S.autoStart); S.autoStart = null; }
+    if (!S.who) S.who = $("who").value.trim();
+    S.ctx = $("ctx").value.trim();
+    S.cadence = Number($("cad").value) || 30;
+    if (!S.pageUrl) S.pageUrl = $("page").value.trim();
+    S.countdown = 3; S.running = true;
+    stopWatching();
+
+    $("h-title").textContent = S.who ? "Meeting with " + S.who : "Live questions";
+    $("h-sub").textContent = "live questions, LP side";
+    $("cad2").value = String(S.cadence);
+    $("stage").className = "stage hide";
+    $("live").className = "";
+    paintAll();
+
+    if (S.timer) clearInterval(S.timer);
+    S.timer = setInterval(function () {
+      if (!S.running || S.busy) { paint(); return; }
+      S.countdown -= 1;
+      if (S.countdown <= 0) { S.countdown = S.cadence; poll(); }
+      paint();
+    }, 1000);
+    poll();
+  }
+
+  function reset() {
+    S.running = false;
+    if (S.timer) clearInterval(S.timer);
+    S.batches = []; S.items = []; S.seq = 1; S.reads = 0; S.tail = "";
+    S.orientation = ""; S.error = null; S.picked = -1; S.who = ""; S.people = ""; S.ctx = "";
+    S.pageUrl = ""; S.seen = {}; S.quiet = 0; S.ended = false; S.plan = null;
+    $("orient").className = "orient hide";
+    $("ended").className = "ended hide";
+    $("draft-out").innerHTML = ""; $("sheet-out").innerHTML = "";
+    $("live").className = "hide"; $("stage").className = "stage"; $("who").value = ""; $("ctx").value = "";
+    paintAll(); paintChips();
+    runChecks();
+  }
+
+  function calTick(on) {
+    if (CAL.tick) { clearInterval(CAL.tick); CAL.tick = null; }
+    if (!on) return;
+    CAL.since = Date.now();
+    CAL.tick = setInterval(function () {
+      if (CAL.state !== "loading") return;
+      var secs = Math.round((Date.now() - CAL.since) / 1000);
+      var el = $("chips").querySelector(".hint");
+      if (el) el.textContent = "Reading your calendar, " + secs + "s.";
+    }, 1000);
+  }
+
+  function refreshCalendar() {
+    if (CAL.state === "loading" && CAL.ctrl) return Promise.resolve();
+    CAL.ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+    CAL.state = "loading"; CAL.error = "";
+    $("btn-cal").textContent = "Stop";
+    $("btn-cal").disabled = false;
+    paintChips();
+    calTick(true);
+    return askClaude(
+      "Call outlook_calendar_search for the signed-in user's events between now and 30 hours from now. " +
+      "Skip declined events and all-day entries such as leave. Take at most 8, soonest first.\n\n" +
+      "For each one work out whether it involves anyone outside the user's own organisation, by comparing attendee email domains " +
+      "against the domain most of them share. If you cannot tell, set external to false rather than dropping the meeting.\n\n" +
+      "The calendar response states the time zone its times are in. Render each start time in that zone and append a short label, " +
+      "so a 10:30 start in Asia/Singapore reads \"10:30 SGT\". Say Today or the weekday, whichever is clearer.\n\n" +
+      'Reply with ONLY a JSON object, no fences, and keep every field under twelve words:\n' +
+      '{"you": "the signed-in user\'s name if you can tell, otherwise empty",\n' +
+      ' "meetings": [{"org": "the outside firm, or the meeting subject if there is none", "when": "Today, 22:00 SGT", ' +
+      '"who": "their people, names only", "note": "call or in person, and which colleagues are on it", "external": true or false}],\n' +
+      ' "error": "only if a tool call failed, the failure in one clause, otherwise empty"}\n\n' +
+      "Do not describe the calendar in prose, and do not list anything you did not get from the tool. Never use em dashes.",
+      M365, T.cal, CAL.ctrl
+    ).then(function (r) {
+      if (r && r.error) throw new Error(String(r.error));
+      var all = (r && Array.isArray(r.meetings)) ? r.meetings.filter(function (m) { return m && m.org; }) : [];
+      var outside = all.filter(function (m) { return m.external !== false; });
+      // Better to show everything than to show nothing.
+      CALENDAR = outside.length ? outside : all;
+      CAL.showingAll = !outside.length && all.length > 0;
+      CAL.owner = (r && r.you) || "";
+      CAL.state = CALENDAR.length ? "ready" : "empty";
+      S.picked = -1;
+      paintChips();
+    }).catch(function (e) {
+      CALENDAR = [];
+      CAL.state = "failed";
+      CAL.error = e.message || String(e);
+      paintChips();
+    }).then(function () {
+      calTick(false);
+      CAL.ctrl = null;
+      $("btn-cal").textContent = "Refresh from calendar";
+      $("btn-cal").disabled = false;
+    });
+  }
+
+  $("btn-start").onclick = start;
+  $("btn-recheck").onclick = function () { runChecks(); };
+  $("btn-watch").onclick = function () { if (S.watching) stopWatching(); else startWatching(); };
+  $("btn-cal").onclick = function () {
+    if (CAL.state === "loading" && CAL.ctrl) {
+      try { CAL.ctrl.abort(); } catch (_) {}
+      return;
+    }
+    refreshCalendar();
+  };
+  $("btn-other").onclick = function () {
+    S.picked = -1; S.who = ""; S.people = "";
+    $("f-who").className = "field"; $("who").value = ""; $("who").focus(); paintChips();
+  };
+  $("btn-now").onclick = function () { poll(); };
+  $("btn-pause").onclick = function () { S.running = !S.running; paint(); };
+  $("btn-timeline").onclick = function () { S.view = "timeline"; paintAll(); };
+  $("btn-outstanding").onclick = function () { S.view = "outstanding"; paintAll(); };
+  $("cad2").onchange = function () { S.cadence = Number(this.value) || 30; S.countdown = S.cadence; paint(); };
+  $("btn-sharpen").onclick = sharpen;
+  $("draft").addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sharpen(); }
+  });
+  $("btn-wrap").onclick = draftNote;
+  $("btn-note").onclick = draftNote;
+  $("btn-keep-going").onclick = function () {
+    S.ended = false; S.quiet = 0; S.running = true;
+    $("ended").className = "ended hide";
+    paint();
+  };
+  $("btn-new").onclick = reset;
+
+  document.addEventListener("keydown", function (e) {
+    if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+    if (e.key === "o" || e.key === "O") { S.view = S.view === "outstanding" ? "timeline" : "outstanding"; paintAll(); }
+  });
+
+  paintChips();
+  runChecks();
+})();
+</script>

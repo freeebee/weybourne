@@ -125,7 +125,8 @@ class TimeSlot(BaseModel):
             e = datetime.fromisoformat(self.end)
         except ValueError:
             return f"{self.start} – {self.end}"
-        return f"{s.strftime('%a %-d %b, %H:%M')}–{e.strftime('%H:%M')}"
+        # %-d is not portable to Windows, so strip the leading zero by hand.
+        return f"{s.strftime('%a')} {s.day} {s.strftime('%b, %H:%M')}–{e.strftime('%H:%M')}"
 
 
 # --- Notion database record shapes (subset of the Property Guidebook) ------- #
@@ -172,6 +173,12 @@ class ExtractedEntity(BaseModel):
     geography: str = ""
     sleeve: Sleeve = "Unclear"
     summary: str = ""
+    # Richer fields for Notion page creation — empty when not in the email.
+    strategy_description: str = ""   # the strategy in the manager's own terms
+    vintage: str = ""                # e.g. "2026"
+    target_size: str = ""            # e.g. "$500m"
+    company_city: str = ""
+    company_country: str = ""
 
 
 class InvestmentTriage(BaseModel):

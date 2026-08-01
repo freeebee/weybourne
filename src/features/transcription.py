@@ -182,6 +182,241 @@ to work, what would break it. Push on anything asserted without evidence.
 - Keep each question to one sentence a person can say out loud."""
 
 
+# --------------------------------------------------------------------------- #
+# Panel-style reads (modelled on the live-questions-panel reference design:
+# docs/reference/live-questions-panel.html). Each read returns a batch — a tight
+# recap of the new speech, answers to open questions, and fresh flagged
+# questions — which the page renders as a timeline.
+# --------------------------------------------------------------------------- #
+
+READ_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "changed": {"type": "boolean"},
+        "recap": {
+            "type": "string",
+            "description": "One tight paragraph on the concrete points just made: "
+                           "figures, names, terms, claims, commitments. Empty if nothing new.",
+        },
+        "answered": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer"},
+                    "answer": {"type": "string",
+                               "description": "What they actually said, under 30 words, "
+                                              "with the figure or name"},
+                },
+                "required": ["id", "answer"],
+                "additionalProperties": False,
+            },
+        },
+        "questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "q": {"type": "string"},
+                    "flag": {"type": "boolean",
+                             "description": "True for the one or two sharpest risk items only"},
+                },
+                "required": ["q", "flag"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["changed", "recap", "answered", "questions"],
+    "additionalProperties": False,
+}
+
+READ_SYSTEM_PROMPT = """You are helping an investor at Weybourne, a single family office, \
+during a live meeting. Weybourne is on the LP side: they allocate, and they are probing the \
+counterparty, so every question must be answerable by the counterparty in the room.
+
+Rules:
+- Only report a question as answered if the new speech genuinely addresses it; never invent \
+an answer. A vague or dodged reply does not count — leave it open and re-pose it sharper as a \
+new question.
+- Give 3 to 5 new questions, most useful first; flag true for the one or two sharpest risk \
+items only. Probe capacity, economics and fees, valuation and marks, team lineage and \
+attribution, process, key person risk, and any contradiction with what was said earlier.
+- The transcript is machine generated: if a figure looks mistranscribed, ask them to confirm \
+it rather than treating it as fact.
+- If no meaningful new speech has appeared, set changed to false with empty recap, answered \
+and questions.
+- Keep each question one sentence a person can say out loud. Never use em dashes."""
+
+
+def read_transcript_batch(
+    client,
+    buffer: TranscriptBuffer,
+    open_items: list[dict],
+    context: str = "",
+    prior_recaps: str = "",
+    last_tail: str = "",
+) -> dict:
+    """One panel-style read: recap of new speech + answered ids + fresh questions.
+
+    ``open_items`` is a list of {"id": int, "q": str} still outstanding.
+    """
+    open_list = "\n".join(f"[{it['id']}] {it['q']}" for it in open_items) or "(none open)"
+    user = (
+        f"MEETING CONTEXT\n{context or '(none supplied)'}\n\n"
+        f"TAIL AT PREVIOUS READ\n\"\"\"{last_tail or '(nothing seen yet)'}\"\"\"\n"
+        "Everything after that point is new speech. Speaker labels are unreliable; infer who "
+        "is talking.\n\n"
+        f"OPEN QUESTIONS\n{open_list}\n\n"
+        f"EARLIER IN THIS CALL\n\"\"\"{prior_recaps or '(nothing yet)'}\"\"\"\n\n"
+        f"TRANSCRIPT (recent window)\n{buffer.recent_text()}"
+    )
+    response = client.messages.create(
+        model=REASONING_MODEL,
+        max_tokens=1500,
+        system=READ_SYSTEM_PROMPT,
+        output_config={"format": {"type": "json_schema", "schema": READ_SCHEMA}},
+        messages=[{"role": "user", "content": user}],
+    )
+    raw = next((b.text for b in response.content if getattr(b, "type", None) == "text"), "")
+    return json.loads(raw)
+
+
+SHARPEN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "question": {"type": "string", "description": "The rewritten question, under 45 words"},
+        "status": {"type": "string", "enum": ["answered", "partial", "open"]},
+        "evidence": {"type": "string",
+                     "description": "If answered or partial: what they said, under 30 words. "
+                                    "Otherwise empty."},
+        "why": {"type": "string", "description": "What the rewrite sharpened, under 15 words"},
+    },
+    "required": ["question", "status", "evidence", "why"],
+    "additionalProperties": False,
+}
+
+
+def sharpen_question(client, buffer: TranscriptBuffer, rough: str, context: str = "") -> dict:
+    """Rewrite a rough mid-call sketch into one sharp question, checked against the transcript."""
+    user = (
+        f"MEETING CONTEXT\n{context or '(none supplied)'}\n\n"
+        "The investor has sketched a rough question mid-call and wants it sharpened and "
+        "checked against what has been said.\n\n"
+        f"THEIR SKETCH (possibly shorthand)\n\"\"\"{rough}\"\"\"\n\n"
+        "Rewrite it as one sharp question the counterparty can answer: keep the intent, make "
+        "it specific, anchor it to figures, names or claims actually made, cut hedging. Then "
+        "decide whether the transcript already covers it. Never invent an answer or figure. "
+        "Never use em dashes.\n\n"
+        f"TRANSCRIPT (recent window)\n{buffer.recent_text()}"
+    )
+    response = client.messages.create(
+        model=REASONING_MODEL,
+        max_tokens=800,
+        system=READ_SYSTEM_PROMPT,
+        output_config={"format": {"type": "json_schema", "schema": SHARPEN_SCHEMA}},
+        messages=[{"role": "user", "content": user}],
+    )
+    raw = next((b.text for b in response.content if getattr(b, "type", None) == "text"), "")
+    return json.loads(raw)
+
+
+NOTE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string", "description": "e.g. 'Call with Axiom Asia'"},
+        "note_type": {
+            "type": "string",
+            "enum": ["GP Meeting", "LP Meeting", "Reference call", "3rd Party Marketer",
+                     "Event", "Internal", "Service Provider", "Email"],
+        },
+        "overall_impression": {
+            "type": "string",
+            "description": "One paragraph of judgement on what they presented and how it held up",
+        },
+        "next_stage": {"type": "string", "description": "What happens next and by when"},
+        "sections": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "heading": {"type": "string"},
+                    "bullets": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["heading", "bullets"],
+                "additionalProperties": False,
+            },
+        },
+        "qa": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"q": {"type": "string"}, "a": {"type": "string"}},
+                "required": ["q", "a"],
+                "additionalProperties": False,
+            },
+            "description": "The most consequential exchanges, at most 10. Where a question "
+                           "was dodged, say so plainly in the answer.",
+        },
+    },
+    "required": ["title", "note_type", "overall_impression", "next_stage", "sections", "qa"],
+    "additionalProperties": False,
+}
+
+NOTE_SYSTEM_PROMPT = """You draft a Weybourne meeting note from a live transcript.
+
+House style: third person, past tense, plain institutional English. State what the manager \
+said as their claim, not as fact. Keep every figure, name and date they gave. Never invent \
+anything not in the transcript. Never use em dashes. One heading per substantive topic in the \
+order discussed. Never include an Action Items section."""
+
+
+def draft_meeting_note(
+    client,
+    buffer: TranscriptBuffer,
+    context: str = "",
+    unanswered: list[str] | None = None,
+) -> dict:
+    """Draft the end-of-call note from the full transcript."""
+    open_qs = "\n".join(f"- {q}" for q in (unanswered or [])) or "(none)"
+    user = (
+        f"MEETING CONTEXT\n{context or '(none supplied)'}\n\n"
+        f"QUESTIONS THAT NEVER GOT ANSWERED (note them under next steps)\n{open_qs}\n\n"
+        f"FULL TRANSCRIPT\n{buffer.full_text()[:24000]}"
+    )
+    response = client.messages.create(
+        model=REASONING_MODEL,
+        max_tokens=4000,
+        system=NOTE_SYSTEM_PROMPT,
+        output_config={"format": {"type": "json_schema", "schema": NOTE_SCHEMA}},
+        messages=[{"role": "user", "content": user}],
+    )
+    raw = next((b.text for b in response.content if getattr(b, "type", None) == "text"), "")
+    return json.loads(raw)
+
+
+def note_to_markdown(note: dict) -> str:
+    """The drafted note as markdown, ready to paste into Notion."""
+    lines = [
+        f"# {note['title']}",
+        f"*{note['note_type']}*",
+        "",
+        "### Meeting Overview",
+        "---",
+        f"- **Overall Impression** - {note['overall_impression']}",
+        f"- **Next Stage** - {note['next_stage']}",
+        "",
+    ]
+    for sec in note.get("sections", []):
+        lines += [f"### {sec['heading']}", "---"]
+        lines += [f"- {b}" for b in sec["bullets"]]
+        lines.append("")
+    if note.get("qa"):
+        lines += ["### Q&A", "---"]
+        for pair in note["qa"]:
+            lines += [f"**Q**: {pair['q']}", f"**A** - {pair['a']}", ""]
+    return "\n".join(lines)
+
+
 def generate_live_questions(
     client,
     buffer: TranscriptBuffer,
