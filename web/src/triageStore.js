@@ -222,6 +222,23 @@ export function toggleProposalEdit(id, kind) {
   setWork(id, { editing });
 }
 
+/* The user's "merge" choice on a possible duplicate: write the proposal's
+   non-empty details onto the existing Notion page instead of creating one. */
+export function updateExisting(msg, p) {
+  const r = S.results[msg.id];
+  const d = r?.dedupe?.[p.kind];
+  if (!d?.match_id) return;
+  return workCall(msg.id, `update-${p.kind}`, async (w) => {
+    const res = await post("/api/notion/update",
+      { page_id: d.match_id, raw_properties: p.raw_properties });
+    setWork(msg.id, {
+      updatedKinds: [...(w.updatedKinds || []), p.kind],
+      notice: `Updated the existing ${p.kind} “${d.match}” with the new details.`
+        + (res.live ? "" : " (Demo mode — nothing was actually written.)"),
+    });
+  });
+}
+
 export function applyPlan(msg) {
   const r = S.results[msg.id];
   return workCall(msg.id, "apply", async (w) => {

@@ -199,4 +199,29 @@ def dedupe_entity(
         out["company"] = match_company(entity.company_name, entity.company_domain, companies)
     if entity.fund_name:
         out["fund"] = match_fund(entity.fund_name, funds)
+
+    # Cross-corroboration: two individually-uncertain matches that point at
+    # each other are one strong one. If the matched CRM contact is already
+    # tagged to (a name-match of) the extracted company, both the contact and
+    # the company are near-certainly the same entities — upgrade review-band
+    # decisions to link_existing and say why.
+    contact_d, company_d = out.get("contact"), out.get("company")
+    if contact_d and contact_d.best_match:
+        crm_contact = next(
+            (c for c in contacts if c.id and c.id == contact_d.best_match.matched_id), None)
+        crm_company = (crm_contact.company or "") if crm_contact else ""
+        corroborated = bool(
+            crm_company
+            and (_name_score(crm_company, entity.company_name) >= REVIEW_THRESHOLD
+                 or (company_d and company_d.best_match
+                     and _name_score(crm_company, company_d.best_match.matched_name)
+                     >= REVIEW_THRESHOLD)))
+        if corroborated:
+            note = (f"corroborated: the CRM contact is tagged to "
+                    f"'{crm_company}', matching the extracted company")
+            for d in (contact_d, company_d):
+                if d and d.best_match and d.recommended_action == "review":
+                    d.recommended_action = "link_existing"  # type: ignore[assignment]
+                    d.is_duplicate = True
+                    d.best_match.reason += f" + {note}"
     return out

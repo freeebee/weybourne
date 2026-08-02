@@ -279,6 +279,8 @@ function DetailPane({ msg, result, flag }) {
               {result.proposals?.map((p) => {
                 const editing = !!w.editing?.[p.kind];
                 const edits = w.edits?.[p.kind] || {};
+                const drow = result.dedupe?.[p.kind];
+                const updated = (w.updatedKinds || []).includes(p.kind);
                 return (
                   <div key={p.kind} style={{ margin: "10px 0 0" }}>
                     <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: "13.5px" }}>
@@ -317,6 +319,59 @@ function DetailPane({ msg, result, flag }) {
                         </React.Fragment>
                       ))}
                     </div>
+
+                    {/* Possible duplicate: side-by-side against the existing
+                        record, with merge-or-create as YOUR call. */}
+                    {p.needs_review && drow?.existing && (
+                      <div style={{ marginLeft: 24, marginTop: 10, padding: "12px 14px",
+                                    background: "var(--paper-050)",
+                                    border: "1px solid var(--paper-200)",
+                                    borderRadius: "var(--radius)" }}>
+                        <span className="microlabel" style={{ color: "var(--caution-600)" }}>
+                          POSSIBLE DUPLICATE · COMPARE BEFORE CREATING
+                        </span>
+                        {drow.ai && (
+                          <p className="muted" style={{ fontSize: "12px", margin: "5px 0 0",
+                                                        fontStyle: "italic" }}>
+                            Assessment: {drow.ai.verdict === "same"
+                              ? "likely the same" : drow.ai.verdict === "different"
+                                ? "likely different" : "unclear"} — {drow.ai.reason}
+                          </p>
+                        )}
+                        <div style={{ display: "grid",
+                          gridTemplateColumns: "110px 1fr 1fr", gap: "3px 12px", marginTop: 8 }}>
+                          <span />
+                          <span className="microlabel" style={{ color: "var(--teal-700)" }}>PROPOSED (NEW)</span>
+                          <span className="microlabel">EXISTING · {(drow.match || "").toUpperCase()}</span>
+                          {[...new Set([...Object.keys(drow.proposed || {}),
+                                        ...Object.keys(drow.existing || {})])].map((k) => (
+                            <React.Fragment key={k}>
+                              <span className="microlabel">{k}</span>
+                              <span style={{ fontSize: "12.5px" }}>{drow.proposed?.[k] || "—"}</span>
+                              <span style={{ fontSize: "12.5px", color: "var(--stone-600)" }}>
+                                {drow.existing?.[k] || "—"}
+                              </span>
+                            </React.Fragment>
+                          ))}
+                        </div>
+                        <div className="row" style={{ marginTop: 10, flexWrap: "wrap" }}>
+                          {updated ? (
+                            <span className="muted" style={{ fontSize: "12.5px" }}>
+                              Existing entry updated with the new details.
+                            </span>
+                          ) : (
+                            <Button variant="ghost" busy={busy === `update-${p.kind}`}
+                              onClick={() => ts.updateExisting(msg, p)}>
+                              Merge into the existing entry
+                            </Button>
+                          )}
+                          <span className="muted" style={{ fontSize: "12px" }}>
+                            …or tick the box above to create a new entry, or do
+                            neither to keep the existing one unchanged.
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

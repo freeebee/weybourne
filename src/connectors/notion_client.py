@@ -402,6 +402,22 @@ class NotionConnector:
         resp.raise_for_status()
         return resp.json()
 
+    def update_page(self, page_id: str, properties: dict) -> dict:
+        """Update properties on an existing page. No-op preview in mock mode."""
+        if not self.live:
+            return {"id": page_id, "url": "https://notion.so/mock", "mock": True,
+                    "properties_preview": properties}
+        import requests
+
+        resp = requests.patch(
+            f"{config.NOTION_BASE_URL}/pages/{page_id}",
+            headers=self._headers(),
+            json={"properties": properties},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
 
 # --------------------------------------------------------------------------- #
 # Property parsers

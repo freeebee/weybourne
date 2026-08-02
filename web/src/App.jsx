@@ -9,6 +9,7 @@ import Prep from "./pages/Prep.jsx";
 import TrackRecords from "./pages/TrackRecords.jsx";
 import Triage from "./pages/Triage.jsx";
 import WhatsNew from "./pages/WhatsNew.jsx";
+import Splash from "./Splash.jsx";
 import * as uiStore from "./uiStore.js";
 
 const GROUPS = [
@@ -99,11 +100,22 @@ function useWarmWhatsNew() {
         if (!jobs.length) await fetch(`/api/jobs/${kind}`, { method: "POST" });
       } catch { /* backend warming up — the page will start it on visit */ }
     });
+    // Re-attach to a running Outlook refresh no matter which page loads first.
+    uiStore.restoreOutlookRefresh();
   }, []);
 }
 
 export default function App() {
   useWarmWhatsNew();
+  // Opening animation — once per session; afterwards the shell renders bare.
+  const [booted, setBooted] = React.useState(
+    () => !!sessionStorage.getItem("wb-splash-seen"));
+  const shell = <AppShell />;
+  if (!booted) return <Splash onDone={() => setBooted(true)}>{shell}</Splash>;
+  return shell;
+}
+
+function AppShell() {
   return (
     <Router>
       <div className="shell">

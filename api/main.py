@@ -136,6 +136,76 @@ def inbox(days: int = config.TRIAGE_LOOKBACK_DAYS, top: int = config.TRIAGE_MAX_
             "notion_live": _notion.live}
 
 
+_ADJUDICATE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "verdict": {"type": "string", "enum": ["same", "different", "unsure"]},
+        "reason": {"type": "string", "description": "One sentence"},
+    },
+    "required": ["verdict", "reason"],
+    "additionalProperties": False,
+}
+
+
+def _existing_details(kind: str, rec) -> dict:
+    """The existing CRM record's fields, for adjudication and the side-by-side."""
+    if kind == "contact":
+        return {"Name": rec.name, "Email": rec.email, "Title": rec.title,
+                "Company": rec.company}
+    if kind == "company":
+        return {"Name": rec.name, "Domain": rec.domain, "City": rec.city,
+                "Country": rec.country, "Description": rec.description}
+    return {"Name": rec.name, "Asset class": ", ".join(rec.asset_class),
+            "Geography": ", ".join(rec.geographic_focus),
+            "Strategy": rec.strategy_description, "Status": rec.status,
+            "Company": rec.company}
+
+
+def _proposed_details(kind: str, e: ExtractedEntity) -> dict:
+    if kind == "contact":
+        return {"Name": e.contact_name, "Email": e.contact_email,
+                "Title": e.contact_title, "Company": e.company_name}
+    if kind == "company":
+        return {"Name": e.company_name, "Domain": e.company_domain,
+                "City": e.company_city, "Country": e.company_country,
+                "Description": e.company_description}
+    return {"Name": e.fund_name, "Asset class": e.asset_class,
+            "Geography": e.geography, "Strategy": e.strategy_description,
+            "Vintage": e.vintage, "Target size": e.target_size}
+
+
+def _adjudicate_duplicate(client, kind: str, proposed: dict, existing: dict) -> dict:
+    """Fast-model judgement on an uncertain match: same entity or not?
+
+    Weighs the evidence a name score can't — a contact whose CRM record sits
+    at the same firm, matching cities, matching strategies. Returns
+    {"verdict": same|different|unsure, "reason"} and never raises.
+    """
+    def lines(d):
+        return "\n".join(f"  {k}: {v}" for k, v in d.items() if v)
+    try:
+        response = client.messages.create(
+            model=config.FAST_MODEL,
+            max_tokens=200,
+            system=("You resolve possible duplicates in a family-office CRM. Decide "
+                    "whether the proposed record and the existing record are the SAME "
+                    "real-world entity. Weigh corroborating fields (a contact's firm, "
+                    "a company's city or domain, a fund's strategy), spelling and "
+                    "concatenation variants ('FIFECAPITAL' = 'Fife Capital'), and be "
+                    "wary of same-named but unrelated entities in different "
+                    "geographies. 'unsure' is a valid answer."),
+            output_config={"format": {"type": "json_schema", "schema": _ADJUDICATE_SCHEMA}},
+            messages=[{"role": "user", "content":
+                       f"PROPOSED {kind.upper()} (from an email)\n{lines(proposed)}\n\n"
+                       f"EXISTING {kind.upper()} (already in the CRM)\n{lines(existing)}"}],
+        )
+        raw = next((b.text for b in response.content
+                    if getattr(b, "type", None) == "text"), "")
+        return json.loads(raw)
+    except Exception:  # noqa: BLE001 - adjudication is an enhancement, never a blocker
+        return {"verdict": "unsure", "reason": "adjudication unavailable"}
+
+
 def _triage_one(client, msg: EmailMessage, progress=None) -> dict:
     def say(what: str):
         if progress:
@@ -149,20 +219,54 @@ def _triage_one(client, msg: EmailMessage, progress=None) -> dict:
     # too, and the screen/draft steps stay available downstream.
     if True:
         say(f"Checking Notion for {result.entity.company_name or result.entity.fund_name or result.entity.contact_name or 'the sender'}")
-        decisions = dedupe_entity(
-            result.entity, _notion.list_contacts(),
-            _notion.list_companies(), _notion.list_funds(),
-        )
+        contacts = _notion.list_contacts()
+        companies = _notion.list_companies()
+        funds = _notion.list_funds()
+        decisions = dedupe_entity(result.entity, contacts, companies, funds)
+
+        records_by_id = {
+            "contact": {c.id: c for c in contacts if c.id},
+            "company": {c.id: c for c in companies if c.id},
+            "fund": {f.id: f for f in funds if f.id},
+        }
+        # Review-band matches get a fast-model second opinion that weighs the
+        # actual record fields (firm, city, strategy), not just the name.
+        adjudications: dict[str, dict] = {}
+        for k, d in decisions.items():
+            if d.recommended_action != "review" or not d.best_match:
+                continue
+            rec = records_by_id[k].get(d.best_match.matched_id)
+            if rec is None:
+                continue
+            say(f"Weighing whether '{d.name}' is the existing '{d.best_match.matched_name}'")
+            verdict = _adjudicate_duplicate(
+                client, k, _proposed_details(k, result.entity),
+                _existing_details(k, rec))
+            adjudications[k] = verdict
+            if verdict.get("verdict") == "same":
+                d.recommended_action = "link_existing"  # type: ignore[assignment]
+                d.is_duplicate = True
+            elif verdict.get("verdict") == "different":
+                d.recommended_action = "create"  # type: ignore[assignment]
+
         proposals = notion_sync.plan_creations(result.entity, decisions,
                                                comments=result.rationale)
-        out["dedupe"] = {
-            k: {"action": d.recommended_action, "name": d.name,
+
+        def _dedupe_row(k: str, d) -> dict:
+            rec = (records_by_id[k].get(d.best_match.matched_id)
+                   if d.best_match else None)
+            return {
+                "action": d.recommended_action, "name": d.name,
                 "match": d.best_match.matched_name if d.best_match else None,
                 "match_id": d.best_match.matched_id if d.best_match else None,
                 "score": d.best_match.score if d.best_match else None,
-                "reason": d.best_match.reason if d.best_match else None}
-            for k, d in decisions.items()
-        }
+                "reason": d.best_match.reason if d.best_match else None,
+                "existing": _existing_details(k, rec) if rec else None,
+                "proposed": _proposed_details(k, result.entity),
+                "ai": adjudications.get(k),
+            }
+
+        out["dedupe"] = {k: _dedupe_row(k, d) for k, d in decisions.items()}
         out["proposals"] = [
             {"kind": p.kind, "title": p.title, "needs_review": p.needs_review,
              "review_reason": p.review_reason,
@@ -338,6 +442,32 @@ def notion_apply(body: ApplyIn):
     res = notion_sync.apply_plan(props, _notion, approved_kinds=set(body.approved_kinds))
     return {"created": res.created, "skipped": res.skipped, "errors": res.errors,
             "live": _notion.live}
+
+
+class UpdateExistingIn(BaseModel):
+    page_id: str
+    raw_properties: dict
+    # The user chose "update my existing entry" in the duplicate side-by-side.
+
+
+@app.post("/api/notion/update")
+def notion_update(body: UpdateExistingIn):
+    """Merge a proposal's details into an existing page instead of creating a
+    duplicate. The existing page's Name is never changed; only non-empty
+    proposed fields are written."""
+    props = {}
+    for name, payload in body.raw_properties.items():
+        if name == "Name":
+            continue   # never rename the existing record
+        if "rich_text" in payload and not payload["rich_text"]:
+            continue   # skip empty values — merge, don't blank
+        if "multi_select" in payload and not payload["multi_select"]:
+            continue
+        props[name] = payload
+    if not props:
+        return {"updated": False, "detail": "nothing to update", "live": _notion.live}
+    page = _notion.update_page(body.page_id, props)
+    return {"updated": True, "url": page.get("url", ""), "live": _notion.live}
 
 
 class SaveEmailNoteIn(BaseModel):

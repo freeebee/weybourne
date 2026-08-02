@@ -33,38 +33,18 @@ export default function Home() {
   React.useSyncExternalStore(liveStore.subscribe, liveStore.getVersion);
   const [events, setEvents] = React.useState([]);
   const [jobs, setJobs] = React.useState([]);
-  const [refreshing, setRefreshing] = React.useState(false);
-  const [refreshNote, setRefreshNote] = React.useState(null);
-  const pollRef = React.useRef(null);
 
   React.useEffect(() => {
     get("/api/calendar?days=7").then((d) => setEvents(d.events)).catch(() => {});
     get("/api/jobs").then(({ jobs: js }) =>
       setJobs(js.filter((j) => j.status === "done").slice(0, 5))).catch(() => {});
-    return () => clearInterval(pollRef.current);
+    // A refresh started on another visit (or before a reload) keeps its
+    // countdown — re-attach to it.
+    uiStore.restoreOutlookRefresh();
   }, []);
 
-  async function refreshOutlook() {
-    setRefreshing(true); setRefreshNote(null);
-    try {
-      const res = await fetch("/api/jobs/outlook-refresh", { method: "POST" });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || `HTTP ${res.status}`);
-      const job = await res.json();
-      pollRef.current = setInterval(async () => {
-        const j = await get(`/api/jobs/${job.id}`).catch(() => null);
-        if (!j || j.status === "running") return;
-        clearInterval(pollRef.current);
-        setRefreshing(false);
-        if (j.status === "error") setRefreshNote({ tone: "error", text: j.error });
-        else {
-          const r = j.result;
-          setRefreshNote({ tone: "success",
-            text: `Refreshed via your Claude Microsoft 365 connector: ${r.inbox} inbox, ${r.calendar} calendar, ${r.shared} shared item(s).` });
-          get("/api/calendar?days=7").then((d) => setEvents(d.events)).catch(() => {});
-        }
-      }, 2000);
-    } catch (e) { setRefreshing(false); setRefreshNote({ tone: "error", text: e.message }); }
-  }
+  const refresh = uiStore.ui.refresh;
+  const refreshLeft = Math.max(0, (refresh.eta || 0) - (refresh.elapsed || 0));
 
   const next = events[0];
   const rest = events.slice(1, 6);
@@ -88,11 +68,31 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="row" style={{ marginBottom: 8 }}>
-        <Button variant="ghost" busy={refreshing} onClick={refreshOutlook}>Refresh Outlook data</Button>
-        {refreshing && <span className="muted small">fetching via your Claude connector — typically a few minutes…</span>}
-      </div>
-      {refreshNote && <Banner tone={refreshNote.tone}>{refreshNote.text}</Banner>}
+      {!refresh.running ? (
+        <div className="row" style={{ marginBottom: 8 }}>
+          <Button variant="ghost" onClick={uiStore.startOutlookRefresh}>Refresh Outlook data</Button>
+        </div>
+      ) : (
+        <Card style={{ margin: "0 0 14px", padding: "14px 18px" }}>
+          <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+            <Mascot state="crunching" width={54} />
+            <div style={{ flex: 1 }}>
+              <span className="microlabel">REFRESHING OUTLOOK · FULL EMAIL BODIES VIA YOUR CLAUDE CONNECTOR</span>
+              <div className="mono" style={{ fontSize: 11.5, color: "var(--teal-700)", marginTop: 3 }}>
+                {refresh.elapsed}S ELAPSED · {refreshLeft > 0 ? `~${refreshLeft}S LEFT` : "WRAPPING UP"}
+              </div>
+              <div style={{ height: 2, background: "var(--paper-200)", marginTop: 8, borderRadius: 1 }}>
+                <div style={{ height: 2, background: "var(--teal-500)", transition: "width 2s linear",
+                  width: `${Math.min(97, refresh.eta > 0 ? (refresh.elapsed / refresh.eta) * 100 : 25)}%` }} />
+              </div>
+              <span className="muted" style={{ fontSize: "12px", display: "block", marginTop: 6 }}>
+                Runs in the background — leave this page or use other tools; it keeps going.
+              </span>
+            </div>
+          </div>
+        </Card>
+      )}
+      {refresh.note && <Banner tone={refresh.note.tone}>{refresh.note.text}</Banner>}
       <ErrorNote error={null} />
 
       <div className="panes" style={{ gap: "40px 56px" }}>
