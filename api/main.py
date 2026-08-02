@@ -1175,7 +1175,7 @@ def start_outlook_refresh():
                  "--allowedTools", _M365_READONLY_TOOLS + ",ToolSearch"],
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
                 # Search + a full read_resource per message takes a while.
-                timeout=560, stdin=subprocess.DEVNULL,
+                timeout=900, stdin=subprocess.DEVNULL,
             )
             raw = (proc.stdout or "").strip()
             start, end = raw.find("["), raw.rfind("]")
@@ -1185,9 +1185,8 @@ def start_outlook_refresh():
             return json.loads(raw[start:end + 1])
 
         counts: dict = {}
-        for part, prompt in _REFRESH_PARTS.items():
-            job["stages"].append({"label": f"Fetch {part}",
-                                  "detail": "via your Claude Microsoft 365 connector"})
+
+        def fetch_part(part: str, prompt: str):
             try:
                 rows = fetch(prompt)
                 if not rows and part == "inbox":
@@ -1201,6 +1200,18 @@ def start_outlook_refresh():
             except Exception as e:  # noqa: BLE001 - one part failing shouldn't kill the rest
                 counts[part] = 0
                 counts[f"{part}_error"] = str(e)[:200]
+
+        # The three mailbox fetches are independent CLI processes — run them
+        # side by side; with full per-message reads a serial pass is too slow.
+        from concurrent.futures import ThreadPoolExecutor
+
+        job["stages"].append({"label": "Fetch inbox + calendar + shared (in parallel)",
+                              "detail": "full message bodies via your Microsoft 365 connector"})
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            futures = [pool.submit(fetch_part, part, prompt)
+                       for part, prompt in _REFRESH_PARTS.items()]
+            for f in futures:
+                f.result()
         job["stages"].append({"label": "Done", "detail": ""})
         return counts
 
