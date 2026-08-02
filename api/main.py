@@ -144,8 +144,11 @@ def _triage_one(client, msg: EmailMessage, progress=None) -> dict:
     say(f"Reading “{msg.subject[:50]}”")
     result: InvestmentTriage = triage_email(client, msg)
     out = result.model_dump()
-    if result.is_investment:
-        say(f"Checking Notion for {result.entity.company_name or result.entity.fund_name or 'the entity'}")
+    # Dedupe runs for every email, not only investment-relevant ones — knowing
+    # whether the sender is already in Notion matters for a personal catch-up
+    # too, and the screen/draft steps stay available downstream.
+    if True:
+        say(f"Checking Notion for {result.entity.company_name or result.entity.fund_name or result.entity.contact_name or 'the sender'}")
         decisions = dedupe_entity(
             result.entity, _notion.list_contacts(),
             _notion.list_companies(), _notion.list_funds(),
@@ -344,25 +347,85 @@ class SaveEmailNoteIn(BaseModel):
     contact_ids: list[str] = []
     company_ids: list[str] = []
     fund_ids: list[str] = []
+    preview: bool = False
+    # User edits from the preview step: {"Name": "…", "Thoughts / Considerations": "…", "Date": "YYYY-MM-DD"}
+    edits: dict[str, str] = {}
+
+
+def _email_note_attendees(msg: EmailMessage,
+                          extra_ids: list[str]) -> tuple[list[str], list[str]]:
+    """(contact page ids, display names) for the note's Attendees relation.
+
+    Inferred from the email itself: the sender, plus the mailbox owner (the
+    person saving the note) — both looked up in the Notion contacts. Any ids
+    the dedupe already matched are merged in.
+    """
+    ids: list[str] = list(extra_ids)
+    names: list[str] = []
+    try:
+        contacts = _notion.list_contacts()
+    except Exception:  # noqa: BLE001 - attendee inference must never block saving
+        return ids, names
+    sender = (msg.sender_email or "").strip().lower()
+    owner_email = (config.MS_USER or "").strip().lower()
+    # "Jinghan.Chen@…" → "jinghan chen" for a name-based fallback match.
+    owner_name = owner_email.split("@", 1)[0].replace(".", " ").strip()
+    for c in contacts:
+        ce = (c.email or "").strip().lower()
+        cn = (c.name or "").strip()
+        if ((sender and ce == sender)
+                or (owner_email and ce == owner_email)
+                or (owner_name and cn.lower() == owner_name)):
+            if c.id and c.id not in ids:
+                ids.append(c.id)
+                names.append(cn)
+    return ids, names
 
 
 @app.post("/api/notion/save-email")
 def notion_save_email(body: SaveEmailNoteIn):
-    """Save an email into the Notes DB following the workspace's convention
-    for notes with Note Type = Email (title "Email: <subject> — <sender> /
-    <company>", summary in Thoughts / Considerations, full text as the body,
-    relations to the matched records)."""
+    """Save an email into the Notes DB following the workspace's convention for
+    Note Type = Email notes. With preview=true nothing is written — the exact
+    properties are returned for review/editing first."""
     msg = EmailMessage.model_validate(body.message)
     if _notion.live and not config.NOTION_NOTES_DB:
         raise HTTPException(status_code=503, detail="NOTION_NOTES_DB is not configured")
+
+    contact_ids, attendee_names = _email_note_attendees(msg, body.contact_ids)
+    who = " / ".join(x for x in (msg.sender_name, body.company_name) if x)
+    default_title = f"Email: {msg.subject}" + (f" — {who}" if who else "")
+    body_text = msg.body or msg.body_preview
+
+    if body.preview:
+        return {
+            "editable": {
+                "Name": default_title,
+                "Thoughts / Considerations": body.summary,
+                "Date": (msg.received or "")[:10],
+            },
+            "fixed": [
+                ["Note Type", "Email"],
+                ["Done", "Yes"],
+                ["Attendees", ", ".join(attendee_names)
+                 or ("(linked from dedupe)" if contact_ids else "none matched in Notion")],
+                ["Companies", f"{len(body.company_ids)} linked" if body.company_ids else "none"],
+                ["Fund", f"{len(body.fund_ids)} linked" if body.fund_ids else "none"],
+                ["Page body", f"full email text ({len(body_text):,} chars)"],
+            ],
+            "live": _notion.live,
+        }
+
+    title = body.edits.get("Name") or default_title
+    summary = body.edits.get("Thoughts / Considerations", body.summary)
+    received = body.edits.get("Date") or msg.received
     props = notion_sync.email_note_properties(
-        subject=msg.subject, sender_name=msg.sender_name,
-        company_name=body.company_name,
-        received=msg.received, summary=body.summary,
-        contact_ids=body.contact_ids, company_ids=body.company_ids,
+        subject="", sender_name="", company_name="",
+        received=received, summary=summary,
+        contact_ids=contact_ids, company_ids=body.company_ids,
         fund_ids=body.fund_ids,
     )
-    children = notion_sync.email_note_children(msg.body or msg.body_preview)
+    props["Name"] = {"title": [{"text": {"content": title[:2000]}}]}
+    children = notion_sync.email_note_children(body_text)
     page = _notion.create_page(config.NOTION_NOTES_DB or "mock-db", props,
                                children=children)
     return {"url": page.get("url", ""), "id": page.get("id", ""),
@@ -863,7 +926,8 @@ invent content. If access fails entirely, reply with [].
 
 _EMAIL_SHAPE = """[{"id": str, "subject": str, "sender_name": str,
 "sender_email": str, "received": ISO8601 str, "body_preview": str (~200 chars),
-"body": str (plain text, max 1200 chars), "has_attachments": bool,
+"body": str (the COMPLETE plain-text body of the message — do not truncate,
+summarise, or abbreviate it; include signatures), "has_attachments": bool,
 "folder": "Inbox"}]"""
 
 _REFRESH_PARTS = {
@@ -894,9 +958,7 @@ def start_outlook_refresh():
     import subprocess
 
     def work(job: dict):
-        import shutil
-
-        cli = shutil.which(config.CLAUDE_CLI_PATH) or config.CLAUDE_CLI_PATH
+        cli = llm.resolve_cli_path(config.CLAUDE_CLI_PATH) or config.CLAUDE_CLI_PATH
         data_dir = BASE / "data"
         data_dir.mkdir(exist_ok=True)
 

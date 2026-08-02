@@ -105,11 +105,14 @@ function applyResult(id, r) {
   if (S.results[id]) return;
   S.results = { ...S.results, [id]: r };
   S.inFlight.delete(id);
-  // Seed the per-message workflow with default approvals.
+  // Seed the per-message workflow with default approvals. Only investment-
+  // relevant mail pre-approves creations; for anything else the proposals are
+  // shown but nothing is ticked by default.
   S.work[id] = S.work[id] || {};
   if (!S.work[id].approved) {
-    S.work[id].approved = (r.proposals || [])
-      .filter((p) => !p.needs_review).map((p) => p.kind);
+    S.work[id].approved = r.is_investment
+      ? (r.proposals || []).filter((p) => !p.needs_review).map((p) => p.kind)
+      : [];
   }
   if (r.is_investment
       && !Object.entries(S.results).some(([k, x]) => k !== id && x.is_investment)) {
@@ -231,23 +234,47 @@ export function applyPlan(msg) {
   });
 }
 
-export function saveEmailNote(msg) {
+function emailNotePayload(msg) {
   const r = S.results[msg.id];
   const d = r?.dedupe || {};
   const linked = (kind) =>
     d[kind]?.action === "link_existing" && d[kind]?.match_id ? [d[kind].match_id] : [];
+  return {
+    message: msg,
+    summary: r?.entity?.summary || r?.rationale || "",
+    company_name: r?.entity?.company_name || "",
+    contact_ids: linked("contact"),
+    company_ids: linked("company"),
+    fund_ids: linked("fund"),
+  };
+}
+
+/* Step 1 of saving an email: fetch the exact properties the note would be
+   created with, so the user can review and edit them before anything is written. */
+export function previewEmailNote(msg) {
   return workCall(msg.id, "emailnote", async () => {
-    const res = await post("/api/notion/save-email", {
-      message: msg,
-      summary: r?.entity?.summary || r?.rationale || "",
-      company_name: r?.entity?.company_name || "",
-      contact_ids: linked("contact"),
-      company_ids: linked("company"),
-      fund_ids: linked("fund"),
-    });
+    const res = await post("/api/notion/save-email",
+      { ...emailNotePayload(msg), preview: true });
+    setWork(msg.id, { emailNote: res, emailNoteEdits: {} });
+  });
+}
+
+export function setEmailNoteEdit(id, prop, value) {
+  const w = workOf(id);
+  setWork(id, { emailNoteEdits: { ...(w.emailNoteEdits || {}), [prop]: value } });
+}
+
+export function cancelEmailNote(id) {
+  setWork(id, { emailNote: null, emailNoteEdits: {} });
+}
+
+export function saveEmailNote(msg) {
+  return workCall(msg.id, "emailnote", async (w) => {
+    const res = await post("/api/notion/save-email",
+      { ...emailNotePayload(msg), edits: w.emailNoteEdits || {} });
     setWork(msg.id, {
-      emailNoteUrl: res.url,
-      notice: "Email saved to Notion as a note (Note Type: Email)."
+      emailNoteUrl: res.url, emailNote: null,
+      notice: "Email saved to Notion as a note (Note Type: Email, marked Done)."
         + (res.live ? "" : " (Demo mode — nothing was actually written.)"),
     });
   });

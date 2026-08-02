@@ -129,10 +129,15 @@ def triage_email(client, email: EmailMessage) -> InvestmentTriage:
                                 rationale="could not parse classifier output",
                                 entity=_default_entity_from_email(email))
     triage = InvestmentTriage.model_validate({**parsed, "message_id": email.id})
-    # Backfill contact email/domain from the sender when the model left them blank.
-    if triage.is_investment:
-        if not triage.entity.contact_email and email.sender_email:
-            triage.entity.contact_email = email.sender_email
-        if not triage.entity.company_domain and "@" in email.sender_email:
-            triage.entity.company_domain = email.sender_email.split("@", 1)[1].lower()
+    # Backfill from the sender for EVERY email, relevant or not — even a
+    # personal catch-up should still be checkable against the Notion contacts
+    # and answerable with a drafted reply.
+    if not triage.entity.contact_name and email.sender_name:
+        triage.entity.contact_name = email.sender_name
+    if not triage.entity.contact_email and email.sender_email:
+        triage.entity.contact_email = email.sender_email
+    if not triage.entity.company_domain and "@" in email.sender_email:
+        triage.entity.company_domain = email.sender_email.split("@", 1)[1].lower()
+    if not triage.entity.summary:
+        triage.entity.summary = email.subject
     return triage

@@ -164,6 +164,8 @@ def email_note_properties(subject: str, sender_name: str, company_name: str,
         "Name": _title_prop(title),
         "Note Type": {"select": {"name": "Email"}},
         "Thoughts / Considerations": _rich_prop(summary),
+        # Saving the email IS dealing with it — the convention marks these done.
+        "Done": {"checkbox": True},
     }
     if received:
         props["Date"] = {"date": {"start": received[:10]}}
@@ -176,7 +178,7 @@ def email_note_properties(subject: str, sender_name: str, company_name: str,
     return props
 
 
-def email_note_children(body_text: str, max_blocks: int = 60) -> list[dict]:
+def email_note_children(body_text: str, max_blocks: int = 95) -> list[dict]:
     """The email body as paragraph blocks (Notion caps rich_text at 2000 chars)."""
     blocks = []
     for para in (body_text or "").replace("\r\n", "\n").split("\n"):

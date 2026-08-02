@@ -246,10 +246,14 @@ function DetailPane({ msg, result, flag }) {
       <div style={{ padding: "0 24px 20px" }}>
         {!result && <Banner>Not yet triaged — include it in a triage run.</Banner>}
         {result && !result.is_investment && (
-          <Banner>Not investment-relevant — nothing further to do.</Banner>
+          <Banner>
+            Not investment-relevant — but the sender has still been checked
+            against Notion below, and you can save the email, screen it, or
+            draft a reply as usual.
+          </Banner>
         )}
 
-        {result?.is_investment && (
+        {result && (
           <>
             <Step n={1} label="NOTION" state="done"
               right={result.proposals?.length
@@ -328,13 +332,64 @@ function DetailPane({ msg, result, flag }) {
                     <a href={w.emailNoteUrl} target="_blank" rel="noreferrer"
                        style={{ color: "var(--teal-700)" }}>open the note</a>
                   </span>
-                ) : (
+                ) : !w.emailNote && (
                   <Button variant="ghost" busy={busy === "emailnote"}
-                    onClick={() => ts.saveEmailNote(msg)}>
+                    onClick={() => ts.previewEmailNote(msg)}>
                     Save email to Notion
                   </Button>
                 )}
               </div>
+
+              {/* Preview of the exact note before it is written — everything
+                  visible, the text properties editable. */}
+              {w.emailNote && !w.emailNoteUrl && (
+                <div style={{ marginTop: 12, padding: "14px 16px",
+                              background: "var(--paper-050)",
+                              border: "1px solid var(--paper-200)",
+                              borderRadius: "var(--radius)" }}>
+                  <span className="microlabel">NOTE TO BE CREATED — REVIEW AND EDIT</span>
+                  <div style={{ display: "grid", gridTemplateColumns: "150px 1fr",
+                                gap: "6px 12px", marginTop: 10 }}>
+                    {Object.entries(w.emailNote.editable || {}).map(([k, v]) => (
+                      <React.Fragment key={k}>
+                        <span className="microlabel" style={{ paddingTop: 6 }}>{k}</span>
+                        {k === "Thoughts / Considerations" ? (
+                          <textarea rows={3}
+                            value={w.emailNoteEdits?.[k] ?? v}
+                            onChange={(e) => ts.setEmailNoteEdit(msg.id, k, e.target.value)}
+                            style={{ fontSize: "12.5px", padding: "6px 8px",
+                                     background: "var(--paper-000)",
+                                     border: "1px solid var(--paper-200)",
+                                     borderRadius: 4, color: "var(--ink-700)",
+                                     fontFamily: "inherit", lineHeight: 1.5 }} />
+                        ) : (
+                          <input value={w.emailNoteEdits?.[k] ?? v}
+                            onChange={(e) => ts.setEmailNoteEdit(msg.id, k, e.target.value)}
+                            style={{ fontSize: "12.5px", padding: "5px 8px",
+                                     background: "var(--paper-000)",
+                                     border: "1px solid var(--paper-200)",
+                                     borderRadius: 4, color: "var(--ink-700)" }} />
+                        )}
+                      </React.Fragment>
+                    ))}
+                    {(w.emailNote.fixed || []).map(([k, v]) => (
+                      <React.Fragment key={k}>
+                        <span className="microlabel">{k}</span>
+                        <span style={{ fontSize: "12.5px", color: "var(--stone-600)" }}>{v}</span>
+                      </React.Fragment>
+                    ))}
+                  </div>
+                  <div className="row" style={{ marginTop: 12 }}>
+                    <Button variant="dark" busy={busy === "emailnote"}
+                      onClick={() => ts.saveEmailNote(msg)}>
+                      Create the note
+                    </Button>
+                    <Button variant="ghost" onClick={() => ts.cancelEmailNote(msg.id)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
             </Step>
 
             <Step n={2} label="PREFERENCE SCREEN" state={screen ? "done" : "current"}

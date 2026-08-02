@@ -209,28 +209,7 @@ class ClaudeCodeClient:
 
     # -- process execution ------------------------------------------------ #
     def _resolve_cli(self) -> str:
-        """Resolve the CLI to an absolute path, tolerating a slimmed PATH.
-
-        Server processes (uvicorn under a launcher) sometimes inherit a PATH
-        without the user's script directory, making bare 'claude' fail even
-        though it is installed. Fall back to the standard install locations.
-        """
-        import shutil
-        from pathlib import Path as _P
-
-        found = shutil.which(self.cli_path)
-        if found:
-            return found
-        # Only rescue the DEFAULT name — an explicitly configured path that
-        # doesn't exist should fail loudly, not silently use another binary.
-        if self.cli_path in ("claude", "claude.exe"):
-            home = _P.home()
-            for candidate in (home / ".local" / "bin" / "claude.exe",
-                              home / ".local" / "bin" / "claude",
-                              home / "AppData" / "Roaming" / "npm" / "claude.cmd"):
-                if candidate.exists():
-                    return str(candidate)
-        return self.cli_path
+        return resolve_cli_path(self.cli_path) or self.cli_path
 
     def _run_subprocess(self, argv: list[str]) -> subprocess.CompletedProcess:
         argv = [self._resolve_cli(), *argv[1:]]
@@ -349,6 +328,51 @@ def get_client():
     )
 
 
+_CLI_RESOLVED_CACHE: Optional[str] = None
+
+
+def resolve_cli_path(configured: str) -> Optional[str]:
+    """Absolute path to the Claude Code CLI, or None if it cannot be found.
+
+    Server processes (uvicorn under a launcher, or spawned by another tool)
+    sometimes inherit a slimmed PATH — or even a different HOME — making bare
+    'claude' fail even though it is installed. Check PATH first, then the
+    standard install locations under every home directory hint available.
+    A successful resolution is cached for the life of the process so one good
+    lookup protects every later call.
+    """
+    global _CLI_RESOLVED_CACHE
+    import os
+    import shutil
+    from pathlib import Path as _P
+
+    if _CLI_RESOLVED_CACHE and _P(_CLI_RESOLVED_CACHE).exists():
+        return _CLI_RESOLVED_CACHE
+
+    found = shutil.which(configured)
+    # Only rescue the DEFAULT name — an explicitly configured path that
+    # doesn't exist should fail loudly, not silently use another binary.
+    if not found and configured in ("claude", "claude.exe"):
+        homes = [_P.home()]
+        for env in ("USERPROFILE", "HOME"):
+            v = os.environ.get(env)
+            if v and _P(v) not in homes:
+                homes.append(_P(v))
+        for home in homes:
+            for candidate in (home / ".local" / "bin" / "claude.exe",
+                              home / ".local" / "bin" / "claude",
+                              home / "AppData" / "Roaming" / "npm" / "claude.cmd",
+                              home / "AppData" / "Roaming" / "npm" / "claude"):
+                if candidate.exists():
+                    found = str(candidate)
+                    break
+            if found:
+                break
+    if found:
+        _CLI_RESOLVED_CACHE = found
+    return found
+
+
 def describe_backend() -> tuple[str, str]:
     """(label, detail) describing the active backend, for the UI status strip."""
     backend = (config.LLM_BACKEND or "claude_cli").strip().lower()
@@ -365,9 +389,7 @@ def preflight() -> tuple[bool, str]:
                 "ANTHROPIC_API_KEY is set" if config.anthropic_configured()
                 else "ANTHROPIC_API_KEY is not set")
 
-    import shutil
-
-    resolved = shutil.which(config.CLAUDE_CLI_PATH)
+    resolved = resolve_cli_path(config.CLAUDE_CLI_PATH)
     if not resolved:
         return (False,
                 f"Claude Code CLI not found ({config.CLAUDE_CLI_PATH}). Install it and run "
