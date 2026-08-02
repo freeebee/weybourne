@@ -1189,14 +1189,20 @@ def start_outlook_refresh():
         def fetch_part(part: str, prompt: str):
             try:
                 rows = fetch(prompt)
-                if not rows and part == "inbox":
+                if not rows:
                     # Connector attaches asynchronously — one retry on empty.
-                    job["stages"].append({"label": "Inbox empty — retrying once",
+                    job["stages"].append({"label": f"{part} empty — retrying once",
                                           "detail": "connector may have been slow to attach"})
                     rows = fetch(prompt)
-                (data_dir / _SNAPSHOT_FILES[part]).write_text(
-                    json.dumps(rows, indent=1), encoding="utf-8")
-                counts[part] = len(rows)
+                target = data_dir / _SNAPSHOT_FILES[part]
+                if rows or not target.exists():
+                    target.write_text(json.dumps(rows, indent=1), encoding="utf-8")
+                    counts[part] = len(rows)
+                else:
+                    # Never clobber a good snapshot with an empty fetch — a
+                    # missed connector attach must not erase real data.
+                    counts[part] = 0
+                    counts[f"{part}_note"] = "empty result — kept the previous snapshot"
             except Exception as e:  # noqa: BLE001 - one part failing shouldn't kill the rest
                 counts[part] = 0
                 counts[f"{part}_error"] = str(e)[:200]
