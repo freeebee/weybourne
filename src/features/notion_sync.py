@@ -196,6 +196,32 @@ def email_note_children(body_text: str, max_blocks: int = 95) -> list[dict]:
     return blocks
 
 
+def markdown_children(md_text: str, max_blocks: int = 95) -> list[dict]:
+    """A drafted meeting note (our own markdown) as Notion blocks: headings,
+    bullets and paragraphs. Divider lines are dropped (Notion has its own)."""
+    def _rt(text):
+        return [{"text": {"content": text[:1800]}}]
+
+    blocks: list[dict] = []
+    for raw in (md_text or "").replace("\r\n", "\n").split("\n"):
+        line = raw.strip()
+        if not line or line == "---" or len(blocks) >= max_blocks:
+            continue
+        if line.startswith("### "):
+            blocks.append({"object": "block", "type": "heading_3",
+                           "heading_3": {"rich_text": _rt(line[4:])}})
+        elif line.startswith("# "):
+            blocks.append({"object": "block", "type": "heading_2",
+                           "heading_2": {"rich_text": _rt(line[2:])}})
+        elif line.startswith("- "):
+            blocks.append({"object": "block", "type": "bulleted_list_item",
+                           "bulleted_list_item": {"rich_text": _rt(line[2:])}})
+        else:
+            blocks.append({"object": "block", "type": "paragraph",
+                           "paragraph": {"rich_text": _rt(line)}})
+    return blocks
+
+
 def describe_properties(props: dict) -> list[tuple[str, str]]:
     """Human-readable (property, value) pairs for a proposal's Notion payload.
 

@@ -82,17 +82,24 @@ export default function Live() {
   return (
     <div className="fade-in">
       <PageHeader
-        eyebrow={s.running ? `RECORDING · ${fmtElapsed(Date.now() - s.startedAt)} ELAPSED` : "IN PROGRESS · LIVE"}
+        eyebrow={s.running ? `RECORDING · ${fmtElapsed(Date.now() - s.startedAt)} ELAPSED` : "MEETINGS · NOTES"}
         eyebrowTone={s.running ? "rec" : undefined}
-        title="Live questions"
+        title="Meeting note taker"
         actions={s.running
           ? <>
               <Button variant="ghost" onClick={live.stop}>Stop</Button>
               <Button variant="dark" busy={s.busy === "note"} onClick={live.draftNote}>Write the note</Button>
             </>
-          : <Button onClick={live.start}>Start listening</Button>}>
+          : <>
+              {s.transcript && (
+                <Button variant="dark" busy={s.busy === "note"} onClick={live.draftNote}>
+                  Write the note
+                </Button>
+              )}
+              <Button onClick={live.start}>Start listening</Button>
+            </>}>
         {s.who ? `With ${s.who}. ` : ""}
-        {s.goal || "Every 30 seconds the new speech is recapped and turned into the next questions worth asking. Keeps running while you use other pages."}
+        {s.goal || "Transcribes the meeting continuously and drafts the Weybourne note at the end. Live question suggestions are optional — recaps land every 30 seconds either way."}
       </PageHeader>
 
       {!s.running && (
@@ -127,6 +134,15 @@ export default function Live() {
                 ))}
               </select>
             </Field>
+            <Field label="LIVE QUESTIONS" style={{ flex: "1 1 200px" }}
+              hint="Suggested questions with each 30-second read, or notes only.">
+              <select value={s.questions ? "on" : "off"}
+                onChange={(e) => live.set({ questions: e.target.value === "on" })}
+                style={inputStyle}>
+                <option value="on">Suggest questions live</option>
+                <option value="off">Note taking only</option>
+              </select>
+            </Field>
           </div>
         </Card>
       )}
@@ -147,13 +163,22 @@ export default function Live() {
           <span className="mono" style={{ fontSize: 11, letterSpacing: ".1em", color: "var(--teal-300)" }}>
             {s.busy === "read" ? "READING…" : s.nextIn > 0 ? `NEXT READ ${s.nextIn}S` : "READ DUE"}
           </span>
+          <button onClick={() => live.set({ questions: !s.questions })}
+            className="mono" title="Toggle live question suggestions"
+            style={{ background: "none", border: "1px solid var(--ink-500)",
+                     borderRadius: 4, cursor: "pointer", padding: "3px 8px",
+                     fontSize: 10.5, letterSpacing: ".1em",
+                     color: s.questions ? "var(--teal-300)" : "var(--slate-300)" }}>
+            QUESTIONS {s.questions ? "ON" : "OFF"}
+          </button>
         </div>
       )}
 
       <ErrorNote error={s.error} />
 
       <div className="panes">
-        {/* Questions pane */}
+        {/* Questions pane — hidden entirely in note-taking-only mode */}
+        {s.questions && (
         <div style={{ flex: "1.4 1 440px", minWidth: "min(100%,320px)" }}>
           <SectionHead label="QUESTIONS WORTH ASKING" right={`${openItems.length} OPEN`} />
 
@@ -242,9 +267,11 @@ export default function Live() {
             </div>
           )}
         </div>
+        )}
 
         {/* Right pane — audio check + what was said */}
-        <div style={{ flex: "1 1 300px", maxWidth: 420, minWidth: "min(100%,280px)" }}>
+        <div style={{ flex: "1 1 300px", maxWidth: s.questions ? 420 : "none",
+                      minWidth: "min(100%,280px)" }}>
           {s.running && (
             <Card style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
@@ -308,11 +335,85 @@ export default function Live() {
         <Card accent="brass" style={{ marginTop: 24 }}>
           <span className="microlabel">NOTE DRAFT · {s.note.note.note_type.toUpperCase()}</span>
           <Markdown text={s.note.markdown} />
-          <Button onClick={() => {
-            const blob = new Blob([s.note.markdown], { type: "text/markdown" });
-            const a = document.createElement("a");
-            a.href = URL.createObjectURL(blob); a.download = "meeting-note.md"; a.click();
-          }}>Download note (markdown)</Button>
+          <div className="row" style={{ flexWrap: "wrap" }}>
+            <Button onClick={() => {
+              const blob = new Blob([s.note.markdown], { type: "text/markdown" });
+              const a = document.createElement("a");
+              a.href = URL.createObjectURL(blob); a.download = "meeting-note.md"; a.click();
+            }}>Download note (markdown)</Button>
+            {s.noteSaveUrl ? (
+              <span className="muted" style={{ fontSize: "12.5px" }}>
+                Saved to Notion —{" "}
+                <a href={s.noteSaveUrl} target="_blank" rel="noreferrer"
+                   style={{ color: "var(--teal-700)" }}>open the note</a>
+              </span>
+            ) : !s.noteSave && (
+              <Button variant="dark" busy={s.busy === "notesave"}
+                onClick={live.previewNoteSave}>
+                Save to Notion
+              </Button>
+            )}
+          </div>
+
+          {/* Preview of the exact Notion note — every field shown, EDIT to change */}
+          {s.noteSave && !s.noteSaveUrl && (
+            <div style={{ marginTop: 14, padding: "14px 16px",
+                          background: "var(--paper-050)",
+                          border: "1px solid var(--paper-200)",
+                          borderRadius: "var(--radius)" }}>
+              <span className="microlabel">NOTE TO BE CREATED</span>
+              <div style={{ display: "grid", gridTemplateColumns: "150px 1fr",
+                            gap: "6px 12px", marginTop: 10 }}>
+                {Object.entries(s.noteSave.editable || {}).map(([k, v]) => {
+                  const editing = !!s.noteSaveEditing?.[k];
+                  const value = s.noteSaveEdits?.[k] ?? v;
+                  const editStyle = { fontSize: "12.5px", padding: "5px 8px",
+                                      background: "var(--paper-000)",
+                                      border: "1px solid var(--paper-200)",
+                                      borderRadius: 4, color: "var(--ink-700)",
+                                      fontFamily: "inherit", lineHeight: 1.5, flex: 1 };
+                  return (
+                    <React.Fragment key={k}>
+                      <span className="microlabel" style={{ paddingTop: 3 }}>{k}</span>
+                      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                        {editing ? (
+                          k === "Thoughts / Considerations"
+                            ? <textarea rows={3} value={value} style={editStyle}
+                                onChange={(e) => live.setNoteSaveEdit(k, e.target.value)} />
+                            : <input value={value} style={editStyle}
+                                onChange={(e) => live.setNoteSaveEdit(k, e.target.value)} />
+                        ) : (
+                          <span style={{ fontSize: "12.5px", flex: 1,
+                            color: k in (s.noteSaveEdits || {}) ? "var(--teal-700)" : "inherit" }}>
+                            {value}
+                          </span>
+                        )}
+                        <button onClick={() => live.toggleNoteSaveFieldEdit(k)}
+                          style={{ background: "none", border: "none", cursor: "pointer",
+                                   color: "var(--teal-700)", fontFamily: "var(--mono)",
+                                   fontSize: 10, letterSpacing: ".1em", paddingTop: 3 }}>
+                          {editing ? "DONE" : "EDIT"}
+                        </button>
+                      </div>
+                    </React.Fragment>
+                  );
+                })}
+                {(s.noteSave.fixed || []).map(([k, v]) => (
+                  <React.Fragment key={k}>
+                    <span className="microlabel">{k}</span>
+                    <span style={{ fontSize: "12.5px", color: "var(--stone-600)" }}>{v}</span>
+                  </React.Fragment>
+                ))}
+              </div>
+              <div className="row" style={{ marginTop: 12 }}>
+                <Button variant="dark" busy={s.busy === "notesave"}
+                  onClick={live.saveNoteToNotion}>
+                  Create the note
+                </Button>
+                <Button variant="ghost" onClick={live.cancelNoteSave}>Cancel</Button>
+              </div>
+            </div>
+          )}
         </Card>
       )}
       {s.busy === "note" && <Mascot state="notes" width={64} text="Drafting the note from the full transcript…" />}

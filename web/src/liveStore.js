@@ -9,9 +9,11 @@ const MIN_NEW_WORDS = 5;
 
 export const S = {
   running: false, who: "", goal: "", source: "system", deviceId: "",
+  questions: true,   // live question suggestions — toggleable; recaps always run
   transcript: "", entries: [], items: [], batches: [], reads: 0, unreadWords: 0,
   lastTail: "", lastReadAt: 0, startedAt: 0, reading: false, nextIn: CADENCE_S,
   error: null, note: null, sharp: null, busy: "", seq: 1, version: 0,
+  noteSave: null, noteSaveEdits: {}, noteSaveEditing: {}, noteSaveUrl: "",
 };
 
 function stamp() {
@@ -69,9 +71,11 @@ export async function performRead() {
     if (parsed.changed && (parsed.questions?.length || parsed.recap)) {
       const bid = Date.now();
       S.batches = [{ id: bid, at: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), recap: parsed.recap || "" }, ...S.batches];
-      S.items = [...S.items, ...(parsed.questions || []).map((q) => ({
-        id: S.seq++, batch: bid, q: q.q, flag: !!q.flag, answer: null,
-      }))];
+      if (S.questions) {
+        S.items = [...S.items, ...(parsed.questions || []).map((q) => ({
+          id: S.seq++, batch: bid, q: q.q, flag: !!q.flag, answer: null,
+        }))];
+      }
     }
   } catch (e) { S.error = e.message; }
   S.reading = false; S.busy = ""; emit();
@@ -259,6 +263,53 @@ export function newSession() {
     transcript: "", entries: [], items: [], batches: [], reads: 0, unreadWords: 0,
     lastTail: "", lastReadAt: 0, startedAt: 0, nextIn: CADENCE_S, error: null,
     note: null, sharp: null, busy: "", seq: 1,
+    noteSave: null, noteSaveEdits: {}, noteSaveEditing: {}, noteSaveUrl: "",
   });
   emit();
+}
+
+// ---- save the drafted note to Notion (preview → edit → create) ----------- //
+
+export async function previewNoteSave() {
+  if (!S.note) return;
+  S.busy = "notesave"; S.error = null; emit();
+  try {
+    S.noteSave = await post("/api/notion/save-meeting-note", {
+      title: S.note.note.title, note_type: S.note.note.note_type,
+      markdown: S.note.markdown,
+      overall_impression: S.note.note.overall_impression || "",
+      who: S.who, preview: true,
+    });
+    S.noteSaveEdits = {}; S.noteSaveEditing = {};
+  } catch (e) { S.error = e.message; }
+  S.busy = ""; emit();
+}
+
+export function setNoteSaveEdit(prop, value) {
+  S.noteSaveEdits = { ...S.noteSaveEdits, [prop]: value }; emit();
+}
+
+export function toggleNoteSaveFieldEdit(prop) {
+  S.noteSaveEditing = { ...S.noteSaveEditing, [prop]: !S.noteSaveEditing[prop] };
+  emit();
+}
+
+export function cancelNoteSave() {
+  S.noteSave = null; S.noteSaveEdits = {}; S.noteSaveEditing = {}; emit();
+}
+
+export async function saveNoteToNotion() {
+  if (!S.note) return;
+  S.busy = "notesave"; S.error = null; emit();
+  try {
+    const res = await post("/api/notion/save-meeting-note", {
+      title: S.note.note.title, note_type: S.note.note.note_type,
+      markdown: S.note.markdown,
+      overall_impression: S.note.note.overall_impression || "",
+      who: S.who,
+      edits: { ...(S.noteSave?.editable || {}), ...S.noteSaveEdits },
+    });
+    S.noteSaveUrl = res.url; S.noteSave = null;
+  } catch (e) { S.error = e.message; }
+  S.busy = ""; emit();
 }

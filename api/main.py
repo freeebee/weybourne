@@ -347,39 +347,74 @@ class SaveEmailNoteIn(BaseModel):
     contact_ids: list[str] = []
     company_ids: list[str] = []
     fund_ids: list[str] = []
+    company_names: list[str] = []
+    fund_names: list[str] = []
     preview: bool = False
-    # User edits from the preview step: {"Name": "…", "Thoughts / Considerations": "…", "Date": "YYYY-MM-DD"}
+    # User edits from the preview step, keyed by the displayed property name.
+    # Every field is editable; relation fields carry comma-separated names
+    # which are resolved back to Notion records on save.
     edits: dict[str, str] = {}
+
+
+def _find_contact(contacts, email: str = "", name: str = ""):
+    """Exact email match first (the unique key), exact name second."""
+    email, name = email.strip().lower(), name.strip().lower()
+    if email:
+        for c in contacts:
+            if (c.email or "").strip().lower() == email:
+                return c
+    if name:
+        for c in contacts:
+            if (c.name or "").strip().lower() == name:
+                return c
+    return None
 
 
 def _email_note_attendees(msg: EmailMessage,
                           extra_ids: list[str]) -> tuple[list[str], list[str]]:
     """(contact page ids, display names) for the note's Attendees relation.
 
-    Inferred from the email itself: the sender, plus the mailbox owner (the
-    person saving the note) — both looked up in the Notion contacts. Any ids
-    the dedupe already matched are merged in.
+    Inferred from the email itself: the SENDER (by email, falling back to
+    their display name) and the mailbox owner — both looked up in the Notion
+    contacts. Any ids the dedupe already matched are merged in.
     """
-    ids: list[str] = list(extra_ids)
-    names: list[str] = []
     try:
         contacts = _notion.list_contacts()
     except Exception:  # noqa: BLE001 - attendee inference must never block saving
-        return ids, names
-    sender = (msg.sender_email or "").strip().lower()
+        return list(extra_ids), []
+    ids: list[str] = []
+    names: list[str] = []
     owner_email = (config.MS_USER or "").strip().lower()
-    # "Jinghan.Chen@…" → "jinghan chen" for a name-based fallback match.
-    owner_name = owner_email.split("@", 1)[0].replace(".", " ").strip()
-    for c in contacts:
-        ce = (c.email or "").strip().lower()
-        cn = (c.name or "").strip()
-        if ((sender and ce == sender)
-                or (owner_email and ce == owner_email)
-                or (owner_name and cn.lower() == owner_name)):
-            if c.id and c.id not in ids:
-                ids.append(c.id)
-                names.append(cn)
+    owner_name = owner_email.split("@", 1)[0].replace(".", " ")
+    for c in (_find_contact(contacts, msg.sender_email or "", msg.sender_name or ""),
+              _find_contact(contacts, owner_email, owner_name)):
+        if c and c.id and c.id not in ids:
+            ids.append(c.id)
+            names.append((c.name or "").strip())
+    by_id = {c.id: c for c in contacts if c.id}
+    for i in extra_ids:
+        if i and i not in ids:
+            ids.append(i)
+            n = (getattr(by_id.get(i), "name", "") or "").strip()
+            if n:
+                names.append(n)
     return ids, names
+
+
+def _ids_for_names(csv_text: str, records) -> list[str]:
+    """Resolve a comma-separated list of names back to Notion record ids
+    (exact case-insensitive name match; unknown names are dropped)."""
+    out: list[str] = []
+    for raw in (csv_text or "").split(","):
+        wanted = raw.strip().lower()
+        if not wanted:
+            continue
+        for r in records:
+            if (getattr(r, "name", "") or "").strip().lower() == wanted and r.id:
+                if r.id not in out:
+                    out.append(r.id)
+                break
+    return out
 
 
 @app.post("/api/notion/save-email")
@@ -422,32 +457,146 @@ def notion_save_email(body: SaveEmailNoteIn):
         return {
             "editable": {
                 "Name": default_title,
-                "Thoughts / Considerations": summary,
+                "Note Type": "Email",
                 "Date": (msg.received or "")[:10],
+                "Done": "Yes",
+                "Attendees": ", ".join(n for n in attendee_names if n),
+                "Companies": ", ".join(body.company_names),
+                "Fund": ", ".join(body.fund_names),
+                "Thoughts / Considerations": summary,
             },
             "fixed": [
-                ["Note Type", "Email"],
-                ["Done", "Yes"],
-                ["Attendees", ", ".join(attendee_names)
-                 or ("(linked from dedupe)" if contact_ids else "none matched in Notion")],
-                ["Companies", f"{len(body.company_ids)} linked" if body.company_ids else "none"],
-                ["Fund", f"{len(body.fund_ids)} linked" if body.fund_ids else "none"],
                 ["Page body", f"full email text ({len(body_text):,} chars)"],
             ],
             "live": _notion.live,
         }
 
-    title = body.edits.get("Name") or default_title
-    summary = body.edits.get("Thoughts / Considerations", body.summary)
-    received = body.edits.get("Date") or msg.received
+    # Every field arrives via edits (the preview values are the baseline, user
+    # changes override). Relation fields carry names — resolve them back to
+    # the actual records; a cleared field clears the relation.
+    e = body.edits
+    title = e.get("Name") or default_title
+    summary = e.get("Thoughts / Considerations", body.summary)
+    received = e.get("Date") or msg.received
+    note_type = (e.get("Note Type") or "Email").strip()
+    done = (e.get("Done") or "Yes").strip().lower() in ("yes", "y", "true", "1", "done")
+    if "Attendees" in e:
+        try:
+            contact_ids = _ids_for_names(e["Attendees"], _notion.list_contacts())
+        except Exception:  # noqa: BLE001
+            pass
+    company_ids = body.company_ids
+    if "Companies" in e:
+        try:
+            company_ids = _ids_for_names(e["Companies"], _notion.list_companies())
+        except Exception:  # noqa: BLE001
+            pass
+    fund_ids = body.fund_ids
+    if "Fund" in e:
+        try:
+            fund_ids = _ids_for_names(e["Fund"], _notion.list_funds())
+        except Exception:  # noqa: BLE001
+            pass
+
     props = notion_sync.email_note_properties(
         subject="", sender_name="", company_name="",
         received=received, summary=summary,
-        contact_ids=contact_ids, company_ids=body.company_ids,
-        fund_ids=body.fund_ids,
+        contact_ids=contact_ids, company_ids=company_ids,
+        fund_ids=fund_ids,
     )
     props["Name"] = {"title": [{"text": {"content": title[:2000]}}]}
+    props["Note Type"] = {"select": {"name": note_type}} if note_type else {"select": None}
+    props["Done"] = {"checkbox": done}
     children = notion_sync.email_note_children(body_text)
+    page = _notion.create_page(config.NOTION_NOTES_DB or "mock-db", props,
+                               children=children)
+    return {"url": page.get("url", ""), "id": page.get("id", ""),
+            "live": _notion.live}
+
+
+class SaveMeetingNoteIn(BaseModel):
+    title: str
+    note_type: str = "GP Meeting"
+    markdown: str = ""
+    overall_impression: str = ""
+    who: str = ""
+    preview: bool = False
+    edits: dict[str, str] = {}
+
+
+@app.post("/api/notion/save-meeting-note")
+def notion_save_meeting_note(body: SaveMeetingNoteIn):
+    """Save a drafted meeting note into the Notes DB. Same contract as
+    save-email: preview=true returns every property for review/editing,
+    then the save call applies the edits."""
+    import datetime as dt
+
+    if _notion.live and not config.NOTION_NOTES_DB:
+        raise HTTPException(status_code=503, detail="NOTION_NOTES_DB is not configured")
+
+    attendee_ids: list[str] = []
+    attendee_names: list[str] = []
+    try:
+        contacts = _notion.list_contacts()
+        owner_email = (config.MS_USER or "").strip().lower()
+        owner_name = owner_email.split("@", 1)[0].replace(".", " ")
+        for c in (_find_contact(contacts, "", body.who),
+                  _find_contact(contacts, owner_email, owner_name)):
+            if c and c.id and c.id not in attendee_ids:
+                attendee_ids.append(c.id)
+                attendee_names.append((c.name or "").strip())
+    except Exception:  # noqa: BLE001
+        pass
+
+    if body.preview:
+        return {
+            "editable": {
+                "Name": body.title,
+                "Note Type": body.note_type,
+                "Date": dt.date.today().isoformat(),
+                "Done": "Yes",
+                "Attendees": ", ".join(n for n in attendee_names if n),
+                "Companies": "",
+                "Fund": "",
+                "Thoughts / Considerations": body.overall_impression,
+            },
+            "fixed": [
+                ["Page body", f"the full drafted note ({len(body.markdown):,} chars)"],
+            ],
+            "live": _notion.live,
+        }
+
+    e = body.edits
+    if "Attendees" in e:
+        try:
+            attendee_ids = _ids_for_names(e["Attendees"], _notion.list_contacts())
+        except Exception:  # noqa: BLE001
+            pass
+    company_ids: list[str] = []
+    if e.get("Companies"):
+        try:
+            company_ids = _ids_for_names(e["Companies"], _notion.list_companies())
+        except Exception:  # noqa: BLE001
+            pass
+    fund_ids: list[str] = []
+    if e.get("Fund"):
+        try:
+            fund_ids = _ids_for_names(e["Fund"], _notion.list_funds())
+        except Exception:  # noqa: BLE001
+            pass
+
+    note_type = (e.get("Note Type") or body.note_type).strip()
+    done = (e.get("Done") or "Yes").strip().lower() in ("yes", "y", "true", "1", "done")
+    props = notion_sync.email_note_properties(
+        subject="", sender_name="", company_name="",
+        received=e.get("Date") or dt.date.today().isoformat(),
+        summary=e.get("Thoughts / Considerations", body.overall_impression),
+        contact_ids=attendee_ids, company_ids=company_ids, fund_ids=fund_ids,
+    )
+    props["Name"] = {"title": [{"text": {"content": (e.get("Name") or body.title)[:2000]}}]}
+    props["Note Type"] = {"select": {"name": note_type}} if note_type else {"select": None}
+    props["Done"] = {"checkbox": done}
+    children = notion_sync.markdown_children(body.markdown)
     page = _notion.create_page(config.NOTION_NOTES_DB or "mock-db", props,
                                children=children)
     return {"url": page.get("url", ""), "id": page.get("id", ""),
@@ -627,19 +776,27 @@ def _start_job(kind: str, label: str, work) -> dict:
         _JOBS[job["id"]] = job
 
     def run():
+        # A cancelled job's status is set by the cancel endpoint the moment the
+        # user clicks — this thread must never resurrect it to done/error when
+        # the in-flight model call finally returns.
         try:
-            job["result"] = work(job)
-            job["status"] = "done"
-            _DURATIONS.setdefault(kind, []).append(time.time() - job["_t0"])
-            del _DURATIONS[kind][:-5]   # keep the last five runs
+            result = work(job)
+            if job["status"] == "running":
+                job["result"] = result
+                job["status"] = "done"
+                _DURATIONS.setdefault(kind, []).append(time.time() - job["_t0"])
+                del _DURATIONS[kind][:-5]   # keep the last five runs
         except _Cancelled:
             job["status"] = "cancelled"
         except llm.ClaudeCodeAuthError as e:
-            job["status"], job["error"] = "error", f"Not signed in to Claude: {e}"
+            if job["status"] == "running":
+                job["status"], job["error"] = "error", f"Not signed in to Claude: {e}"
         except llm.ClaudeCodeRateLimited as e:
-            job["status"], job["error"] = "error", f"Claude usage limit reached: {e}"
+            if job["status"] == "running":
+                job["status"], job["error"] = "error", f"Claude usage limit reached: {e}"
         except Exception as e:  # noqa: BLE001
-            job["status"], job["error"] = "error", str(e)
+            if job["status"] == "running":
+                job["status"], job["error"] = "error", str(e)
         job["elapsed"] = int(time.time() - job["_t0"])
 
     def tick():
@@ -658,9 +815,13 @@ def cancel_job(job_id: str):
     if job is None:
         raise HTTPException(status_code=404, detail="No such job")
     job["cancel"] = True
-    # An in-flight model call can't be interrupted mid-request; the job stops
-    # at the next stage boundary and any in-flight output is discarded.
-    return {"status": "cancelling"}
+    # Cancellation is immediate from the user's point of view: the job reads
+    # as cancelled now, and the worker thread discards whatever its in-flight
+    # model call eventually returns.
+    if job["status"] == "running":
+        job["status"] = "cancelled"
+        job["elapsed"] = int(time.time() - job["_t0"])
+    return {"status": "cancelled"}
 
 
 @app.get("/api/jobs")

@@ -240,6 +240,8 @@ function emailNotePayload(msg) {
   const d = r?.dedupe || {};
   const linked = (kind) =>
     d[kind]?.action === "link_existing" && d[kind]?.match_id ? [d[kind].match_id] : [];
+  const linkedNames = (kind) =>
+    d[kind]?.action === "link_existing" && d[kind]?.match ? [d[kind].match] : [];
   return {
     message: msg,
     summary: r?.entity?.summary || r?.rationale || "",
@@ -247,6 +249,8 @@ function emailNotePayload(msg) {
     contact_ids: linked("contact"),
     company_ids: linked("company"),
     fund_ids: linked("fund"),
+    company_names: linkedNames("company"),
+    fund_names: linkedNames("fund"),
   };
 }
 

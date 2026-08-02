@@ -13,7 +13,7 @@ import * as uiStore from "./uiStore.js";
 
 const GROUPS = [
   ["OVERVIEW", [["/", "Home"]]],
-  ["WORKFLOW", [["/triage", "Inbox triage"], ["/prep", "Meeting prep"], ["/live", "Live meeting"]]],
+  ["WORKFLOW", [["/triage", "Inbox triage"], ["/prep", "Meeting prep"], ["/live", "Note taker"]]],
   ["ANALYSIS", [["/track-records", "Track records"], ["/fund-data", "Fund data"], ["/whats-new", "What's new"]]],
 ];
 
