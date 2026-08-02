@@ -163,3 +163,29 @@ table.wb td:first-child{text-align:left;font-family:var(--sans);
 .stepnum.done{background:var(--teal-100);color:var(--teal-700)}
 .stepnum.current{background:var(--teal-600);color:var(--paper-000)}
 .stepnum.pending{background:var(--paper-100);color:var(--stone-400)}
+
+/* ---- Mobile: sidebar collapses to a top bar (interim pattern — the design
+   handoff leaves sub-900px nav undesigned) ---------------------------------- */
+@media (max-width: 900px){
+  .shell{grid-template-columns:1fr}
+  .sidebar{position:sticky;top:0;height:auto;z-index:50;flex-direction:row;
+    align-items:center;gap:6px;padding:10px 12px;overflow-x:auto;overflow-y:hidden}
+  .lockup{padding:0;flex:none}
+  .lockup .sub{display:none}
+  .lockup .word{font-size:11px;letter-spacing:.2em}
+  .navgroups{flex-direction:row;gap:2px;flex:1;min-width:0}
+  .navgroup{flex-direction:row;gap:2px}
+  .navgroup .glabel{display:none}
+  .sidebar a.nav{padding:8px 10px;font-size:13px;border-left:none;
+    border-bottom:2px solid transparent;white-space:nowrap;border-radius:var(--radius)}
+  .sidebar a.nav.active{border-left:none;border-bottom-color:var(--teal-500)}
+  .sidefoot{display:none}
+  .main{padding:22px 16px 56px}
+  .pagehead h1{font-size:28px}
+  .pagehead h1.xl{font-size:32px}
+  .pagehead .actions{width:100%}
+  .panes{gap:20px}
+  .kpis .kpi{padding:12px 14px}
+  .kpis .kval{font-size:21px}
+  input,select,button{min-height:38px}   /* touch targets */
+}

@@ -63,4 +63,5 @@ command -v claude >/dev/null 2>&1 || echo "Note: Claude Code not installed — A
 
 # -- 5. Launch --------------------------------------------------------------- #
 echo "Starting the app at http://localhost:8000 (Ctrl+C to stop)"
-exec "$PY" -m uvicorn api.main:app --port 8000
+echo "On your phone (same Wi-Fi): http://<this-machine's-IP>:8000, then Add to Home Screen."
+exec "$PY" -m uvicorn api.main:app --host 0.0.0.0 --port 8000

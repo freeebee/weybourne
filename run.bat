@@ -156,10 +156,14 @@ echo.
 echo Starting the app - your browser will open automatically at
 echo http://localhost:8000
 echo.
+echo On your phone (same Wi-Fi): open http://THIS-PC-IP:8000 and use the
+echo browser's "Add to Home Screen" to install it. Your addresses:
+ipconfig | findstr /c:"IPv4"
+echo.
 echo Keep this window open while you use the app. Press Ctrl+C to stop.
 echo.
 start "" http://localhost:8000
-"%PY%" -m uvicorn api.main:app --port 8000
+"%PY%" -m uvicorn api.main:app --host 0.0.0.0 --port 8000
 
 echo.
 echo The app has stopped.

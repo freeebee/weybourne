@@ -1,0 +1,13 @@
+{
+  "name": "Weybourne Investment Connector",
+  "short_name": "Weybourne",
+  "description": "Inbox triage, meeting prep, live meetings, track records and fund data.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F3EA",
+  "theme_color": "#0F2E42",
+  "icons": [
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
