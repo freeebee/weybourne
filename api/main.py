@@ -397,10 +397,32 @@ def notion_save_email(body: SaveEmailNoteIn):
     body_text = msg.body or msg.body_preview
 
     if body.preview:
+        # Thoughts / Considerations should be a real summary of the email, in
+        # the style of the existing Email notes — not the triage one-liner.
+        summary = body.summary
+        try:
+            client = _client()
+            response = client.messages.create(
+                model=config.FAST_MODEL,
+                max_tokens=300,
+                system=("Summarise emails for a family-office CRM note. One to three "
+                        "plain sentences: who wrote (name, role, firm if evident), "
+                        "what they want or announced, and any concrete specifics "
+                        "(dates, places, figures, names). Neutral third person. "
+                        "No preamble, no markdown."),
+                messages=[{"role": "user", "content":
+                           f"From: {msg.sender_name} <{msg.sender_email}>\n"
+                           f"Subject: {msg.subject}\n\n{body_text}"}],
+            )
+            generated = next((b.text for b in response.content
+                              if getattr(b, "type", None) == "text"), "").strip()
+            summary = generated or summary
+        except Exception:  # noqa: BLE001 - a summary hiccup must not block the preview
+            pass
         return {
             "editable": {
                 "Name": default_title,
-                "Thoughts / Considerations": body.summary,
+                "Thoughts / Considerations": summary,
                 "Date": (msg.received or "")[:10],
             },
             "fixed": [
@@ -449,7 +471,20 @@ class DraftIn(BaseModel):
     message: dict
     entity: dict
     screen: dict | None = None
+    dedupe: dict | None = None
     offer_slots: bool = True
+
+
+def _relationship_context(dedupe: dict | None) -> str:
+    """Turn the triage dedupe result into prose for the draft prompt, so a
+    reply to someone already in the CRM reads like a reply to someone we know."""
+    lines = []
+    for kind, d in (dedupe or {}).items():
+        if (d or {}).get("action") == "link_existing" and d.get("match"):
+            lines.append(f"- The {kind} '{d['match']}' is already in our Notion CRM "
+                         f"({d.get('reason') or 'matched'}) — an existing relationship, "
+                         "not a cold inbound.")
+    return "\n".join(lines)
 
 
 @app.post("/api/drafts")
@@ -472,7 +507,8 @@ def drafts(body: DraftIn):
             # A calendar hiccup must never block reply drafting — just
             # draft without offering meeting slots.
             slots = []
-    options = _run(generate_draft_options, _client(), msg, entity, scr, slots)
+    options = _run(generate_draft_options, _client(), msg, entity, scr, slots,
+                   relationship=_relationship_context(body.dedupe))
     return {"options": [o.model_dump() for o in options]}
 
 

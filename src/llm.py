@@ -213,6 +213,18 @@ class ClaudeCodeClient:
 
     def _run_subprocess(self, argv: list[str]) -> subprocess.CompletedProcess:
         argv = [self._resolve_cli(), *argv[1:]]
+        # The prompt travels in argv for the runner interface, but Windows caps
+        # a whole command line at ~32k characters — a preference screen or
+        # briefing prompt (which embeds entire Notion pages) blows past that,
+        # and CreateProcess fails with WinError 206, which Python surfaces as
+        # FileNotFoundError — i.e. "CLI not found" with the CLI right there.
+        # So the prompt is lifted out of argv and fed via stdin instead, which
+        # `claude -p` reads with no length limit.
+        prompt_input = ""
+        if "-p" in argv:
+            i = argv.index("-p")
+            if i + 1 < len(argv):
+                prompt_input = argv.pop(i + 1)
         try:
             return subprocess.run(
                 argv,
@@ -223,7 +235,7 @@ class ClaudeCodeClient:
                 encoding="utf-8",
                 errors="replace",
                 timeout=self.timeout,
-                stdin=subprocess.DEVNULL,  # else the CLI waits ~3s for stdin
+                input=prompt_input,  # also closes stdin, so the CLI never waits on it
                 cwd=str(_scratch_dir()),
             )
         except FileNotFoundError as e:

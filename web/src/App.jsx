@@ -88,7 +88,22 @@ function SideFoot() {
   );
 }
 
+/* Kick off the What's new digests as soon as the app opens, so the briefing
+   is ready (or well under way) by the time the page is visited. The page's
+   own auto-job hook then attaches to the running job or shows the result. */
+function useWarmWhatsNew() {
+  React.useEffect(() => {
+    ["whats-new-team", "whats-new-inbox"].forEach(async (kind) => {
+      try {
+        const { jobs } = await get(`/api/jobs?kind=${kind}`);
+        if (!jobs.length) await fetch(`/api/jobs/${kind}`, { method: "POST" });
+      } catch { /* backend warming up — the page will start it on visit */ }
+    });
+  }, []);
+}
+
 export default function App() {
+  useWarmWhatsNew();
   return (
     <Router>
       <div className="shell">

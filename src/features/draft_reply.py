@@ -70,6 +70,17 @@ invent a reason that is not supported by the screen. Keep the door open where ap
 verbatim, as options.
 - One INFO option requesting the specific missing information named in the open questions.
 
+RELATIONSHIP CONTEXT, when supplied, is authoritative: if the sender, their firm, or the \
+fund is already in our CRM, write to them as a KNOWN counterparty — acknowledge the \
+existing relationship in tone, never treat them as a cold inbound, and never imply we are \
+unfamiliar with or uninterested in a firm we already know or hold. A pass, if offered at \
+all, must be about the specific new ask, not the relationship.
+
+If the email is NOT an investment pitch (a catch-up, scheduling, an introduction, personal \
+or administrative), do NOT produce pass/info options about investment fit — produce the \
+natural replies instead: accept, propose alternative times (using the free slots if any), \
+or politely decline the meeting, matching what the email actually asks.
+
 Never commit to an investment, never quote internal targets, thresholds or portfolio data, \
 and never disclose the internal preference framework or that the email was screened \
 automatically."""
@@ -146,10 +157,13 @@ def generate_draft_options(
     entity: ExtractedEntity,
     screen: PreferenceScreen,
     slots: list[TimeSlot] | None = None,
+    relationship: str = "",
 ) -> list[DraftReplyOption]:
     """Produce the selectable reply options for one opportunity.
 
-    Falls back to deterministic drafts when ``client`` is None.
+    ``relationship`` carries what the Notion dedupe established (e.g. the
+    sender's firm is already in the CRM) so drafts never read like a reply to
+    a stranger. Falls back to deterministic drafts when ``client`` is None.
     """
     slots = slots or []
     if client is None:
@@ -160,9 +174,12 @@ def generate_draft_options(
         if slots
         else "(no free slots supplied — do not offer specific times)"
     )
+    rel_block = (f"RELATIONSHIP CONTEXT (from our Notion CRM)\n{relationship}\n\n"
+                 if relationship else "")
     user = (
         f"ORIGINAL EMAIL\nFrom: {entity.contact_name} <{entity.contact_email}>\n"
         f"Subject: {email.subject}\n\n{email.body or email.body_preview}\n\n"
+        f"{rel_block}"
         f"OPPORTUNITY\nFund: {entity.fund_name}\nManager: {entity.company_name}\n"
         f"Asset class: {entity.asset_class}\nSleeve: {screen.sleeve}\n\n"
         f"PREFERENCE SCREEN\nOverall fit: {screen.overall_fit}\n"

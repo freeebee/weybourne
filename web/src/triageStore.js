@@ -199,7 +199,8 @@ export function genDrafts(msg) {
   const r = S.results[msg.id];
   return workCall(msg.id, "drafts", async (w) => {
     const res = await post("/api/drafts",
-      { message: msg, entity: r.entity, screen: w.screen || null });
+      { message: msg, entity: r.entity, screen: w.screen || null,
+        dedupe: r.dedupe || null });
     setWork(msg.id, { options: res.options, chosen: 0,
                       draftBody: res.options[0]?.body || "" });
   });
@@ -265,13 +266,23 @@ export function setEmailNoteEdit(id, prop, value) {
 }
 
 export function cancelEmailNote(id) {
-  setWork(id, { emailNote: null, emailNoteEdits: {} });
+  setWork(id, { emailNote: null, emailNoteEdits: {}, emailNoteEditing: {} });
+}
+
+export function toggleEmailNoteFieldEdit(id, prop) {
+  const w = workOf(id);
+  const editing = { ...(w.emailNoteEditing || {}) };
+  editing[prop] = !editing[prop];
+  setWork(id, { emailNoteEditing: editing });
 }
 
 export function saveEmailNote(msg) {
   return workCall(msg.id, "emailnote", async (w) => {
+    // The previewed values (including the generated summary) are the baseline;
+    // anything the user edited overrides them.
     const res = await post("/api/notion/save-email",
-      { ...emailNotePayload(msg), edits: w.emailNoteEdits || {} });
+      { ...emailNotePayload(msg),
+        edits: { ...(w.emailNote?.editable || {}), ...(w.emailNoteEdits || {}) } });
     setWork(msg.id, {
       emailNoteUrl: res.url, emailNote: null,
       notice: "Email saved to Notion as a note (Note Type: Email, marked Done)."

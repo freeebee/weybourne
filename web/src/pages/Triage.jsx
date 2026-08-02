@@ -347,31 +347,44 @@ function DetailPane({ msg, result, flag }) {
                               background: "var(--paper-050)",
                               border: "1px solid var(--paper-200)",
                               borderRadius: "var(--radius)" }}>
-                  <span className="microlabel">NOTE TO BE CREATED — REVIEW AND EDIT</span>
+                  <span className="microlabel">NOTE TO BE CREATED</span>
                   <div style={{ display: "grid", gridTemplateColumns: "150px 1fr",
                                 gap: "6px 12px", marginTop: 10 }}>
-                    {Object.entries(w.emailNote.editable || {}).map(([k, v]) => (
-                      <React.Fragment key={k}>
-                        <span className="microlabel" style={{ paddingTop: 6 }}>{k}</span>
-                        {k === "Thoughts / Considerations" ? (
-                          <textarea rows={3}
-                            value={w.emailNoteEdits?.[k] ?? v}
-                            onChange={(e) => ts.setEmailNoteEdit(msg.id, k, e.target.value)}
-                            style={{ fontSize: "12.5px", padding: "6px 8px",
-                                     background: "var(--paper-000)",
-                                     border: "1px solid var(--paper-200)",
-                                     borderRadius: 4, color: "var(--ink-700)",
-                                     fontFamily: "inherit", lineHeight: 1.5 }} />
-                        ) : (
-                          <input value={w.emailNoteEdits?.[k] ?? v}
-                            onChange={(e) => ts.setEmailNoteEdit(msg.id, k, e.target.value)}
-                            style={{ fontSize: "12.5px", padding: "5px 8px",
-                                     background: "var(--paper-000)",
-                                     border: "1px solid var(--paper-200)",
-                                     borderRadius: 4, color: "var(--ink-700)" }} />
-                        )}
-                      </React.Fragment>
-                    ))}
+                    {Object.entries(w.emailNote.editable || {}).map(([k, v]) => {
+                      const editing = !!w.emailNoteEditing?.[k];
+                      const value = w.emailNoteEdits?.[k] ?? v;
+                      const inputStyle = { fontSize: "12.5px", padding: "5px 8px",
+                                           background: "var(--paper-000)",
+                                           border: "1px solid var(--paper-200)",
+                                           borderRadius: 4, color: "var(--ink-700)",
+                                           fontFamily: "inherit", lineHeight: 1.5,
+                                           flex: 1 };
+                      return (
+                        <React.Fragment key={k}>
+                          <span className="microlabel" style={{ paddingTop: 3 }}>{k}</span>
+                          <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                            {editing ? (
+                              k === "Thoughts / Considerations"
+                                ? <textarea rows={3} value={value} style={inputStyle}
+                                    onChange={(e) => ts.setEmailNoteEdit(msg.id, k, e.target.value)} />
+                                : <input value={value} style={inputStyle}
+                                    onChange={(e) => ts.setEmailNoteEdit(msg.id, k, e.target.value)} />
+                            ) : (
+                              <span style={{ fontSize: "12.5px", flex: 1,
+                                color: k in (w.emailNoteEdits || {}) ? "var(--teal-700)" : "inherit" }}>
+                                {value}
+                              </span>
+                            )}
+                            <button onClick={() => ts.toggleEmailNoteFieldEdit(msg.id, k)}
+                              style={{ background: "none", border: "none", cursor: "pointer",
+                                       color: "var(--teal-700)", fontFamily: "var(--mono)",
+                                       fontSize: 10, letterSpacing: ".1em", paddingTop: 3 }}>
+                              {editing ? "DONE" : "EDIT"}
+                            </button>
+                          </div>
+                        </React.Fragment>
+                      );
+                    })}
                     {(w.emailNote.fixed || []).map(([k, v]) => (
                       <React.Fragment key={k}>
                         <span className="microlabel">{k}</span>
