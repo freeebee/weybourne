@@ -20,6 +20,8 @@ export default function Prep() {
   const [viewing, setViewing] = React.useState(null);  // {name, result}
   const [error, setError] = React.useState(null);
   const [showFull, setShowFull] = React.useState(false);
+  const [justDone, setJustDone] = React.useState(null);   // {label, entity, email, company, vehicle}
+  const [minimized, setMinimized] = React.useState({});   // {screen: bool, brief: bool}
   const pollRef = React.useRef(null);
   const doneSeen = React.useRef(new Set());
 
@@ -43,6 +45,14 @@ export default function Prep() {
             doneSeen.current.add(j.id);
             const full = await get(`/api/jobs/${j.id}`);
             setViewing({ name: full.label, result: full.result });
+            setJustDone({
+              label: full.label,
+              entity: full.result?.entity || "",
+              email: full.result?.email || "",
+              company: full.result?.company || "",
+              vehicle: full.result?.briefing?.vehicle || "",
+            });
+            setMinimized({});
             refreshLibrary();
           }
           if (j.status === "error" && !doneSeen.current.has(j.id)) {
@@ -243,17 +253,63 @@ export default function Prep() {
           )}
           <ErrorNote error={error} />
 
-          {viewing?.result?.screen && <ScreenView screen={viewing.result.screen} />}
+          {/* Completion banner — the prep is done, here's exactly what for. */}
+          {justDone && (
+            <Card accent="teal" style={{ marginBottom: 16, padding: "16px 20px" }}>
+              <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                <Mascot state="celebrating" width={58} />
+                <div style={{ flex: 1 }}>
+                  <span className="microlabel" style={{ color: "var(--positive-600)" }}>
+                    MEETING PREP DONE
+                  </span>
+                  <div style={{ font: "400 17px/1.4 var(--serif)", color: "var(--ink-800)" }}>
+                    {justDone.entity}
+                    {justDone.vehicle ? ` · ${justDone.vehicle}` : ""}
+                    {justDone.company && justDone.company !== justDone.entity
+                      ? ` · ${justDone.company}` : ""}
+                  </div>
+                  {justDone.email && (
+                    <span className="mono" style={{ fontSize: 11, color: "var(--stone-500)" }}>
+                      {justDone.email}
+                    </span>
+                  )}
+                </div>
+                <button onClick={() => setJustDone(null)} title="Dismiss" style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  color: "var(--stone-400)", fontFamily: "var(--mono)", fontSize: 14 }}>×</button>
+              </div>
+            </Card>
+          )}
+
+          {viewing?.result?.screen && (
+            minimized.screen ? (
+              <MinimizedBar label={`PREFERENCE SCREEN · ${viewing.result.screen.overall_fit.toUpperCase()}`}
+                onExpand={() => setMinimized((m) => ({ ...m, screen: false }))} />
+            ) : (
+              <ScreenView screen={viewing.result.screen}
+                onMinimize={() => setMinimized((m) => ({ ...m, screen: true }))} />
+            )
+          )}
 
           {viewing?.result?.briefing && (
+            minimized.brief ? (
+              <MinimizedBar style={{ marginTop: viewing?.result?.screen ? 12 : 0 }}
+                label={`BRIEF · ${(viewing.result.briefing.entity || viewing.name || "").toUpperCase()}`}
+                onExpand={() => setMinimized((m) => ({ ...m, brief: false }))} />
+            ) : (
             <Card accent="brass" style={{ padding: "26px 28px 28px",
                                           marginTop: viewing?.result?.screen ? 20 : 0 }}>
               <div className="spread" style={{ marginBottom: 12 }}>
                 <span className="microlabel">
                   BRIEF · {(viewing.result.briefing.entity || viewing.name || "").toUpperCase()}
                 </span>
-                <span className="mono" style={{ fontSize: 10.5, color: "var(--stone-400)" }}>
-                  {viewing.result.briefing.meeting_details || ""}
+                <span className="row" style={{ gap: 12 }}>
+                  <span className="mono" style={{ fontSize: 10.5, color: "var(--stone-400)" }}>
+                    {viewing.result.briefing.meeting_details || ""}
+                  </span>
+                  <MiniBtn onClick={() => setMinimized((m) => ({ ...m, brief: true }))}>
+                    MINIMIZE
+                  </MiniBtn>
                 </span>
               </div>
               <div style={{ font: "400 26px/1.25 var(--serif)", color: "var(--ink-800)", marginBottom: 10 }}>
@@ -280,8 +336,10 @@ export default function Prep() {
                 </Button>
               </div>
             </Card>
+            )
           )}
-          {viewing?.result?.briefing && showFull && <BriefingView data={viewing.result.briefing} />}
+          {viewing?.result?.briefing && !minimized.brief && showFull &&
+            <BriefingView data={viewing.result.briefing} />}
 
           {/* Library — every completed prep is saved automatically. */}
           <div style={{ marginTop: 28 }}>
@@ -312,15 +370,42 @@ export default function Prep() {
   );
 }
 
-function ScreenView({ screen }) {
+function MiniBtn({ onClick, children }) {
+  return (
+    <button onClick={onClick} style={{
+      background: "none", border: "1px solid var(--paper-200)", borderRadius: 4,
+      cursor: "pointer", padding: "2px 8px", color: "var(--teal-700)",
+      fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".1em" }}>
+      {children}
+    </button>
+  );
+}
+
+function MinimizedBar({ label, onExpand, style }) {
+  return (
+    <div onClick={onExpand} className="click" style={{
+      display: "flex", justifyContent: "space-between", alignItems: "center",
+      padding: "10px 16px", background: "var(--paper-000)", cursor: "pointer",
+      border: "1px solid var(--paper-200)", borderRadius: "var(--radius)",
+      marginBottom: 12, ...style }}>
+      <span className="microlabel">{label}</span>
+      <MiniBtn onClick={onExpand}>EXPAND</MiniBtn>
+    </div>
+  );
+}
+
+function ScreenView({ screen, onMinimize }) {
   const color = { Fit: "var(--positive-600)", Partial: "var(--caution-600)",
     "Non-fit": "var(--critical-600)", Unclear: "var(--stone-500)" }[screen.overall_fit];
   return (
     <Card accent="teal" style={{ padding: "20px 22px" }}>
       <div className="spread" style={{ marginBottom: 8 }}>
         <span className="microlabel">PREFERENCE SCREEN · CHAO</span>
-        <span className="mono" style={{ fontSize: 11, letterSpacing: ".1em", color }}>
-          {screen.overall_fit.toUpperCase()} · {screen.sleeve.toUpperCase()}
+        <span className="row" style={{ gap: 12 }}>
+          <span className="mono" style={{ fontSize: 11, letterSpacing: ".1em", color }}>
+            {screen.overall_fit.toUpperCase()} · {screen.sleeve.toUpperCase()}
+          </span>
+          {onMinimize && <MiniBtn onClick={onMinimize}>MINIMIZE</MiniBtn>}
         </span>
       </div>
       <p style={{ fontSize: 14, lineHeight: 1.55, margin: "0 0 12px" }}>{screen.summary}</p>

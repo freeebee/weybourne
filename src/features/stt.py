@@ -40,5 +40,14 @@ def transcribe_wav(wav_bytes: bytes) -> str:
             "`pip install faster-whisper` in the app's environment."
         ) from e
 
-    segments, _info = model.transcribe(io.BytesIO(wav_bytes), vad_filter=True)
+    segments, _info = model.transcribe(
+        io.BytesIO(wav_bytes),
+        vad_filter=True,
+        # Live chunks arrive every 8 seconds — latency wins over the last few
+        # points of accuracy. Greedy decoding (beam 1) is 2-3x faster than the
+        # default beam of 5, and pinning the language skips per-chunk detection.
+        beam_size=1,
+        language=os.environ.get("WHISPER_LANGUAGE", "en"),
+        condition_on_previous_text=False,
+    )
     return " ".join(seg.text.strip() for seg in segments).strip()

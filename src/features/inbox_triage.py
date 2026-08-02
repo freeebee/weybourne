@@ -138,6 +138,6 @@ def triage_email(client, email: EmailMessage) -> InvestmentTriage:
         triage.entity.contact_email = email.sender_email
     if not triage.entity.company_domain and "@" in email.sender_email:
         triage.entity.company_domain = email.sender_email.split("@", 1)[1].lower()
-    if not triage.entity.summary:
-        triage.entity.summary = email.subject
+    # NOTE: never backfill summary with the subject line — it leaks into Notion
+    # Description fields and reads as nonsense. Blank is better than wrong.
     return triage

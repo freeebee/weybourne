@@ -892,7 +892,8 @@ async def start_prep_job(
         job["stages"].append({"label": "Context gathered",
                               "detail": f"{len(ctx.sources)} source(s) against {notion_note} · {deck_note}"})
 
-        result: dict = {"kind": "prep", "entity": name}
+        result: dict = {"kind": "prep", "entity": name,
+                        "email": email, "company": company}
 
         def run_screen():
             entity = ExtractedEntity(

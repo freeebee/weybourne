@@ -235,8 +235,9 @@ function DetailPane({ msg, result, flag }) {
           {msg.sender_name} &lt;{msg.sender_email}&gt; · {msg.received}
         </div>
         <p style={{ fontSize: "14.5px", lineHeight: 1.6, color: "var(--stone-600)",
-                    maxWidth: "60ch", margin: 0 }}>
-          {msg.body_preview || (msg.body || "").slice(0, 400)}
+                    maxWidth: "68ch", margin: 0, whiteSpace: "pre-wrap",
+                    maxHeight: 300, overflowY: "auto" }}>
+          {msg.body || msg.body_preview}
         </p>
         {result?.rationale && (
           <p className="muted" style={{ fontSize: "13px", margin: "10px 0 0" }}>{result.rationale}</p>

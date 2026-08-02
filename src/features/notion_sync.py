@@ -80,9 +80,12 @@ def contact_properties(entity: ExtractedEntity) -> dict:
 
 
 def company_properties(entity: ExtractedEntity) -> dict:
+    # Description must describe the FIRM — the strategy in the manager's own
+    # terms where extracted; never an email subject or opportunity one-liner.
+    desc = entity.strategy_description or entity.summary
     props = {
         "Name": _title_prop(entity.company_name),
-        "Description": _rich_prop(entity.summary),
+        "Description": _rich_prop(desc),
     }
     if entity.company_city:
         props["City"] = _rich_prop(entity.company_city)

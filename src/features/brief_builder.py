@@ -153,6 +153,23 @@ plainly in the meetings section.
 - Admissible internal sources: Notion records, Outlook, SharePoint. Everything else is external \
 research. Anchor every question with a one-line source reference.
 
+EXTERNAL RESEARCH (mandatory — you have the WebSearch tool; USE IT before writing):
+- Run real web searches on the entity and its principals. Prioritise the diff: post-deck \
+developments, other vehicles, current fundraising status, personnel and leadership changes, \
+ownership and governance changes, competitive landscape, and anything material the manager's \
+own materials do not disclose.
+- Background-check every named individual: search "[Name]" together with criticism OR \
+controversy OR litigation. Report findings plainly and proportionately; where a person has no \
+meaningful public record, say so explicitly — absence of information is not a clean bill of \
+health.
+- Watch for name collisions (same-named but unrelated firms in other geographies) and say \
+which entity a finding refers to.
+- For each portfolio position in a deck, look for the most recent public newsflow since entry \
+(funding rounds, filings, hiring, customer wins, leadership changes, expansion or contraction \
+signals) and read it lightly against the deck's narrative.
+- Cite searched facts in the sources list as kind "External" with enough detail to find them \
+again. Never invent a search result.
+
 CLASSIFICATION:
 - A fund manager gets the full briefing including deals. A non-manager relationship (a \
 government body, another allocator, a service provider) gets is_manager=false, an explicit \
@@ -198,13 +215,22 @@ def synthesize_briefing(client, ctx: PrepContext) -> dict:
         f"ATTACHED DOCUMENT (deck)\n{ctx.document_text or '(none)'}\n\n"
         f"KNOWN SOURCE LIST\n" + "\n".join(f"- {s}" for s in ctx.sources)
     )
-    response = client.messages.create(
+    kwargs = dict(
         model=REASONING_MODEL,
         max_tokens=8000,
         system=BRIEFING_SYSTEM_PROMPT,
         output_config={"format": {"type": "json_schema", "schema": BRIEFING_SCHEMA}},
         messages=[{"role": "user", "content": user}],
     )
+    try:
+        # The CLI backend can actually run web searches during synthesis —
+        # this is what fills the background-research and newsflow sections
+        # with post-deck reality instead of restating the deck.
+        response = client.messages.create(
+            **kwargs, extra_allowed_tools=["WebSearch", "WebFetch"])
+    except TypeError:
+        # API-backend clients don't take the kwarg — same call without it.
+        response = client.messages.create(**kwargs)
     raw = next((b.text for b in response.content if getattr(b, "type", None) == "text"), "")
     return json.loads(raw)
 

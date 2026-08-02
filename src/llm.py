@@ -251,7 +251,8 @@ class ClaudeCodeClient:
 
     # -- the adapter ------------------------------------------------------ #
     def _build_argv(self, system: Optional[str], prompt: str, schema: Optional[dict],
-                    model: Optional[str], needs_read: bool) -> list[str]:
+                    model: Optional[str], needs_read: bool,
+                    extra_tools: Optional[list] = None) -> list[str]:
         # A prompt that begins with "-" (e.g. a markdown bullet list) would be
         # parsed by the CLI's option parser as an unknown flag. A leading
         # newline is invisible to the model and defuses it.
@@ -271,8 +272,11 @@ class ClaudeCodeClient:
         cli_model = _cli_model(model)
         if cli_model:
             argv += ["--model", cli_model]
+        tools = list(extra_tools or [])
         if needs_read:
-            argv += ["--allowedTools", "Read"]
+            tools.append("Read")
+        if tools:
+            argv += ["--allowedTools", ",".join(tools)]
         return argv
 
     def _create(self, **kwargs: Any) -> _Response:
@@ -282,7 +286,8 @@ class ClaudeCodeClient:
         schema = ((output_config.get("format") or {}).get("schema"))
 
         prompt, images = _extract_prompt(messages)
-        argv = self._build_argv(system, prompt, schema, kwargs.get("model"), bool(images))
+        argv = self._build_argv(system, prompt, schema, kwargs.get("model"), bool(images),
+                                extra_tools=kwargs.get("extra_allowed_tools"))
 
         try:
             completed = self._runner(argv)

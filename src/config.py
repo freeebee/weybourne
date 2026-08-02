@@ -52,7 +52,7 @@ FAST_MODEL = os.environ.get("CLAUDE_FAST_MODEL", "claude-haiku-4-5-20251001")
 LLM_BACKEND = os.environ.get("LLM_BACKEND", "claude_cli")
 
 CLAUDE_CLI_PATH = os.environ.get("CLAUDE_CLI_PATH", "claude")
-CLAUDE_CLI_TIMEOUT = int(os.environ.get("CLAUDE_CLI_TIMEOUT", "300"))
+CLAUDE_CLI_TIMEOUT = int(os.environ.get("CLAUDE_CLI_TIMEOUT", "600"))
 # Empty directory the CLI runs from, so it doesn't auto-load an unrelated
 # CLAUDE.md / .mcp.json / hooks into every call. See src/llm.py.
 CLAUDE_CLI_SCRATCH_DIR = os.environ.get("CLAUDE_CLI_SCRATCH_DIR")
