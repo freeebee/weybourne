@@ -11,13 +11,21 @@ import { Markdown } from "./Prep.jsx";
 function CalendarPick() {
   const [events, setEvents] = React.useState([]);
   const [idx, setIdx] = React.useState("");
+  const [loaded, setLoaded] = React.useState(0);
 
   React.useEffect(() => {
     get("/api/calendar?days=2").then((d) => setEvents(d.events)).catch(() => {});
   }, []);
 
   return (
-    <select value={idx} style={inputStyle} onChange={(e) => {
+    <>
+    {loaded > 0 && (
+      <span className="mono" style={{ fontSize: 10, color: "var(--brass-700)",
+                                      display: "block", marginBottom: 4 }}>
+        {loaded} KEY QUESTION{loaded === 1 ? "" : "S"} LOADED FROM YOUR PREP
+      </span>
+    )}
+    <select value={idx} style={inputStyle} onChange={async (e) => {
       setIdx(e.target.value);
       const ev = events[+e.target.value];
       if (ev) {
@@ -25,6 +33,10 @@ function CalendarPick() {
           who: ev.counterparty_name || ev.subject,
           goal: live.S.goal || ev.subject,
         });
+        // Pull in the key questions saved for this meeting's counterparty.
+        let n = await live.loadKeyQuestions(ev.counterparty_name);
+        if (!n && ev.subject) n = await live.loadKeyQuestions(ev.subject);
+        setLoaded(n);
       }
     }}>
       <option value="">— pick a meeting —</option>
@@ -34,6 +46,7 @@ function CalendarPick() {
         </option>
       ))}
     </select>
+    </>
   );
 }
 
@@ -182,13 +195,16 @@ export default function Live() {
         <div style={{ flex: "1.4 1 440px", minWidth: "min(100%,320px)" }}>
           <SectionHead label="QUESTIONS WORTH ASKING" right={`${openItems.length} OPEN`} />
 
-          {/* Sketch */}
+          {/* Sketch — available before the meeting starts too, so key
+              questions can be prepared in advance. */}
           <div className="row" style={{ marginBottom: 14 }}>
             <input value={rough} onChange={(e) => setRough(e.target.value)}
               placeholder="sketch a question — rough is fine"
               style={{ flex: 1, minWidth: 180 }} />
-            <Button variant="ghost" busy={s.busy === "sharpen"} disabled={!rough || !s.transcript}
+            <Button variant="ghost" busy={s.busy === "sharpen"} disabled={!rough}
               onClick={() => live.sharpen(rough).then(() => setRough(""))}>Sharpen</Button>
+            <Button variant="ghost" disabled={!rough}
+              onClick={() => { live.addOwnQuestion(rough); setRough(""); }}>Add as key</Button>
           </div>
           {s.sharp && (
             <Card accent="teal" style={{ marginBottom: 14 }}>

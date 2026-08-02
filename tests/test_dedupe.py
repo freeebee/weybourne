@@ -59,9 +59,29 @@ class TestContactMatching:
         assert not decision.is_duplicate
         assert decision.recommended_action == "create"
 
+    def test_exact_name_is_a_direct_match_even_without_email(self):
+        # 'Allan Fife' with a different email address IS the CRM's Allan Fife.
+        decision = match_contact("a.fife@elsewhere.com", "Catherine Wu", CONTACTS)
+        assert decision.recommended_action == "link_existing"
+        assert decision.best_match.reason == "exact name match"
+
+
+class TestConcatenatedNames:
+    def test_concatenated_company_name_matches_its_spaced_form(self):
+        # 'FIFECAPITAL' must match 'Fife Capital' — noise-token stripping alone
+        # collapses the spaced form to 'fife' and the two stop matching, while
+        # an unrelated 'ECapital' scores higher as a substring. Regression for
+        # the squashed-name comparison.
+        companies = [CompanyRecord(id="x1", name="Fife Capital", domain=""),
+                     CompanyRecord(id="x2", name="ECapital", domain="")]
+        decision = match_company("FIFECAPITAL", "", companies)
+        assert decision.best_match.matched_name == "Fife Capital"
+        assert decision.recommended_action == "link_existing"
+
     def test_similar_name_different_email_needs_review_not_auto_merge(self):
-        # Two people can share a name; never silently merge on name alone.
-        decision = match_contact("c.wu@othershop.com", "Catherine Wu", CONTACTS)
+        # A merely SIMILAR name (not identical — that links directly) must
+        # still be surfaced for review rather than silently merged.
+        decision = match_contact("c.woo@othershop.com", "Catherine Woo", CONTACTS)
         assert decision.recommended_action == "review"
         assert not decision.is_duplicate
 

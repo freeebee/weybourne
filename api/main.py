@@ -514,6 +514,43 @@ def notion_save_email(body: SaveEmailNoteIn):
             "live": _notion.live}
 
 
+# --------------------------------------------------------------------------- #
+# Key-questions library — questions starred in a briefing (or added by hand)
+# persist per entity, and the note taker preloads them for the same meeting.
+# --------------------------------------------------------------------------- #
+
+QUESTIONS_DIR = BASE / "data" / "questions"
+
+
+def _questions_path(entity: str):
+    import re as _re
+
+    slug = _re.sub(r"[^a-z0-9]+", "-", (entity or "").lower()).strip("-") or "unnamed"
+    return QUESTIONS_DIR / f"{slug}.json"
+
+
+@app.get("/api/questions")
+def get_questions(entity: str = ""):
+    p = _questions_path(entity)
+    if not p.exists():
+        return {"entity": entity, "questions": []}
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+class QuestionsIn(BaseModel):
+    entity: str
+    questions: list[dict]   # [{q, src}]
+
+
+@app.post("/api/questions")
+def save_questions(body: QuestionsIn):
+    QUESTIONS_DIR.mkdir(parents=True, exist_ok=True)
+    _questions_path(body.entity).write_text(
+        json.dumps({"entity": body.entity, "questions": body.questions}, indent=1),
+        encoding="utf-8")
+    return {"saved": len(body.questions)}
+
+
 class SaveMeetingNoteIn(BaseModel):
     title: str
     note_type: str = "GP Meeting"

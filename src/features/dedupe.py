@@ -75,6 +75,26 @@ def _similarity(a: str, b: str) -> float:
     return difflib.SequenceMatcher(None, a, b).ratio()
 
 
+def _squash(name: str) -> str:
+    """Lower-case with everything but letters/digits removed — no token logic.
+
+    'FIFECAPITAL' and 'Fife Capital' both squash to 'fifecapital'."""
+    return re.sub(r"[^\w]", "", (name or "").lower())
+
+
+def _name_score(a_raw: str, b_raw: str) -> float:
+    """Best of the token-normalised and squashed comparisons.
+
+    Token normalisation strips noise words ('capital', 'partners'), which is
+    right for 'Blackstone Capital Partners' vs 'Blackstone' — but it mangles
+    concatenated names: 'FIFECAPITAL' keeps its full string while
+    'Fife Capital' collapses to 'fife', and the two stop matching. The
+    squashed comparison catches exactly that case, so take the max.
+    """
+    return max(_similarity(normalize_name(a_raw), normalize_name(b_raw)),
+               _similarity(_squash(a_raw), _squash(b_raw)))
+
+
 def _action_for(score: float) -> str:
     if score >= DUPLICATE_THRESHOLD:
         return "link_existing"
@@ -92,11 +112,17 @@ def match_contact(email: str, name: str, contacts: list[ContactRecord]) -> Dedup
             matches.append(DedupeMatch(db="contacts", matched_name=c.name, matched_id=c.id,
                                        score=1.0, reason="exact email match (unique key)"))
             continue
-        score = _similarity(name_n, normalize_name(c.name))
+        if name_n and name_n == normalize_name(c.name):
+            # The exact same full name is a direct match — 'Allan Fife' IS the
+            # 'Allan Fife' in the CRM unless something else says otherwise.
+            matches.append(DedupeMatch(db="contacts", matched_name=c.name, matched_id=c.id,
+                                       score=1.0, reason="exact name match"))
+            continue
+        score = _name_score(name, c.name)
         if score >= REVIEW_THRESHOLD:
-            # Name alone never proves identity — two people can share a name, and
-            # Email is the unique key. Cap name-only matches into the review band
-            # so they are surfaced for a human rather than merged automatically.
+            # A merely-similar name never proves identity — two people can share
+            # one. Cap fuzzy name matches into the review band so they are
+            # surfaced for a human rather than merged automatically.
             capped = min(score, DUPLICATE_THRESHOLD - 0.01)
             matches.append(DedupeMatch(db="contacts", matched_name=c.name, matched_id=c.id,
                                        score=round(capped, 3),
@@ -113,7 +139,7 @@ def match_company(name: str, domain: str, companies: list[CompanyRecord]) -> Ded
             matches.append(DedupeMatch(db="companies", matched_name=co.name, matched_id=co.id,
                                        score=1.0, reason="exact domain match"))
             continue
-        score = _similarity(name_n, normalize_name(co.name))
+        score = _name_score(name, co.name)
         if score >= REVIEW_THRESHOLD:
             matches.append(DedupeMatch(db="companies", matched_name=co.name, matched_id=co.id,
                                        score=round(score, 3), reason="name similarity"))
@@ -125,7 +151,7 @@ def match_fund(name: str, funds: list[FundRecord]) -> DedupeDecision:
     vintage = vintage_of(name)
     matches: list[DedupeMatch] = []
     for f in funds:
-        score = _similarity(name_n, normalize_name(f.name))
+        score = _name_score(name, f.name)
         if score < REVIEW_THRESHOLD:
             continue
         other_vintage = vintage_of(f.name)

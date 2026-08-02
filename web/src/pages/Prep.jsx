@@ -111,6 +111,32 @@ export default function Prep() {
   const nothingPicked = !wantBrief && !wantScreen;
   const running = jobs.filter((j) => j.status === "running");
 
+  // Key questions — starred in the brief or added by hand, persisted per
+  // entity so the note taker can preload them for the same meeting.
+  const entityName = viewing?.result?.briefing?.entity || viewing?.result?.entity || "";
+  const [keyQs, setKeyQs] = React.useState([]);
+  React.useEffect(() => {
+    if (!entityName) { setKeyQs([]); return; }
+    get(`/api/questions?entity=${encodeURIComponent(entityName)}`)
+      .then((d) => setKeyQs(d.questions || [])).catch(() => setKeyQs([]));
+  }, [entityName]);
+  const persistKeyQs = (next) => {
+    setKeyQs(next);
+    fetch("/api/questions", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entity: entityName, questions: next }),
+    }).catch(() => {});
+  };
+  const toggleKey = (q) => {
+    const exists = keyQs.some((k) => k.q === q.q);
+    persistKeyQs(exists ? keyQs.filter((k) => k.q !== q.q)
+      : [...keyQs, { q: q.q, src: q.src || "" }]);
+  };
+  const addKey = (text) => {
+    const t = text.trim();
+    if (t && !keyQs.some((k) => k.q === t)) persistKeyQs([...keyQs, { q: t, src: "added by you" }]);
+  };
+
   return (
     <div className="fade-in">
       <PageHeader eyebrow="PREPARATION · BRIEFING" title="Meeting prep"
@@ -281,12 +307,32 @@ export default function Prep() {
             </Card>
           )}
 
+          {/* Group header — the meeting these outputs belong to. */}
+          {viewing?.result && (viewing.result.screen || viewing.result.briefing) && (
+            <div style={{ display: "flex", alignItems: "baseline", gap: 12,
+                          flexWrap: "wrap", margin: "0 0 10px" }}>
+              <span className="microlabel">MEETING PREP</span>
+              <span style={{ font: "500 18px/1.3 var(--serif)", color: "var(--ink-800)" }}>
+                {viewing.result.entity || viewing.name}
+              </span>
+              {viewing.result.company && viewing.result.company !== viewing.result.entity && (
+                <span className="muted" style={{ fontSize: "12.5px" }}>{viewing.result.company}</span>
+              )}
+              {viewing.result.email && (
+                <span className="mono" style={{ fontSize: 10.5, color: "var(--stone-400)" }}>
+                  {viewing.result.email}
+                </span>
+              )}
+            </div>
+          )}
+
           {viewing?.result?.screen && (
             minimized.screen ? (
-              <MinimizedBar label={`PREFERENCE SCREEN · ${viewing.result.screen.overall_fit.toUpperCase()}`}
+              <MinimizedBar label={`PREFERENCE SCREEN · ${(viewing.result.entity || viewing.name || "").toUpperCase()} · ${viewing.result.screen.overall_fit.toUpperCase()}`}
                 onExpand={() => setMinimized((m) => ({ ...m, screen: false }))} />
             ) : (
               <ScreenView screen={viewing.result.screen}
+                entityName={viewing.result.entity || viewing.name || ""}
                 onMinimize={() => setMinimized((m) => ({ ...m, screen: true }))} />
             )
           )}
@@ -339,7 +385,8 @@ export default function Prep() {
             )
           )}
           {viewing?.result?.briefing && !minimized.brief && showFull &&
-            <BriefingView data={viewing.result.briefing} />}
+            <BriefingView data={viewing.result.briefing}
+              keyQs={keyQs} onToggleKey={toggleKey} onAddKey={addKey} />}
 
           {/* Library — every completed prep is saved automatically. */}
           <div style={{ marginTop: 28 }}>
@@ -394,13 +441,15 @@ function MinimizedBar({ label, onExpand, style }) {
   );
 }
 
-function ScreenView({ screen, onMinimize }) {
+function ScreenView({ screen, onMinimize, entityName }) {
   const color = { Fit: "var(--positive-600)", Partial: "var(--caution-600)",
     "Non-fit": "var(--critical-600)", Unclear: "var(--stone-500)" }[screen.overall_fit];
   return (
     <Card accent="teal" style={{ padding: "20px 22px" }}>
       <div className="spread" style={{ marginBottom: 8 }}>
-        <span className="microlabel">PREFERENCE SCREEN · CHAO</span>
+        <span className="microlabel">
+          PREFERENCE SCREEN · CHAO{entityName ? ` · ${entityName.toUpperCase()}` : ""}
+        </span>
         <span className="row" style={{ gap: 12 }}>
           <span className="mono" style={{ fontSize: 11, letterSpacing: ".1em", color }}>
             {screen.overall_fit.toUpperCase()} · {screen.sleeve.toUpperCase()}
@@ -429,7 +478,8 @@ function ScreenView({ screen, onMinimize }) {
   );
 }
 
-function BriefingView({ data }) {
+function BriefingView({ data, keyQs = [], onToggleKey, onAddKey }) {
+  const keySet = new Set(keyQs.map((k) => k.q));
   return (
     <div style={{ marginTop: 20 }}>
       <Section n="1" title="Historical meeting context">
@@ -458,10 +508,37 @@ function BriefingView({ data }) {
       </Section>
       <Section n="3" title="Strategy"><Markdown text={data.strategy_md} /></Section>
       <Section n="4" title="Questions for the manager">
+        {/* The key list — starred below or written yourself; preloaded into
+            the note taker when you pick this meeting from the calendar. */}
+        <div style={{ background: "var(--brass-100)", border: "1px solid var(--paper-200)",
+                      borderRadius: "var(--radius)", padding: "12px 16px", marginBottom: 16 }}>
+          <span className="microlabel" style={{ color: "var(--brass-700)" }}>
+            KEY QUESTIONS · SAVED FOR THIS MEETING ({keyQs.length})
+          </span>
+          {keyQs.length === 0 && (
+            <p className="muted" style={{ fontSize: "12.5px", margin: "6px 0 0" }}>
+              Tick a question below, or write your own — the list carries into
+              the note taker for this meeting.
+            </p>
+          )}
+          {keyQs.map((k, i) => (
+            <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline",
+                                  padding: "5px 0", fontSize: "13.5px" }}>
+              <span className="mono" style={{ fontSize: 10, color: "var(--brass-700)" }}>
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <span style={{ flex: 1 }}>{k.q}</span>
+              <button onClick={() => onToggleKey?.(k)} title="Remove from key questions"
+                style={{ background: "none", border: "none", cursor: "pointer",
+                         color: "var(--stone-400)", fontFamily: "var(--mono)", fontSize: 12 }}>×</button>
+            </div>
+          ))}
+          {onAddKey && <AddQuestion onAdd={onAddKey} />}
+        </div>
         <SubHead>A. Strategy &amp; direction</SubHead>
-        <QList items={data.questions_a || []} />
+        <QList items={data.questions_a || []} keySet={keySet} onToggle={onToggleKey} />
         <SubHead style={{ marginTop: 14 }}>B. Manager-level &amp; structural</SubHead>
-        <QList items={data.questions_b || []} />
+        <QList items={data.questions_b || []} keySet={keySet} onToggle={onToggleKey} />
       </Section>
       <Section n="5" title="Deals">
         {!data.is_manager ? (
@@ -507,7 +584,7 @@ function BriefingView({ data }) {
                 {c.questions?.length > 0 && (
                   <div style={{ marginTop: 8 }}>
                     <span className="microlabel">QUESTIONS</span>
-                    <QList items={c.questions} />
+                    <QList items={c.questions} keySet={keySet} onToggle={onToggleKey} />
                   </div>
                 )}
                 {c.key_flag && (
@@ -556,22 +633,49 @@ function SubHead({ children, style }) {
   return <div className="microlabel" style={{ color: "var(--ink-700)", margin: "10px 0 4px", ...style }}>{children}</div>;
 }
 
-function QList({ items }) {
+function QList({ items, keySet, onToggle }) {
   return (
     <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
-      {items.map((q, i) => (
-        <li key={i} className="rrow" style={{ display: "grid",
-          gridTemplateColumns: "28px minmax(0,1fr)", gap: 10 }}>
-          <span className="mono" style={{ fontSize: 11, color: "var(--brass-500)" }}>
-            {String(i + 1).padStart(2, "0")}
-          </span>
-          <div>
-            <div style={{ font: "400 14.5px/1.5 var(--serif)" }}>{q.q}</div>
-            <div className="mono" style={{ fontSize: 10, color: "var(--stone-400)", marginTop: 2 }}>→ {q.src}</div>
-          </div>
-        </li>
-      ))}
+      {items.map((q, i) => {
+        const isKey = keySet?.has(q.q);
+        return (
+          <li key={i} className="rrow" style={{ display: "grid",
+            gridTemplateColumns: onToggle ? "28px minmax(0,1fr) auto" : "28px minmax(0,1fr)",
+            gap: 10, background: isKey ? "var(--brass-100)" : "transparent" }}>
+            <span className="mono" style={{ fontSize: 11, color: "var(--brass-500)" }}>
+              {String(i + 1).padStart(2, "0")}
+            </span>
+            <div>
+              <div style={{ font: "400 14.5px/1.5 var(--serif)" }}>{q.q}</div>
+              <div className="mono" style={{ fontSize: 10, color: "var(--stone-400)", marginTop: 2 }}>→ {q.src}</div>
+            </div>
+            {onToggle && (
+              <button onClick={() => onToggle(q)}
+                title={isKey ? "Remove from key questions" : "Mark as a key question"}
+                style={{ background: "none", border: "none", cursor: "pointer",
+                         color: isKey ? "var(--brass-700)" : "var(--stone-300)",
+                         fontSize: 14, lineHeight: 1, padding: "2px 4px" }}>✓</button>
+            )}
+          </li>
+        );
+      })}
     </ol>
+  );
+}
+
+function AddQuestion({ onAdd }) {
+  const [text, setText] = React.useState("");
+  return (
+    <div className="row" style={{ marginTop: 10 }}>
+      <input value={text} onChange={(e) => setText(e.target.value)}
+        placeholder="write your own question"
+        onKeyDown={(e) => { if (e.key === "Enter" && text.trim()) { onAdd(text); setText(""); } }}
+        style={{ flex: 1, minWidth: 180, fontSize: "13px", padding: "7px 10px",
+                 background: "var(--paper-000)", border: "1px solid var(--paper-200)",
+                 borderRadius: 4 }} />
+      <Button variant="ghost" disabled={!text.trim()}
+        onClick={() => { onAdd(text); setText(""); }}>Add</Button>
+    </div>
   );
 }
 

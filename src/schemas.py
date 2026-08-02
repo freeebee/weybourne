@@ -175,6 +175,7 @@ class ExtractedEntity(BaseModel):
     summary: str = ""
     # Richer fields for Notion page creation — empty when not in the email.
     strategy_description: str = ""   # the strategy in the manager's own terms
+    company_description: str = ""    # about the FIRM itself, never a single fund
     vintage: str = ""                # e.g. "2026"
     target_size: str = ""            # e.g. "$500m"
     company_city: str = ""

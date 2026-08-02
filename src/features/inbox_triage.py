@@ -55,6 +55,14 @@ TRIAGE_SCHEMA = {
                     "description": "The strategy in the manager's own terms — what it "
                                    "invests in, stage, approach. Fuller than summary.",
                 },
+                "company_description": {
+                    "type": "string",
+                    "description": "About the MANAGEMENT COMPANY itself: who they are, "
+                                   "where based, who runs it, what they do as a firm. "
+                                   "Never about one specific fund — a manager will have "
+                                   "many funds. E.g. 'Sydney-based real assets manager "
+                                   "founded and run by Allan Fife.'",
+                },
                 "vintage": {"type": "string", "description": "Fund vintage year if stated, e.g. '2026'"},
                 "target_size": {"type": "string", "description": "Target fund size if stated, e.g. '$500m'"},
                 "company_city": {"type": "string", "description": "Management company HQ city if stated or inferable"},
@@ -63,8 +71,8 @@ TRIAGE_SCHEMA = {
             "required": [
                 "fund_name", "company_name", "company_domain", "contact_name",
                 "contact_email", "contact_title", "asset_class", "geography",
-                "sleeve", "summary", "strategy_description", "vintage",
-                "target_size", "company_city", "company_country",
+                "sleeve", "summary", "strategy_description", "company_description",
+                "vintage", "target_size", "company_city", "company_country",
             ],
             "additionalProperties": False,
         },
@@ -84,8 +92,9 @@ specific opportunity, or vendor spam.
 
 When it is an investment, extract as much as the email supports: the fund (name, vintage, \
 target size, strategy in the manager's own terms), the management company (name, email domain, \
-HQ city and country if stated or clearly inferable), the primary contact (name, email, title), \
-the asset class and geography, and the most likely strategy sleeve. Prefer the sender's own \
+HQ city and country if stated or clearly inferable, and a firm-level description — who they \
+are and what they do as a manager, distinct from any one fund), the primary contact (name, \
+email, title), the asset class and geography, and the most likely strategy sleeve. Prefer the sender's own \
 email domain for company_domain. Leave a field as an empty string if it is not present — never \
 guess an email address or a figure."""
 

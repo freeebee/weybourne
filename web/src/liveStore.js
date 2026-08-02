@@ -1,7 +1,7 @@
 /* Live-meeting session store — lives at module scope, OUTSIDE React, so the
    audio pipeline, timers and transcript keep running when the user navigates
    to another page. The Live page (and the sidebar chip) subscribe to it. */
-import { post, postFile } from "./api.js";
+import { get, post, postFile } from "./api.js";
 
 const CHUNK_MS = 8000;          // recorder restart interval → self-contained blobs
 export const CADENCE_S = 30;    // read the new speech every 30 seconds
@@ -227,10 +227,31 @@ export function keepSharp() {
   const sharp = S.sharp;
   if (!sharp) return;
   S.items = [...S.items, {
-    id: S.seq++, batch: 0, q: sharp.question, flag: false,
+    id: S.seq++, batch: 0, q: sharp.question, flag: false, starred: true,
     answer: sharp.status === "answered" ? sharp.evidence : null,
   }];
   S.sharp = null; emit();
+}
+
+/* Your own question, added verbatim — marked as key (starred). */
+export function addOwnQuestion(q, starred = true) {
+  const text = (q || "").trim();
+  if (!text || S.items.some((it) => it.q === text)) return;
+  S.items = [...S.items, {
+    id: S.seq++, batch: 0, q: text, flag: false, answer: null, starred,
+  }];
+  emit();
+}
+
+/* Preload the key questions saved for this entity (starred in a briefing or
+   written in the prep page) — called when a calendar meeting is picked. */
+export async function loadKeyQuestions(entity) {
+  if (!entity) return 0;
+  try {
+    const d = await get(`/api/questions?entity=${encodeURIComponent(entity)}`);
+    (d.questions || []).forEach((k) => addOwnQuestion(k.q, true));
+    return (d.questions || []).length;
+  } catch { return 0; }
 }
 
 export function dropSharp() { S.sharp = null; emit(); }
