@@ -136,16 +136,9 @@ def inbox(days: int = config.TRIAGE_LOOKBACK_DAYS, top: int = config.TRIAGE_MAX_
             "notion_live": _notion.live}
 
 
-class TriageIn(BaseModel):
-    message: dict
-
-
-@app.post("/api/triage")
-def triage(body: TriageIn):
-    msg = EmailMessage.model_validate(body.message)
-    result: InvestmentTriage = _run(triage_email, _client(), msg)
+def _triage_one(client, msg: EmailMessage) -> dict:
+    result: InvestmentTriage = triage_email(client, msg)
     out = result.model_dump()
-
     if result.is_investment:
         decisions = dedupe_entity(
             result.entity, _notion.list_contacts(),
@@ -168,6 +161,125 @@ def triage(body: TriageIn):
             for p in proposals
         ]
     return out
+
+
+class TriageIn(BaseModel):
+    message: dict
+
+
+@app.post("/api/triage")
+def triage(body: TriageIn):
+    msg = EmailMessage.model_validate(body.message)
+    return _run(_triage_one, _client(), msg)
+
+
+class TriageJobIn(BaseModel):
+    messages: list[dict]
+
+
+@app.post("/api/jobs/triage")
+def start_triage_job(body: TriageJobIn):
+    """Triage a batch as a background job: survives navigation, exposes
+    per-message progress and partial results as they land."""
+    msgs = [EmailMessage.model_validate(m) for m in body.messages]
+    client = _client()
+
+    def work(job: dict):
+        job["total"] = len(msgs)
+        job["done"] = 0
+        job["partial"] = {}
+        per_msg: list[float] = []
+        for msg in msgs:
+            _checkpoint(job)
+            job["current"] = msg.subject[:80]
+            t0 = time.time()
+            try:
+                job["partial"][msg.id] = _triage_one(client, msg)
+            except (llm.ClaudeCodeAuthError, llm.ClaudeCodeRateLimited):
+                raise   # backend-level: stop the whole batch with a clear error
+            except Exception as e:  # noqa: BLE001 - one bad message shouldn't stop the rest
+                job["partial"][msg.id] = {"error": str(e)[:200]}
+            per_msg.append(time.time() - t0)
+            job["done"] += 1
+            avg = sum(per_msg) / len(per_msg)
+            job["eta_override"] = int(job["elapsed"] + avg * (len(msgs) - job["done"]))
+        job["current"] = ""
+        return {"results": job["partial"]}
+
+    return _job_summary(_start_job("triage", f"Triage · {len(msgs)} messages", work))
+
+
+@app.get("/api/jobs/{job_id}/partial")
+def job_partial(job_id: str):
+    job = _JOBS.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="No such job")
+    return {"partial": job.get("partial", {}), "done": job.get("done", 0),
+            "total": job.get("total", 0), "current": job.get("current", "")}
+
+
+FLAGS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "flags": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "flag": {"type": "string",
+                             "enum": ["delete", "shared", "triage", "priority", "none"]},
+                    "reason": {"type": "string", "description": "Five words or fewer"},
+                },
+                "required": ["id", "flag", "reason"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["flags"],
+    "additionalProperties": False,
+}
+
+FLAGS_PROMPT = """You pre-sort a Weybourne investment inbox. For each message, one flag:
+- "delete" — marketing, webcast replays, event blasts, system reminders (Concur etc.), \
+newsletters with no specific opportunity.
+- "shared" — manager updates, LP letters, research and market commentary that belong in \
+the shared investments mailbox rather than a personal one.
+- "triage" — inbound from a manager or intermediary about a fund, deal, meeting or \
+introduction: the ones worth running full triage on.
+- "priority" — personal or internal mail addressed to the user needing their own reply \
+(colleagues, direct 1:1 scheduling, references).
+- "none" — anything that fits nothing above.
+Judge from sender + subject + preview only. Reply for every message."""
+
+
+class FlagsIn(BaseModel):
+    messages: list[dict]
+
+
+@app.post("/api/inbox/flags")
+def inbox_flags(body: FlagsIn):
+    """One fast model pass over the scan: a flag per message."""
+    client = _client()
+    lines = "\n".join(
+        f"- id={m.get('id')} | from: {m.get('sender_name')} <{m.get('sender_email')}> | "
+        f"subject: {m.get('subject')} | preview: {(m.get('body_preview') or '')[:150]}"
+        for m in body.messages
+    )
+
+    def call():
+        response = client.messages.create(
+            model=config.REASONING_MODEL,
+            max_tokens=2000,
+            system=FLAGS_PROMPT,
+            output_config={"format": {"type": "json_schema", "schema": FLAGS_SCHEMA}},
+            messages=[{"role": "user", "content": lines}],
+        )
+        raw = next((b.text for b in response.content
+                    if getattr(b, "type", None) == "text"), "")
+        return json.loads(raw)
+
+    return _run(call)
 
 
 class ApplyIn(BaseModel):
@@ -311,9 +423,13 @@ def _checkpoint(job: dict) -> None:
 
 
 def _job_summary(j: dict) -> dict:
-    return {**{k: j[k] for k in ("id", "kind", "label", "status", "stages",
-                                 "elapsed", "created")},
-            "eta": _eta(j["kind"])}
+    out = {**{k: j[k] for k in ("id", "kind", "label", "status", "stages",
+                                "elapsed", "created")},
+           "eta": j.get("eta_override") or _eta(j["kind"])}
+    for k in ("done", "total", "current"):
+        if k in j:
+            out[k] = j[k]
+    return out
 
 
 def _start_job(kind: str, label: str, work) -> dict:
@@ -412,6 +528,15 @@ async def start_prep_job(
 
         job["stages"].append({"label": "Resolve the counterparty",
                               "detail": name + (f" ({email})" if email else "")})
+        # Announce the Notion read BEFORE doing it: a cold cache pull over a
+        # 10k-record workspace takes minutes, and without this stage the job
+        # looks stuck on "Resolve the counterparty".
+        job["stages"].append({
+            "label": "Read Notion records",
+            "detail": ("cold cache — the first read of the workspace can take a few "
+                       "minutes; later runs are instant for 10 minutes"
+                       if _notion.live else "sample data"),
+        })
         ctx = build_context(
             _notion, counterparty_name=name, counterparty_email=email,
             company_name=company, event=ev, pdf_path=pdf_path,
@@ -420,7 +545,7 @@ async def start_prep_job(
         notion_note = "live Notion" if _notion.live else "sample data — not your live Notion"
         deck_note = (f"deck read ({len(ctx.document_text):,} chars)"
                      if ctx.document_text else "no deck attached")
-        job["stages"].append({"label": "Gather context",
+        job["stages"].append({"label": "Context gathered",
                               "detail": f"{len(ctx.sources)} source(s) against {notion_note} · {deck_note}"})
 
         result: dict = {"kind": "prep", "entity": name}
@@ -451,6 +576,7 @@ async def start_prep_job(
             result["briefing"] = data
 
         job["stages"].append({"label": "Done", "detail": ""})
+        _save_prep(job, result)
         return result
 
     parts = [p for p, on in (("briefing", want_brief), ("preferences", want_screen)) if on]
@@ -537,6 +663,79 @@ def live_note(body: NoteIn):
     note = _run(draft_meeting_note, _client(), _buffer_from(body.transcript),
                 body.context, body.unanswered)
     return {"note": note, "markdown": note_to_markdown(note)}
+
+
+# --------------------------------------------------------------------------- #
+# Prep library — completed preps persist to disk for future reference.
+# --------------------------------------------------------------------------- #
+
+PREPS_DIR = BASE / "data" / "preps"
+
+
+def _save_prep(job: dict, result: dict) -> None:
+    """Persist a completed prep. Failures never break the job itself."""
+    try:
+        PREPS_DIR.mkdir(parents=True, exist_ok=True)
+        record = {
+            "id": job["id"],
+            "name": result.get("entity") or job["label"],
+            "label": job["label"],
+            "created": time.strftime("%Y-%m-%d %H:%M"),
+            "outputs": [k for k in ("briefing", "screen") if k in result],
+            "result": result,
+        }
+        (PREPS_DIR / f"{job['id']}.json").write_text(
+            json.dumps(record, ensure_ascii=False), encoding="utf-8")
+    except Exception:  # noqa: BLE001
+        pass
+
+
+@app.get("/api/preps")
+def list_preps():
+    if not PREPS_DIR.exists():
+        return {"preps": []}
+    out = []
+    for f in sorted(PREPS_DIR.glob("*.json"),
+                    key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            d = json.loads(f.read_text(encoding="utf-8"))
+            out.append({k: d[k] for k in ("id", "name", "created", "outputs")})
+        except Exception:  # noqa: BLE001
+            continue
+    return {"preps": out[:50]}
+
+
+@app.get("/api/preps/{prep_id}")
+def get_prep(prep_id: str):
+    path = PREPS_DIR / f"{prep_id}.json"
+    if not path.exists() or ".." in prep_id or "/" in prep_id:
+        raise HTTPException(status_code=404, detail="No such prep")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+@app.delete("/api/preps/{prep_id}")
+def delete_prep(prep_id: str):
+    path = PREPS_DIR / f"{prep_id}.json"
+    if not path.exists() or ".." in prep_id or "/" in prep_id:
+        raise HTTPException(status_code=404, detail="No such prep")
+    path.unlink()
+    return {"deleted": prep_id}
+
+
+# Warm the Notion list cache in the background at startup, so the first triage
+# or prep doesn't pay the multi-minute cold pull interactively.
+def _warm_notion_cache():
+    if not _notion.live:
+        return
+    try:
+        _notion.list_contacts()
+        _notion.list_companies()
+        _notion.list_funds()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+threading.Thread(target=_warm_notion_cache, daemon=True).start()
 
 
 # --------------------------------------------------------------------------- #

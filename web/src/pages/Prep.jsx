@@ -15,66 +15,56 @@ export default function Prep() {
   const [typedCompany, setTypedCompany] = React.useState("");
   const [deck, setDeck] = React.useState(null);
   const [deckName, setDeckName] = React.useState("");
-  const [busy, setBusy] = React.useState(false);
-  const [stages, setStages] = React.useState([]);
-  const [elapsed, setElapsed] = React.useState(0);
-  const [eta, setEta] = React.useState(0);
-  const [jobId, setJobId] = React.useState(null);
-  const [jobLabel, setJobLabel] = React.useState("");
-  const [result, setResult] = React.useState(null);
+  const [jobs, setJobs] = React.useState([]);          // all prep jobs, newest first
+  const [library, setLibrary] = React.useState([]);    // saved preps on disk
+  const [viewing, setViewing] = React.useState(null);  // {name, result}
   const [error, setError] = React.useState(null);
-  const [cancelled, setCancelled] = React.useState(false);
   const [showFull, setShowFull] = React.useState(false);
   const pollRef = React.useRef(null);
+  const doneSeen = React.useRef(new Set());
+
+  const refreshLibrary = React.useCallback(() => {
+    get("/api/preps").then((d) => setLibrary(d.preps)).catch(() => {});
+  }, []);
 
   React.useEffect(() => {
     get("/api/calendar").then((d) => setEvents(d.events)).catch(() => {});
-  }, []);
+    refreshLibrary();
+  }, [refreshLibrary]);
 
-  function attach(id, label) {
-    clearInterval(pollRef.current);
-    setBusy(true); setJobId(id); setCancelled(false); setJobLabel(label || "");
-    pollRef.current = setInterval(async () => {
-      try {
-        const j = await get(`/api/jobs/${id}`);
-        setStages(j.stages); setElapsed(j.elapsed); setEta(j.eta || 0);
-        setJobLabel(j.label);
-        if (j.status !== "running") {
-          clearInterval(pollRef.current);
-          setBusy(false); setJobId(null);
-          if (j.status === "error") setError(j.error);
-          else if (j.status === "cancelled") setCancelled(true);
-          else setResult(j.result);
-        }
-      } catch (e) {
-        clearInterval(pollRef.current);
-        setBusy(false); setJobId(null); setError(e.message);
-      }
-    }, 1200);
-  }
-
+  // One poller for ALL prep jobs — multiple runs go in parallel server-side.
   React.useEffect(() => {
-    get("/api/jobs?kind=prep").then(({ jobs }) => {
-      const latest = jobs[0];
-      if (!latest) return;
-      if (latest.status === "running") { setStages(latest.stages); attach(latest.id, latest.label); }
-      else get(`/api/jobs/${latest.id}`).then((j) => {
-        setStages(j.stages); setElapsed(j.elapsed); setJobLabel(j.label);
-        if (j.status === "error") setError(j.error);
-        else if (j.status === "done") setResult(j.result);
-      });
-    }).catch(() => {});
-    return () => clearInterval(pollRef.current);
-  }, []);
+    const poll = async () => {
+      try {
+        const { jobs: js } = await get("/api/jobs?kind=prep");
+        setJobs(js);
+        for (const j of js) {
+          if (j.status === "done" && !doneSeen.current.has(j.id)) {
+            doneSeen.current.add(j.id);
+            const full = await get(`/api/jobs/${j.id}`);
+            setViewing({ name: full.label, result: full.result });
+            refreshLibrary();
+          }
+          if (j.status === "error" && !doneSeen.current.has(j.id)) {
+            doneSeen.current.add(j.id);
+            const full = await get(`/api/jobs/${j.id}`);
+            setError(`${j.label}: ${full.error}`);
+          }
+        }
+      } catch { /* transient */ }
+      pollRef.current = setTimeout(poll, 1500);
+    };
+    poll();
+    return () => clearTimeout(pollRef.current);
+  }, [refreshLibrary]);
 
-  async function cancel() {
-    if (!jobId) return;
-    try { await fetch(`/api/jobs/${jobId}/cancel`, { method: "POST" }); }
+  async function cancel(id) {
+    try { await fetch(`/api/jobs/${id}/cancel`, { method: "POST" }); }
     catch { /* finishing anyway */ }
   }
 
   async function prepare(fields, file) {
-    setError(null); setResult(null); setStages([]); setElapsed(0); setShowFull(false);
+    setError(null);
     const fd = new FormData();
     Object.entries({
       ...fields,
@@ -88,16 +78,28 @@ export default function Prep() {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.detail || `HTTP ${res.status}`);
       }
-      const job = await res.json();
-      setStages(job.stages);
-      attach(job.id, job.label);
+    } catch (e) { setError(e.message); }
+  }
+
+  async function openSaved(id) {
+    try {
+      const d = await get(`/api/preps/${id}`);
+      setViewing({ name: d.name, result: d.result });
+      setShowFull(false);
+    } catch (e) { setError(e.message); }
+  }
+
+  async function deleteSaved(id) {
+    if (!window.confirm("Delete this saved prep?")) return;
+    try {
+      await fetch(`/api/preps/${id}`, { method: "DELETE" });
+      refreshLibrary();
     } catch (e) { setError(e.message); }
   }
 
   const ev = events[eventIdx];
   const nothingPicked = !wantBrief && !wantScreen;
-  const remaining = eta > 0 ? eta - elapsed : 0;
-  const progress = eta > 0 ? Math.min(0.97, elapsed / eta) : 0;
+  const running = jobs.filter((j) => j.status === "running");
 
   return (
     <div className="fade-in">
@@ -175,7 +177,7 @@ export default function Prep() {
               Preference screen (Notion CHAO pages)
             </label>
             {nothingPicked && <Banner tone="warning">Pick at least one output.</Banner>}
-            <Button style={{ marginTop: 14 }} busy={busy}
+            <Button style={{ marginTop: 14 }}
               disabled={nothingPicked
                 || (tab === "calendar" && !ev)
                 || (tab === "name" && !typedName)
@@ -190,21 +192,23 @@ export default function Prep() {
           </div>
         </div>
 
-        {/* Right pane — running / result */}
+        {/* Right pane — running jobs / result / library */}
         <div style={{ flex: "2 1 480px", minWidth: "min(100%,320px)" }}>
-          {busy && (
-            <Card style={{ padding: "18px 20px", marginBottom: 20 }}>
+          {running.map((j) => (
+            <Card key={j.id} style={{ padding: "18px 20px", marginBottom: 14 }}>
               <div className="spread" style={{ marginBottom: 12 }}>
-                <span className="microlabel">RUNNING · {jobLabel.toUpperCase()}</span>
+                <span className="microlabel">RUNNING · {j.label.toUpperCase()}</span>
                 <span className="mono" style={{ fontSize: 11, color: "var(--teal-700)" }}>
-                  {elapsed}S ELAPSED{eta > 0 && remaining > 0 ? ` · ~${remaining}S LEFT` : eta > 0 ? " · OVERRUNNING" : ""}
+                  {j.elapsed}S ELAPSED
+                  {j.eta > 0 && (j.eta - j.elapsed > 0
+                    ? ` · ~${j.eta - j.elapsed}S LEFT` : " · OVERRUNNING")}
                 </span>
               </div>
               <div style={{ display: "flex", gap: 18, alignItems: "flex-start" }}>
                 <Mascot state="crunching" width={66} />
                 <div style={{ flex: 1 }}>
-                  {stages.map((s, i) => {
-                    const isLast = i === stages.length - 1;
+                  {j.stages.map((st, i) => {
+                    const isLast = i === j.stages.length - 1;
                     return (
                       <div key={i} style={{ display: "flex", gap: 9, alignItems: "baseline",
                         padding: "3px 0", fontSize: "13.5px",
@@ -212,42 +216,49 @@ export default function Prep() {
                         <span className="mono" style={{ color: isLast ? "var(--teal-600)" : "var(--positive-600)" }}>
                           {isLast ? "›" : "✓"}
                         </span>
-                        <span>{s.label}{s.detail && <span className="muted"> — {s.detail}</span>}</span>
+                        <span>{st.label}{st.detail && <span className="muted"> — {st.detail}</span>}</span>
                       </div>
                     );
                   })}
                   <div style={{ height: 2, background: "var(--paper-200)", marginTop: 12, borderRadius: 1 }}>
-                    <div style={{ height: 2, width: `${progress * 100}%`, background: "var(--teal-500)",
-                                  transition: "width 1s linear" }} />
+                    <div style={{ height: 2, background: "var(--teal-500)", transition: "width 1s linear",
+                      width: `${Math.min(97, j.eta > 0 ? (j.elapsed / j.eta) * 100 : 30)}%` }} />
                   </div>
                 </div>
-                <Button variant="ghost" onClick={cancel}>Cancel</Button>
+                <Button variant="ghost" onClick={() => cancel(j.id)}>Cancel</Button>
               </div>
             </Card>
+          ))}
+          {running.length > 0 && (
+            <p className="muted" style={{ fontSize: "12.5px", margin: "0 0 16px" }}>
+              Runs in the background — start another prep, or leave and come back.
+            </p>
           )}
-          {cancelled && <Banner tone="warning">Preparation cancelled — nothing was produced.</Banner>}
           <ErrorNote error={error} />
 
-          {result?.screen && <ScreenView screen={result.screen} />}
+          {viewing?.result?.screen && <ScreenView screen={viewing.result.screen} />}
 
-          {result?.briefing && (
-            <Card accent="brass" style={{ padding: "26px 28px 28px", marginTop: result?.screen ? 20 : 0 }}>
+          {viewing?.result?.briefing && (
+            <Card accent="brass" style={{ padding: "26px 28px 28px",
+                                          marginTop: viewing?.result?.screen ? 20 : 0 }}>
               <div className="spread" style={{ marginBottom: 12 }}>
-                <span className="microlabel">LAST BRIEF · {(result.briefing.entity || "").toUpperCase()}</span>
+                <span className="microlabel">
+                  BRIEF · {(viewing.result.briefing.entity || viewing.name || "").toUpperCase()}
+                </span>
                 <span className="mono" style={{ fontSize: 10.5, color: "var(--stone-400)" }}>
-                  {result.briefing.meeting_details || ""}
+                  {viewing.result.briefing.meeting_details || ""}
                 </span>
               </div>
               <div style={{ font: "400 26px/1.25 var(--serif)", color: "var(--ink-800)", marginBottom: 10 }}>
-                {result.briefing.descriptor}
+                {viewing.result.briefing.descriptor}
               </div>
               <p style={{ font: "400 16.5px/1.65 var(--serif)", color: "var(--ink-700)",
                           maxWidth: "64ch", margin: "0 0 16px" }}>
-                {result.briefing.relationship}
-                {result.briefing.vehicle ? ` · ${result.briefing.vehicle}` : ""}
+                {viewing.result.briefing.relationship}
+                {viewing.result.briefing.vehicle ? ` · ${viewing.result.briefing.vehicle}` : ""}
               </p>
               <SectionHead label="QUESTIONS THAT WOULD CHANGE THE VIEW" />
-              {(result.briefing.questions_a || []).slice(0, 5).map((q, i) => (
+              {(viewing.result.briefing.questions_a || []).slice(0, 5).map((q, i) => (
                 <div key={i} className="rrow" style={{ display: "grid",
                   gridTemplateColumns: "28px minmax(0,1fr)", gap: 10 }}>
                   <span className="mono" style={{ fontSize: 11, color: "var(--brass-500)" }}>
@@ -263,7 +274,31 @@ export default function Prep() {
               </div>
             </Card>
           )}
-          {result?.briefing && showFull && <BriefingView data={result.briefing} />}
+          {viewing?.result?.briefing && showFull && <BriefingView data={viewing.result.briefing} />}
+
+          {/* Library — every completed prep is saved automatically. */}
+          <div style={{ marginTop: 28 }}>
+            <SectionHead label="LIBRARY · SAVED PREPS" right={String(library.length)} />
+            {library.length === 0 && (
+              <p className="muted small">Completed preps are saved here automatically.</p>
+            )}
+            {library.map((p) => (
+              <div key={p.id} className="rrow click" onClick={() => openSaved(p.id)}
+                style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto",
+                         gap: 14, alignItems: "baseline", padding: "12px 8px", cursor: "pointer" }}>
+                <span>
+                  <b style={{ fontSize: "14px" }}>{p.name}</b>
+                  <span className="mono" style={{ fontSize: 10, color: "var(--stone-400)", marginLeft: 10 }}>
+                    {(p.outputs || []).join(" + ").toUpperCase()}
+                  </span>
+                </span>
+                <span className="mono" style={{ fontSize: 10.5, color: "var(--stone-400)" }}>{p.created}</span>
+                <button onClick={(e) => { e.stopPropagation(); deleteSaved(p.id); }}
+                  title="Delete" style={{ background: "none", border: "none", cursor: "pointer",
+                    color: "var(--critical-600)", fontFamily: "var(--mono)", fontSize: 12 }}>×</button>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

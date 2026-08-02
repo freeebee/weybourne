@@ -1,71 +1,28 @@
 import React from "react";
-import { get, post } from "../api.js";
+import { post } from "../api.js";
+import * as ts from "../triageStore.js";
 import {
-  Banner, Button, Card, Chip, ErrorNote, Mascot, PageHeader, SectionHead,
+  Banner, Button, Card, Chip, ErrorNote, Mascot, PageHeader, Spinner,
 } from "../ui.jsx";
-import * as uiStore from "../uiStore.js";
+
+const FLAG_META = {
+  delete: ["critical", "SUGGEST DELETE"],
+  shared: ["neutral", "TO SHARED INBOX"],
+  triage: ["teal", "TRIAGE"],
+  priority: ["caution", "PRIORITY"],
+};
 
 export default function Triage() {
-  const [days, setDays] = React.useState(3);
-  const [top, setTop] = React.useState(25);
-  const [messages, setMessages] = React.useState(null);
-  const [notionLive, setNotionLive] = React.useState(true);
-  const [results, setResults] = React.useState({});
-  const [selected, setSelected] = React.useState(new Set());
-  const [activeId, setActiveId] = React.useState(null);
-  const [busy, setBusy] = React.useState("");
-  const [error, setError] = React.useState(null);
-  const [notice, setNotice] = React.useState(null);
+  React.useSyncExternalStore(ts.subscribe, ts.getVersion);
+  const s = ts.S;
 
-  async function scan() {
-    setBusy("scan"); setError(null); setResults({}); setNotice(null); setActiveId(null);
-    try {
-      const data = await get(`/api/inbox?days=${days}&top=${top}`);
-      setMessages(data.messages);
-      setSelected(new Set(data.messages.map((m) => m.id)));
-      setNotionLive(data.notion_live);
-      setActiveId(data.messages[0]?.id ?? null);
-      uiStore.setInboxCount(data.messages.length);
-    } catch (e) { setError(e.message); }
-    setBusy("");
-  }
+  React.useEffect(() => { ts.restore(); }, []);
 
-  async function triageSelected() {
-    setBusy("triage"); setError(null);
-    let firstRelevant = null;
-    for (const m of messages.filter((m) => selected.has(m.id))) {
-      try {
-        const r = await post("/api/triage", { message: m });
-        setResults((prev) => ({ ...prev, [m.id]: r }));
-        if (!firstRelevant && r.is_investment) {
-          firstRelevant = m.id;
-          setActiveId(m.id);
-        }
-      } catch (e) {
-        setError(`Stopped at “${m.subject}”: ${e.message}`);
-        break;
-      }
-    }
-    setBusy("");
-  }
-
-  async function deleteMessage(m) {
-    if (!window.confirm(`Move “${m.subject}” to Deleted Items?`)) return;
-    setBusy(`del-${m.id}`); setError(null);
-    try {
-      const r = await post("/api/messages/delete", { message_id: m.id });
-      setMessages((prev) => prev.filter((x) => x.id !== m.id));
-      setSelected((prev) => { const n = new Set(prev); n.delete(m.id); return n; });
-      if (activeId === m.id) setActiveId(null);
-      setNotice("Moved to Deleted Items — recoverable in Outlook."
-        + (r.live ? "" : " (Demo mode — nothing was actually moved.)"));
-    } catch (e) { setError(e.message); }
-    setBusy("");
-  }
-
-  const triaged = Object.keys(results).length;
-  const relevant = Object.values(results).filter((r) => r.is_investment).length;
-  const active = messages?.find((m) => m.id === activeId);
+  const triaged = Object.keys(s.results).length;
+  const relevant = Object.values(s.results).filter((r) => r.is_investment).length;
+  const active = s.messages?.find((m) => m.id === s.activeId);
+  const running = !!s.job;
+  const etaLeft = s.job && s.job.eta > 0 ? Math.max(0, s.job.eta - s.job.elapsed) : null;
 
   return (
     <div className="fade-in">
@@ -74,89 +31,106 @@ export default function Triage() {
           <>
             <label className="microlabel" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               LOOK BACK
-              <select value={days} onChange={(e) => setDays(+e.target.value)}>
+              <select value={s.days} onChange={(e) => ts.set({ days: +e.target.value })}>
                 {[3, 7, 14].map((d) => <option key={d} value={d}>{d} days</option>)}
               </select>
             </label>
             <label className="microlabel" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               MAX
-              <select value={top} onChange={(e) => setTop(+e.target.value)}>
+              <select value={s.top} onChange={(e) => ts.set({ top: +e.target.value })}>
                 {[25, 50, 100].map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
             </label>
-            <Button busy={busy === "scan"} onClick={scan}>Scan inbox</Button>
+            <Button busy={s.scanBusy} onClick={ts.scan}>Scan inbox</Button>
           </>
         }>
         Flag investment-relevant mail, check it against Notion, screen it against our
         preferences, and draft a reply. Nothing is sent or written without your approval.
       </PageHeader>
 
-      <ErrorNote error={error} />
-      {notice && <Banner tone="success">{notice}</Banner>}
+      <ErrorNote error={s.error} />
+      {s.notice && <Banner tone="success">{s.notice}</Banner>}
 
-      {messages === null && <Mascot state="coffee" width={64} text="Press Scan inbox to begin." />}
-      {messages?.length === 0 && (
+      {s.messages === null && !running &&
+        <Mascot state="coffee" width={64} text="Press Scan inbox to begin." />}
+      {s.messages?.length === 0 && (
         <Mascot state="celebrating" width={64}
-          text={`Nothing in the Inbox from the last ${days} day(s) — everything is filed or already dealt with.`} />
+          text={`Nothing in the Inbox from the last ${s.days} day(s) — everything is filed or already dealt with.`} />
       )}
 
-      {messages?.length > 0 && (
+      {s.messages?.length > 0 && (
         <>
-          <div className="spread" style={{ margin: "0 0 18px", flexWrap: "wrap", gap: 12 }}>
-            <div className="row" style={{ gap: 14 }}>
-              <Mascot state="filing" width={44} />
-              <span className="mono" style={{ fontSize: 11, letterSpacing: ".12em",
-                textTransform: "uppercase", color: "var(--stone-500)" }}>
-                {messages.length} MESSAGES · {triaged} TRIAGED · {relevant} INVESTMENT-RELEVANT · LAST {days} DAYS
-              </span>
-            </div>
-            <div className="row">
-              <span className="muted small">{selected.size} of {messages.length} selected</span>
-              <Button variant="ghost" onClick={() =>
-                setSelected(selected.size === messages.length
-                  ? new Set() : new Set(messages.map((m) => m.id)))}>
-                {selected.size === messages.length ? "Deselect all" : "Select all"}
-              </Button>
-              <Button variant="dark" busy={busy === "triage"}
-                disabled={!selected.size} onClick={triageSelected}>
-                Triage {selected.size} selected
-              </Button>
+          {/* Sticky meta bar — stays put while the list scrolls. */}
+          <div style={{ position: "sticky", top: 0, zIndex: 5,
+                        background: "var(--paper-050)", padding: "10px 0 12px",
+                        borderBottom: "1px solid var(--paper-200)", marginBottom: 4 }}>
+            <div className="spread" style={{ flexWrap: "wrap", gap: 12 }}>
+              <div className="row" style={{ gap: 14 }}>
+                <Mascot state={running ? "crunching" : "filing"} width={44} />
+                <div>
+                  <span className="mono" style={{ fontSize: 11, letterSpacing: ".12em",
+                    textTransform: "uppercase", color: "var(--stone-500)", display: "block" }}>
+                    {s.messages.length} MESSAGES · {triaged} TRIAGED · {relevant} RELEVANT
+                    {s.flagsBusy && <span style={{ color: "var(--teal-700)" }}> · PRE-SORTING…</span>}
+                  </span>
+                  {running && (
+                    <span className="mono" style={{ fontSize: 10.5, color: "var(--teal-700)" }}>
+                      TRIAGING {s.job.done}/{s.job.total}
+                      {etaLeft != null && ` · ~${etaLeft}S LEFT`}
+                      {s.job.current && ` · ${s.job.current.slice(0, 44).toUpperCase()}`}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="row">
+                <span className="muted small">{s.selected.size} of {s.messages.length} selected</span>
+                <Button variant="ghost" disabled={running}
+                  onClick={() => ts.selectAll(s.selected.size !== s.messages.length)}>
+                  {s.selected.size === s.messages.length ? "Deselect all" : "Select all"}
+                </Button>
+                <Button variant="dark" busy={running} disabled={!s.selected.size}
+                  onClick={ts.startTriage}>
+                  {running ? `Triaging ${s.job.done}/${s.job.total}` : `Triage ${s.selected.size} selected`}
+                </Button>
+              </div>
             </div>
           </div>
-          {busy === "triage" && (
-            <p className="muted small">One call per message — {triaged}/{selected.size} done…</p>
+          {running && (
+            <p className="muted" style={{ fontSize: "12.5px", margin: "6px 0 12px" }}>
+              Runs in the background — leave this page and results keep landing.
+            </p>
           )}
-          {!notionLive && triaged > 0 && (
+          {!s.notionLive && triaged > 0 && (
             <Banner tone="warning">
-              Dedupe ran against sample data, not your live Notion — “appears to be new”
-              only means new to the sample set.
+              Dedupe ran against sample data, not your live Notion.
             </Banner>
           )}
 
           <div className="panes">
             {/* Message list */}
             <div style={{ flex: "1 1 320px", minWidth: "min(100%,300px)", maxWidth: 440 }}>
-              {messages.map((m) => {
-                const r = results[m.id];
-                const isActive = m.id === activeId;
+              {s.messages.map((m) => {
+                const r = s.results[m.id];
+                const fl = s.flags[m.id];
+                const isActive = m.id === s.activeId;
                 const relevantRow = r?.is_investment;
+                const inFlight = running && s.job.current &&
+                  m.subject.startsWith(s.job.current.slice(0, 30));
                 return (
-                  <div key={m.id} onClick={() => setActiveId(m.id)} className="rrow click" style={{
-                    padding: "16px 14px", display: "flex", flexDirection: "column", gap: 7,
-                    background: isActive ? "var(--paper-000)" : "transparent",
-                    borderLeft: isActive ? "2px solid var(--teal-500)" : "2px solid transparent",
-                    opacity: r && !relevantRow ? 0.6 : 1, cursor: "pointer",
-                  }}>
+                  <div key={m.id} onClick={() => ts.set({ activeId: m.id })}
+                    className="rrow click" style={{
+                      padding: "14px", display: "flex", flexDirection: "column", gap: 6,
+                      background: isActive ? "var(--paper-000)" : "transparent",
+                      borderLeft: isActive ? "2px solid var(--teal-500)" : "2px solid transparent",
+                      opacity: r && !relevantRow ? 0.6 : 1, cursor: "pointer",
+                    }}>
                     <div style={{ display: "flex", gap: 9, alignItems: "baseline" }}>
-                      <input type="checkbox" checked={selected.has(m.id)}
+                      <input type="checkbox" checked={s.selected.has(m.id)}
+                        disabled={running}
                         onClick={(e) => e.stopPropagation()}
-                        onChange={() => setSelected((prev) => {
-                          const n = new Set(prev);
-                          n.has(m.id) ? n.delete(m.id) : n.add(m.id);
-                          return n;
-                        })} />
+                        onChange={() => ts.toggle(m.id)} />
                       <span className="dot" style={{
-                        width: 7, height: 7, marginTop: 4,
+                        width: 7, height: 7, marginTop: 4, flex: "none",
                         background: relevantRow ? "var(--teal-500)" : "transparent",
                         border: relevantRow ? "none" : "1px solid var(--stone-300)",
                       }} />
@@ -165,31 +139,44 @@ export default function Triage() {
                         color: r && !relevantRow ? "var(--stone-600)" : "var(--ink-800)" }}>
                         {m.subject}
                       </span>
-                      <button onClick={(e) => { e.stopPropagation(); deleteMessage(m); }}
+                      {inFlight && <Spinner size={12} />}
+                      <button onClick={(e) => { e.stopPropagation(); ts.deleteMessage(m); }}
                         title="Move to Deleted Items" style={{
                           background: "none", border: "none", cursor: "pointer",
                           color: "var(--critical-600)", fontFamily: "var(--mono)", fontSize: 11,
-                        }}>
-                        {busy === `del-${m.id}` ? "…" : "×"}
-                      </button>
+                        }}>×</button>
                     </div>
                     <span style={{ fontSize: 13, color: "var(--stone-600)" }}>
                       {m.sender_name || m.sender_email}{m.has_attachments ? " · attachment" : ""}
                     </span>
-                    <span className="mono" style={{ fontSize: 10, letterSpacing: ".1em",
-                      textTransform: "uppercase", color: "var(--stone-400)" }}>
-                      {(m.received || "").slice(5, 16).replace("T", " ")}
-                      {r && ` · ${r.category} · ${Math.round(r.confidence * 100)}%`}
-                    </span>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <span className="mono" style={{ fontSize: 10, letterSpacing: ".1em",
+                        textTransform: "uppercase", color: "var(--stone-400)" }}>
+                        {(m.received || "").slice(5, 16).replace("T", " ")}
+                        {r && ` · ${r.category} · ${Math.round(r.confidence * 100)}%`}
+                      </span>
+                      {fl && fl.flag !== "none" && (
+                        <Chip tone={FLAG_META[fl.flag]?.[0] || "neutral"}>
+                          {FLAG_META[fl.flag]?.[1] || fl.flag}
+                        </Chip>
+                      )}
+                    </div>
+                    {fl && fl.flag !== "none" && fl.reason && (
+                      <span className="muted" style={{ fontSize: "11.5px", fontStyle: "italic" }}>
+                        {fl.reason}
+                      </span>
+                    )}
                   </div>
                 );
               })}
             </div>
 
-            {/* Detail pane */}
-            <div style={{ flex: "3 1 460px", minWidth: "min(100%,320px)" }}>
+            {/* Detail pane — sticky, scrolls with you. */}
+            <div style={{ flex: "3 1 460px", minWidth: "min(100%,320px)",
+                          position: "sticky", top: 96, alignSelf: "flex-start",
+                          maxHeight: "calc(100vh - 120px)", overflowY: "auto" }}>
               {active
-                ? <DetailPane msg={active} result={results[active.id]} />
+                ? <DetailPane msg={active} result={s.results[active.id]} flag={s.flags[active.id]} />
                 : <p className="muted small">Select a message.</p>}
             </div>
           </div>
@@ -199,7 +186,7 @@ export default function Triage() {
   );
 }
 
-function DetailPane({ msg, result }) {
+function DetailPane({ msg, result, flag }) {
   const [screen, setScreen] = React.useState(null);
   const [options, setOptions] = React.useState(null);
   const [chosen, setChosen] = React.useState(0);
@@ -246,21 +233,27 @@ function DetailPane({ msg, result }) {
   const verdictColor = screen && { Fit: "var(--positive-600)", Partial: "var(--caution-600)",
     "Non-fit": "var(--critical-600)", Unclear: "var(--stone-500)" }[screen.overall_fit];
 
+  if (result?.error) {
+    return <Card><ErrorNote error={`This message failed to triage: ${result.error}`} /></Card>;
+  }
+
   return (
     <Card style={{ padding: 0 }}>
-      {/* Head block */}
       <div style={{ padding: "22px 24px 18px", borderBottom: "1px solid var(--paper-200)" }}>
-        {result && (
-          <div className="row" style={{ marginBottom: 10 }}>
-            {result.is_investment
-              ? <Chip tone="teal">INVESTMENT-RELEVANT</Chip>
-              : <Chip tone="neutral">NOT RELEVANT</Chip>}
+        <div className="row" style={{ marginBottom: 10 }}>
+          {result && (result.is_investment
+            ? <Chip tone="teal">INVESTMENT-RELEVANT</Chip>
+            : <Chip tone="neutral">NOT RELEVANT</Chip>)}
+          {flag && flag.flag !== "none" && (
+            <Chip tone={FLAG_META[flag.flag]?.[0] || "neutral"}>{FLAG_META[flag.flag]?.[1]}</Chip>
+          )}
+          {result && (
             <span className="mono" style={{ fontSize: 10, letterSpacing: ".1em",
               textTransform: "uppercase", color: "var(--stone-400)" }}>
               {result.category} · {Math.round(result.confidence * 100)}%
             </span>
-          </div>
-        )}
+          )}
+        </div>
         <div style={{ font: "400 24px/1.25 var(--serif)", color: "var(--ink-800)" }}>{msg.subject}</div>
         <div style={{ fontSize: "13.5px", color: "var(--stone-500)", margin: "6px 0 10px" }}>
           {msg.sender_name} &lt;{msg.sender_email}&gt; · {msg.received}
@@ -275,14 +268,13 @@ function DetailPane({ msg, result }) {
       </div>
 
       <div style={{ padding: "0 24px 20px" }}>
-        {!result && <Banner>Not yet triaged — select it and run triage.</Banner>}
+        {!result && <Banner>Not yet triaged — include it in a triage run.</Banner>}
         {result && !result.is_investment && (
           <Banner>Not investment-relevant — nothing further to do.</Banner>
         )}
 
         {result?.is_investment && (
           <>
-            {/* Step 1 — Notion */}
             <Step n={1} label="NOTION" state="done"
               right={result.proposals?.length
                 ? `${result.proposals.length} TO CREATE · ${Object.values(result.dedupe || {}).filter((d) => d.action === "link_existing").length} LINKED`
@@ -333,7 +325,6 @@ function DetailPane({ msg, result }) {
               )}
             </Step>
 
-            {/* Step 2 — Preference screen */}
             <Step n={2} label="PREFERENCE SCREEN" state={screen ? "done" : "current"}
               right={screen && (
                 <span style={{ color: verdictColor }}>
@@ -367,7 +358,6 @@ function DetailPane({ msg, result }) {
               )}
             </Step>
 
-            {/* Step 3 — Reply */}
             <Step n={3} label="REPLY · DRAFT ONLY" state={options ? "done" : screen ? "current" : "pending"} last>
               {!options && (
                 <Button variant="ghost" busy={busy === "drafts"} disabled={!screen} onClick={genDrafts}>

@@ -1,11 +1,41 @@
 /* Live meeting — thin view over liveStore; redesign per handoff. */
 import React from "react";
+import { get } from "../api.js";
 import * as live from "../liveStore.js";
 import {
   Banner, Button, Card, ErrorNote, Field, Mascot, PageHeader, SectionHead,
   inputStyle,
 } from "../ui.jsx";
 import { Markdown } from "./Prep.jsx";
+
+function CalendarPick() {
+  const [events, setEvents] = React.useState([]);
+  const [idx, setIdx] = React.useState("");
+
+  React.useEffect(() => {
+    get("/api/calendar?days=2").then((d) => setEvents(d.events)).catch(() => {});
+  }, []);
+
+  return (
+    <select value={idx} style={inputStyle} onChange={(e) => {
+      setIdx(e.target.value);
+      const ev = events[+e.target.value];
+      if (ev) {
+        live.set({
+          who: ev.counterparty_name || ev.subject,
+          goal: live.S.goal || ev.subject,
+        });
+      }
+    }}>
+      <option value="">— pick a meeting —</option>
+      {events.map((e, i) => (
+        <option key={i} value={i}>
+          {(e.start || "").slice(5, 16).replace("T", " ")} · {e.subject}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 function fmtElapsed(ms) {
   const s = Math.floor(ms / 1000);
@@ -68,6 +98,10 @@ export default function Live() {
       {!s.running && (
         <Card style={{ marginBottom: 20 }}>
           <div className="panes" style={{ gap: 18 }}>
+            <Field label="FROM MY CALENDAR (OPTIONAL)" style={{ flex: "1 1 260px" }}
+              hint="Picking a meeting fills in who and what for.">
+              <CalendarPick />
+            </Field>
             <Field label="WHO YOU ARE MEETING" style={{ flex: "1 1 220px" }}>
               <input value={s.who} onChange={(e) => live.set({ who: e.target.value })}
                 placeholder="Axiom Asia, Fund VII" style={inputStyle} />
