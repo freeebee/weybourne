@@ -67,7 +67,7 @@ export default function Live() {
   React.useEffect(() => {
     const el = transcriptBoxRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [s.entries.length]);
+  }, [s.batches.length]);
 
   React.useEffect(() => {
     navigator.mediaDevices?.enumerateDevices?.().then((ds) =>
@@ -186,80 +186,108 @@ export default function Live() {
           {openItems.length === 0 && s.batches.length === 0 && (
             <p className="muted small">Questions appear here after the first read.</p>
           )}
-          {[...openItems].reverse().map((it) => {
-            const isNew = newest && it.batch === newest.id;
-            return (
-              <Card key={it.id} style={{
-                padding: "15px 17px", marginBottom: 10,
-                borderLeft: isNew ? "2px solid var(--teal-500)" : "1px solid var(--paper-200)",
-              }}>
-                <div className="spread" style={{ marginBottom: 6 }}>
-                  <span className="mono" style={{ fontSize: 10, letterSpacing: ".1em",
-                    color: isNew ? "var(--teal-700)" : "var(--stone-400)" }}>
-                    {isNew ? "NEW · FROM THE LAST 30 SECONDS"
-                      : it.batch === 0 ? "YOURS"
-                      : `READ · ${s.batches.find((b) => b.id === it.batch)?.at || ""}`}
-                    {it.flag && <span style={{ color: "var(--caution-600)" }}> · RISK</span>}
-                  </span>
-                  <button onClick={() => live.discardItem(it.id)} title="Discard" style={{
-                    background: "none", border: "none", cursor: "pointer",
-                    color: "var(--stone-400)", fontSize: 15, lineHeight: 1, padding: 0 }}>×</button>
-                </div>
-                <div style={{ fontSize: 15, lineHeight: 1.5 }}>{it.q}</div>
-              </Card>
-            );
-          })}
+          {[...openItems].sort((a, b) => (b.starred ? 1 : 0) - (a.starred ? 1 : 0))
+            .map((it) => {
+              const isNew = newest && it.batch === newest.id;
+              return (
+                <Card key={it.id} style={{
+                  padding: "15px 17px", marginBottom: 10,
+                  background: it.starred ? "var(--brass-100)" : "var(--paper-000)",
+                  borderLeft: it.starred ? "2px solid var(--brass-500)"
+                    : isNew ? "2px solid var(--teal-500)" : "1px solid var(--paper-200)",
+                }}>
+                  <div className="spread" style={{ marginBottom: 6 }}>
+                    <span className="mono" style={{ fontSize: 10, letterSpacing: ".1em",
+                      color: it.starred ? "var(--brass-700)"
+                        : isNew ? "var(--teal-700)" : "var(--stone-400)" }}>
+                      {it.starred ? "MARKED · ASK THIS"
+                        : isNew ? "NEW · FROM THE LAST 30 SECONDS"
+                        : it.batch === 0 ? "YOURS"
+                        : `READ · ${s.batches.find((b) => b.id === it.batch)?.at || ""}`}
+                      {it.flag && <span style={{ color: "var(--caution-600)" }}> · RISK</span>}
+                    </span>
+                    <span style={{ display: "flex", gap: 10 }}>
+                      <button onClick={() => live.toggleStar(it.id)}
+                        title={it.starred ? "Unmark" : "Mark as important — ask this"}
+                        style={{ background: "none", border: "none", cursor: "pointer",
+                          color: it.starred ? "var(--brass-700)" : "var(--stone-400)",
+                          fontSize: 14, lineHeight: 1, padding: 0 }}>✓</button>
+                      <button onClick={() => live.discardItem(it.id)} title="Discard" style={{
+                        background: "none", border: "none", cursor: "pointer",
+                        color: "var(--stone-400)", fontSize: 15, lineHeight: 1, padding: 0 }}>×</button>
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 15, lineHeight: 1.5 }}>{it.q}</div>
+                </Card>
+              );
+            })}
 
           {answeredItems.length > 0 && (
             <div style={{ borderTop: "1px solid var(--paper-200)", paddingTop: 12, marginTop: 6 }}>
               <span className="microlabel" style={{ color: "var(--positive-600)" }}>
                 ANSWERED · {answeredItems.length}
               </span>
-              <div style={{ fontSize: "13.5px", color: "var(--stone-600)", marginTop: 6 }}>
-                {answeredItems.map((it) => it.q).join(" · ")}
-              </div>
-            </div>
-          )}
-
-          {/* Recaps */}
-          {s.batches.filter((b) => b.recap).length > 0 && (
-            <div style={{ marginTop: 22 }}>
-              <SectionHead label="WHAT WAS SAID" />
-              {s.batches.filter((b) => b.recap).map((b) => (
-                <div key={b.id} className="rrow">
-                  <span className="mono" style={{ fontSize: 10, color: "var(--stone-400)" }}>{b.at}</span>
-                  <p style={{ fontSize: "13.5px", lineHeight: 1.55, margin: "4px 0 0" }}>{b.recap}</p>
+              {answeredItems.map((it) => (
+                <div key={it.id} className="rrow">
+                  <div style={{ fontSize: "13.5px", textDecoration: "line-through",
+                                color: "var(--stone-400)" }}>{it.q}</div>
+                  <div style={{ fontSize: "13px", borderLeft: "2px solid var(--teal-500)",
+                                paddingLeft: 10, marginTop: 4 }}>
+                    <span style={{ fontVariantCaps: "all-small-caps",
+                      color: "var(--teal-700)", marginRight: 6 }}>They said</span>
+                    {it.answer}
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* Transcript pane */}
+        {/* Right pane — audio check + what was said */}
         <div style={{ flex: "1 1 300px", maxWidth: 420, minWidth: "min(100%,280px)" }}>
-          <SectionHead label="LIVE TRANSCRIPT" right={`${words.toLocaleString()} WORDS`} />
+          {s.running && (
+            <Card style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                <Mascot state="call" width={54} />
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {s.source === "system" && (
+                    <span style={{ fontSize: "13.5px",
+                      color: s.hearSystem ? "var(--positive-600)" : "var(--stone-400)" }}>
+                      {s.hearSystem ? "✓ I'm hearing the call audio"
+                        : "· Waiting for call audio…"}
+                    </span>
+                  )}
+                  <span style={{ fontSize: "13.5px",
+                    color: s.hearMic ? "var(--positive-600)" : "var(--stone-400)" }}>
+                    {s.hearMic ? "✓ I'm hearing your microphone"
+                      : "· Your microphone is quiet"}
+                  </span>
+                  {s.busy === "read" && (
+                    <span className="mono" style={{ fontSize: 11, color: "var(--teal-600)" }}>
+                      READING THE NEW SPEECH…
+                    </span>
+                  )}
+                </div>
+              </div>
+            </Card>
+          )}
+
+          <SectionHead label="WHAT WAS SAID" right={`${words.toLocaleString()} WORDS`} />
           <Card style={{ padding: "14px 16px" }}>
-            <div ref={transcriptBoxRef} style={{ maxHeight: 420, overflowY: "auto",
-              display: "flex", flexDirection: "column", gap: 14 }}>
-              {s.entries.length === 0 && (
+            <div ref={transcriptBoxRef} style={{ maxHeight: 420, overflowY: "auto" }}>
+              {s.batches.filter((b) => b.recap).length === 0 && (
                 <span className="muted" style={{ fontSize: "13.5px", fontStyle: "italic" }}>
-                  {s.running ? "Listening — words appear a few seconds behind the room…"
+                  {s.running
+                    ? "A recap of the conversation lands here after each read."
                     : "Start listening, or paste captions below."}
                 </span>
               )}
-              {s.entries.map((e, i) => (
-                <div key={i}>
-                  <span className="mono" style={{ fontSize: 10, color: "var(--stone-400)" }}>{e.at}</span>
-                  <div style={{ fontSize: "13.5px", lineHeight: 1.6,
-                    color: i === s.entries.length - 1 ? "var(--ink-700)" : "var(--stone-600)" }}>
-                    {e.text}
-                  </div>
+              {s.batches.filter((b) => b.recap).map((b) => (
+                <div key={b.id} className="rrow">
+                  <span className="mono" style={{ fontSize: 10, color: "var(--stone-400)" }}>{b.at}</span>
+                  <p style={{ fontSize: "13.5px", lineHeight: 1.55, margin: "4px 0 0" }}>{b.recap}</p>
                 </div>
               ))}
-              {s.busy === "read" && (
-                <Mascot state="call" width={46}
-                  text={<span className="mono" style={{ fontSize: 11, color: "var(--teal-600)" }}>READING THE NEW SPEECH…</span>} />
-              )}
             </div>
           </Card>
           <Field label="PASTE CAPTIONS (TEAMS, A NOTION TRANSCRIPT)" style={{ marginTop: 14 }}>

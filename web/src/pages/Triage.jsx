@@ -358,11 +358,19 @@ function DetailPane({ msg, result, flag }) {
               )}
             </Step>
 
-            <Step n={3} label="REPLY · DRAFT ONLY" state={options ? "done" : screen ? "current" : "pending"} last>
+            <Step n={3} label="REPLY · DRAFT ONLY" state={options ? "done" : "current"} last>
               {!options && (
-                <Button variant="ghost" busy={busy === "drafts"} disabled={!screen} onClick={genDrafts}>
-                  Generate reply options
-                </Button>
+                <>
+                  <Button variant="ghost" busy={busy === "drafts"} onClick={genDrafts}>
+                    Generate reply options
+                  </Button>
+                  {!screen && (
+                    <span className="muted" style={{ fontSize: "12.5px", marginLeft: 10 }}>
+                      Works without the preference screen — run it first and the reply
+                      will reflect the verdict.
+                    </span>
+                  )}
+                </>
               )}
               {options && (
                 <>

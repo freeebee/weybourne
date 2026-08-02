@@ -139,12 +139,14 @@ hr.rule{border:0;border-top:1px solid var(--paper-200);margin:1.6rem 0}
 .chip.bare-rec{color:var(--positive-600)}
 
 /* ---- Inputs --------------------------------------------------------------- */
+/* Prose fields read in the app's sans, not mono — mono stays for figures. */
 input[type=text],input[type=number],select,textarea{
   padding:8px 10px;border:1px solid var(--paper-300);background:var(--paper-000);
-  border-radius:var(--radius);font:400 13.5px/1.4 var(--mono);color:var(--ink-700);
-  outline:none}
+  border-radius:var(--radius);font:400 14px/1.4 var(--sans);color:var(--ink-700);
+  outline:none;max-width:100%}
+select{width:auto;min-width:0;text-overflow:ellipsis}
 input:focus,select:focus,textarea:focus{border-color:var(--teal-500)}
-textarea{font-family:var(--sans);resize:vertical}
+textarea{resize:vertical}
 
 /* ---- Tables --------------------------------------------------------------- */
 table.wb{border-collapse:collapse;width:100%;font-size:13.5px}

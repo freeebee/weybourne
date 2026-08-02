@@ -208,7 +208,32 @@ class ClaudeCodeClient:
         self.messages = _Messages(self)
 
     # -- process execution ------------------------------------------------ #
+    def _resolve_cli(self) -> str:
+        """Resolve the CLI to an absolute path, tolerating a slimmed PATH.
+
+        Server processes (uvicorn under a launcher) sometimes inherit a PATH
+        without the user's script directory, making bare 'claude' fail even
+        though it is installed. Fall back to the standard install locations.
+        """
+        import shutil
+        from pathlib import Path as _P
+
+        found = shutil.which(self.cli_path)
+        if found:
+            return found
+        # Only rescue the DEFAULT name — an explicitly configured path that
+        # doesn't exist should fail loudly, not silently use another binary.
+        if self.cli_path in ("claude", "claude.exe"):
+            home = _P.home()
+            for candidate in (home / ".local" / "bin" / "claude.exe",
+                              home / ".local" / "bin" / "claude",
+                              home / "AppData" / "Roaming" / "npm" / "claude.cmd"):
+                if candidate.exists():
+                    return str(candidate)
+        return self.cli_path
+
     def _run_subprocess(self, argv: list[str]) -> subprocess.CompletedProcess:
+        argv = [self._resolve_cli(), *argv[1:]]
         try:
             return subprocess.run(
                 argv,

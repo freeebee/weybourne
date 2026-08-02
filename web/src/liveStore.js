@@ -20,7 +20,18 @@ function stamp() {
 
 let listeners = new Set();
 let micStream = null, displayStream = null, audioCtx = null, analyser = null,
+    micAnalyser = null, sysAnalyser = null,
     recorder = null, chunkTimer = null, countdown = null, raf = 0, canvas = null;
+let lastMicAt = 0, lastSysAt = 0;
+
+function levelOf(an) {
+  if (!an) return 0;
+  const data = new Uint8Array(512);
+  an.getByteFrequencyData(data);
+  let sum = 0;
+  for (let i = 0; i < data.length; i++) sum += data[i];
+  return sum / data.length / 255;
+}
 
 function emit() { S.version++; listeners.forEach((f) => f()); }
 export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
@@ -80,7 +91,8 @@ export async function start() {
       audio: S.deviceId ? { deviceId: { exact: S.deviceId } } : true,
     });
     const micSrc = audioCtx.createMediaStreamSource(micStream);
-    micSrc.connect(mixed); micSrc.connect(analyser);
+    micAnalyser = audioCtx.createAnalyser(); micAnalyser.fftSize = 1024;
+    micSrc.connect(mixed); micSrc.connect(analyser); micSrc.connect(micAnalyser);
 
     if (S.source === "system") {
       const display = await navigator.mediaDevices.getDisplayMedia({
@@ -95,7 +107,8 @@ export async function start() {
         throw new Error('no audio in the share — pick a tab or screen AND tick "Also share audio" in the picker');
       }
       const sysSrc = audioCtx.createMediaStreamSource(new MediaStream(audioTracks));
-      sysSrc.connect(mixed); sysSrc.connect(analyser);
+      sysAnalyser = audioCtx.createAnalyser(); sysAnalyser.fftSize = 1024;
+      sysSrc.connect(mixed); sysSrc.connect(analyser); sysSrc.connect(sysAnalyser);
       audioTracks[0].addEventListener("ended", () => stop());
     }
 
@@ -135,6 +148,12 @@ export async function start() {
     countdown = setInterval(() => {
       const due = CADENCE_S - (Date.now() - S.lastReadAt) / 1000;
       S.nextIn = Math.max(0, Math.round(due));
+      // Per-source "am I hearing it?" indicators, with a 3-second hold.
+      const now = Date.now();
+      if (levelOf(micAnalyser) > 0.015) lastMicAt = now;
+      if (levelOf(sysAnalyser) > 0.015) lastSysAt = now;
+      S.hearMic = now - lastMicAt < 3000;
+      S.hearSystem = now - lastSysAt < 3000;
       emit();
       if (S.running && !S.reading && due <= 0 && S.unreadWords >= MIN_NEW_WORDS) {
         performRead();
@@ -154,6 +173,8 @@ export function stop() {
   micStream?.getTracks().forEach((t) => t.stop()); micStream = null;
   displayStream?.getTracks().forEach((t) => t.stop()); displayStream = null;
   audioCtx?.close().catch(() => {}); audioCtx = null; analyser = null;
+  micAnalyser = null; sysAnalyser = null;
+  S.hearMic = false; S.hearSystem = false;
   emit();
 }
 
@@ -212,6 +233,12 @@ export function dropSharp() { S.sharp = null; emit(); }
 
 export function discardItem(id) {
   S.items = S.items.filter((it) => it.id !== id);
+  emit();
+}
+
+export function toggleStar(id) {
+  S.items = S.items.map((it) =>
+    it.id === id ? { ...it, starred: !it.starred } : it);
   emit();
 }
 

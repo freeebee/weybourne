@@ -136,10 +136,16 @@ def inbox(days: int = config.TRIAGE_LOOKBACK_DAYS, top: int = config.TRIAGE_MAX_
             "notion_live": _notion.live}
 
 
-def _triage_one(client, msg: EmailMessage) -> dict:
+def _triage_one(client, msg: EmailMessage, progress=None) -> dict:
+    def say(what: str):
+        if progress:
+            progress(what)
+
+    say(f"Reading “{msg.subject[:50]}”")
     result: InvestmentTriage = triage_email(client, msg)
     out = result.model_dump()
     if result.is_investment:
+        say(f"Checking Notion for {result.entity.company_name or result.entity.fund_name or 'the entity'}")
         decisions = dedupe_entity(
             result.entity, _notion.list_contacts(),
             _notion.list_companies(), _notion.list_funds(),
@@ -194,7 +200,9 @@ def start_triage_job(body: TriageJobIn):
             job["current"] = msg.subject[:80]
             t0 = time.time()
             try:
-                job["partial"][msg.id] = _triage_one(client, msg)
+                job["partial"][msg.id] = _triage_one(
+                    client, msg,
+                    progress=lambda what: job.__setitem__("current", what[:90]))
             except (llm.ClaudeCodeAuthError, llm.ClaudeCodeRateLimited):
                 raise   # backend-level: stop the whole batch with a clear error
             except Exception as e:  # noqa: BLE001 - one bad message shouldn't stop the rest
@@ -315,15 +323,22 @@ def screen(body: ScreenIn):
 class DraftIn(BaseModel):
     message: dict
     entity: dict
-    screen: dict
+    screen: dict | None = None
     offer_slots: bool = True
 
 
 @app.post("/api/drafts")
 def drafts(body: DraftIn):
+    """Reply drafts. A preference screen is optional — when supplied the drafts
+    incorporate its verdict; without one they stay neutral on fit."""
     msg = EmailMessage.model_validate(body.message)
     entity = ExtractedEntity.model_validate(body.entity)
-    scr = PreferenceScreen.model_validate(body.screen)
+    scr = (PreferenceScreen.model_validate(body.screen) if body.screen
+           else PreferenceScreen(
+               sleeve=entity.sleeve, overall_fit="Unclear",
+               summary="No preference screen was run — keep the reply neutral on "
+                       "fit; acknowledge, gather materials, and leave the door open.",
+           ))
     slots = _graph.find_free_slots(max_slots=4) if body.offer_slots else []
     options = _run(generate_draft_options, _client(), msg, entity, scr, slots)
     return {"options": [o.model_dump() for o in options]}
