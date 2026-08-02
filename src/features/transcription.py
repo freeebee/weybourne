@@ -235,9 +235,12 @@ during a live meeting. Weybourne is on the LP side: they allocate, and they are 
 counterparty, so every question must be answerable by the counterparty in the room.
 
 Rules:
-- Only report a question as answered if the new speech genuinely addresses it; never invent \
-an answer. A vague or dodged reply does not count — leave it open and re-pose it sharper as a \
-new question.
+- Check EVERY open question against the new speech, one by one, before anything else. If \
+the new speech addresses one — even partially — report it in "answered" with what was \
+actually said (a partial answer should say what is still missing). Never invent an answer. \
+A vague or dodged reply does not count — leave it open and re-pose it sharper as a new \
+question. Missing a genuinely answered question is the worst failure mode: it leaves the \
+investor asking something the room already answered.
 - Give 3 to 5 new questions, most useful first; flag true for the one or two sharpest risk \
 items only. Probe capacity, economics and fees, valuation and marks, team lineage and \
 attribution, process, key person risk, and any contradiction with what was said earlier.

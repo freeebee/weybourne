@@ -132,6 +132,18 @@ export default function Prep() {
             Pick at least one output.
           </span>
         )}
+        <Button style={{ marginLeft: "auto" }}
+          disabled={nothingPicked
+            || (tab === "calendar" && !ev)
+            || (tab === "name" && !typedName)
+            || (tab === "deck" && !deck)}
+          onClick={() => {
+            if (tab === "calendar") prepare({ name: ev.counterparty_name, email: ev.counterparty_email, event: JSON.stringify(ev) });
+            else if (tab === "name") prepare({ name: typedName, company: typedCompany });
+            else prepare({ name: deckName || deck.name.replace(/\.[^.]+$/, "") }, deck);
+          }}>
+          Prepare
+        </Button>
       </div>
 
       <div className="panes">
@@ -185,20 +197,6 @@ export default function Prep() {
             </>
           )}
 
-          <div style={{ marginTop: 18, borderTop: "1px solid var(--paper-200)", paddingTop: 14 }}>
-            <Button
-              disabled={nothingPicked
-                || (tab === "calendar" && !ev)
-                || (tab === "name" && !typedName)
-                || (tab === "deck" && !deck)}
-              onClick={() => {
-                if (tab === "calendar") prepare({ name: ev.counterparty_name, email: ev.counterparty_email, event: JSON.stringify(ev) });
-                else if (tab === "name") prepare({ name: typedName, company: typedCompany });
-                else prepare({ name: deckName || deck.name.replace(/\.[^.]+$/, "") }, deck);
-              }}>
-              Prepare
-            </Button>
-          </div>
         </div>
 
         {/* Right pane — running jobs / result / library */}

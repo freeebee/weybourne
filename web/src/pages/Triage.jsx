@@ -1,5 +1,4 @@
 import React from "react";
-import { post } from "../api.js";
 import * as ts from "../triageStore.js";
 import {
   Banner, Button, Card, Chip, ErrorNote, Mascot, PageHeader, Spinner,
@@ -24,8 +23,14 @@ export default function Triage() {
   const triaged = Object.keys(s.results).length;
   const relevant = Object.values(s.results).filter((r) => r.is_investment).length;
   const active = s.messages?.find((m) => m.id === s.activeId);
-  const running = !!s.job;
-  const etaLeft = s.job && s.job.eta > 0 ? Math.max(0, s.job.eta - s.job.elapsed) : null;
+  const jobList = Object.values(s.jobs);
+  const running = jobList.length > 0;
+  const agg = jobList.reduce((a, j) => ({
+    done: a.done + (j.done || 0), total: a.total + (j.total || 0),
+    current: a.current || j.current,
+    etaLeft: Math.max(a.etaLeft, j.eta > 0 ? j.eta - j.elapsed : 0),
+  }), { done: 0, total: 0, current: "", etaLeft: 0 });
+  const queueable = ts.triageable().length;
 
   return (
     <div className="fade-in">
@@ -78,29 +83,29 @@ export default function Triage() {
                   </span>
                   {running && (
                     <span className="mono" style={{ fontSize: 10.5, color: "var(--teal-700)" }}>
-                      TRIAGING {s.job.done}/{s.job.total}
-                      {etaLeft != null && ` · ~${etaLeft}S LEFT`}
-                      {s.job.current && ` · ${s.job.current.slice(0, 44).toUpperCase()}`}
+                      TRIAGING {agg.done}/{agg.total}
+                      {agg.etaLeft > 0 && ` · ~${agg.etaLeft}S LEFT`}
+                      {agg.current && ` · ${agg.current.slice(0, 44).toUpperCase()}`}
                     </span>
                   )}
                 </div>
               </div>
               <div className="row">
                 <span className="muted small">{s.selected.size} of {s.messages.length} selected</span>
-                <Button variant="ghost" disabled={running}
+                <Button variant="ghost"
                   onClick={() => ts.selectAll(s.selected.size !== s.messages.length)}>
                   {s.selected.size === s.messages.length ? "Deselect all" : "Select all"}
                 </Button>
-                <Button variant="dark" busy={running} disabled={!s.selected.size}
-                  onClick={ts.startTriage}>
-                  {running ? `Triaging ${s.job.done}/${s.job.total}` : `Triage ${s.selected.size} selected`}
+                <Button variant="dark" disabled={!queueable} onClick={ts.startTriage}>
+                  {running ? `Queue ${queueable} more` : `Triage ${queueable} selected`}
                 </Button>
               </div>
             </div>
           </div>
           {running && (
             <p className="muted" style={{ fontSize: "12.5px", margin: "6px 0 12px" }}>
-              Runs in the background — leave this page and results keep landing.
+              Runs in the background — leave this page, keep selecting, and queue more
+              while it works; results keep landing.
             </p>
           )}
           {!s.notionLive && triaged > 0 && (
@@ -117,8 +122,7 @@ export default function Triage() {
                 const fl = s.flags[m.id];
                 const isActive = m.id === s.activeId;
                 const relevantRow = r?.is_investment;
-                const inFlight = running && s.job.current &&
-                  m.subject.startsWith(s.job.current.slice(0, 30));
+                const inFlight = s.inFlight.has(m.id);
                 return (
                   <div key={m.id} onClick={() => ts.set({ activeId: m.id })}
                     className="rrow click" style={{
@@ -129,7 +133,7 @@ export default function Triage() {
                     }}>
                     <div style={{ display: "flex", gap: 9, alignItems: "baseline" }}>
                       <input type="checkbox" checked={s.selected.has(m.id)}
-                        disabled={running}
+                        disabled={inFlight || !!r}
                         onClick={(e) => e.stopPropagation()}
                         onChange={() => ts.toggle(m.id)} />
                       <span className="dot" style={{
@@ -190,48 +194,17 @@ export default function Triage() {
 }
 
 function DetailPane({ msg, result, flag }) {
-  const [screen, setScreen] = React.useState(null);
-  const [options, setOptions] = React.useState(null);
-  const [chosen, setChosen] = React.useState(0);
-  const [draftBody, setDraftBody] = React.useState("");
-  const [approved, setApproved] = React.useState(new Set());
-  const [busy, setBusy] = React.useState("");
-  const [notice, setNotice] = React.useState(null);
-  const [error, setError] = React.useState(null);
+  // All workflow state lives in the store, so a running preference screen or
+  // draft generation keeps going when you navigate away and is here on return.
+  const w = ts.getWork(msg.id);
+  const { screen, options, chosen = 0, draftBody = "", busy = "", notice, error } = w;
+  const approved = new Set(w.approved || []);
 
-  React.useEffect(() => {
-    setScreen(null); setOptions(null); setDraftBody(""); setNotice(null); setError(null);
-    setApproved(new Set((result?.proposals || []).filter((p) => !p.needs_review).map((p) => p.kind)));
-  }, [msg.id, result]);
-
-  async function call(name, fn) {
-    setBusy(name); setError(null);
-    try { await fn(); } catch (e) { setError(e.message); }
-    setBusy("");
-  }
-
-  const applyPlan = () => call("apply", async () => {
-    const r = await post("/api/notion/apply", {
-      proposals: result.proposals, approved_kinds: [...approved],
-    });
-    setNotice(`Created: ${r.created.map((c) => c[0]).join(", ") || "none"}.`
-      + (r.live ? "" : " (Demo mode — nothing was actually written.)"));
-  });
-
-  const runScreen = () => call("screen", async () => {
-    setScreen(await post("/api/screen", { entity: result.entity, key_facts: result.key_facts }));
-  });
-
-  const genDrafts = () => call("drafts", async () => {
-    const r = await post("/api/drafts", { message: msg, entity: result.entity, screen });
-    setOptions(r.options); setChosen(0); setDraftBody(r.options[0]?.body || "");
-  });
-
-  const saveDraft = () => call("save", async () => {
-    const r = await post("/api/drafts/save", { message_id: msg.id, body: draftBody });
-    setNotice("Draft saved to Outlook — review and send it there."
-      + (r.live ? "" : " (Demo mode — no draft was actually created.)"));
-  });
+  const setApproved = (next) => ts.setWork(msg.id, { approved: [...next] });
+  const applyPlan = () => ts.applyPlan(msg);
+  const runScreen = () => ts.runScreen(msg);
+  const genDrafts = () => ts.genDrafts(msg);
+  const saveDraft = () => ts.saveDraft(msg);
 
   const verdictColor = screen && { Fit: "var(--positive-600)", Partial: "var(--caution-600)",
     "Non-fit": "var(--critical-600)", Unclear: "var(--stone-500)" }[screen.overall_fit];
@@ -381,10 +354,11 @@ function DetailPane({ msg, result, flag }) {
                     {options.map((o, i) => (
                       <Button key={i} variant={i === chosen ? "primary" : "ghost"}
                         style={{ fontSize: "12.5px", padding: "7px 12px" }}
-                        onClick={() => { setChosen(i); setDraftBody(o.body); }}>{o.label}</Button>
+                        onClick={() => ts.setWork(msg.id, { chosen: i, draftBody: o.body })}>{o.label}</Button>
                     ))}
                   </div>
-                  <textarea value={draftBody} onChange={(e) => setDraftBody(e.target.value)}
+                  <textarea value={draftBody}
+                    onChange={(e) => ts.setWork(msg.id, { draftBody: e.target.value })}
                     rows={10} style={{
                       width: "100%", background: "var(--paper-050)",
                       border: "1px solid var(--paper-200)", borderRadius: "var(--radius)",
