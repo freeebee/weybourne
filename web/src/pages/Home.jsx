@@ -2,7 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { get } from "../api.js";
 import * as liveStore from "../liveStore.js";
-import { Banner, Button, Card, Chip, ErrorNote, Mascot, SectionHead } from "../ui.jsx";
+import { Banner, Button, Card, Chip, ErrorNote, Mascot, SectionHead, fmtDate, fmtTime } from "../ui.jsx";
 import * as uiStore from "../uiStore.js";
 
 const WORKSPACES = [
@@ -139,9 +139,9 @@ export default function Home() {
               <>
                 <Card accent="teal" style={{ padding: "17px 17px 15px" }}>
                   <div className="spread">
-                    <span className="mono" style={{ fontSize: 12 }}>{(next.start || "").slice(11, 16)}</span>
+                    <span className="mono" style={{ fontSize: 12 }}>{fmtTime(next.start)}</span>
                     <span className="mono" style={{ fontSize: 10, color: "var(--stone-400)" }}>
-                      {(next.start || "").slice(0, 10)}
+                      {fmtDate(next.start)}
                     </span>
                   </div>
                   <div style={{ font: "400 19px/1.3 var(--serif)", color: "var(--ink-800)", margin: "6px 0 4px" }}>
@@ -157,7 +157,7 @@ export default function Home() {
                 {rest.map((e, i) => (
                   <div key={i} className="rrow" style={{ display: "flex", gap: 14 }}>
                     <span className="mono" style={{ fontSize: 12, width: 42, flex: "none", color: "var(--stone-500)" }}>
-                      {(e.start || "").slice(11, 16)}
+                      {fmtTime(e.start)}
                     </span>
                     <span style={{ fontSize: "13.5px", color: "var(--stone-600)" }}>{e.subject}</span>
                   </div>

@@ -2,7 +2,7 @@ import React from "react";
 import { get } from "../api.js";
 import {
   Banner, Button, Card, ErrorNote, Field, Mascot, PageHeader, SectionHead,
-  inputStyle,
+  fmtDate, fmtTime, inputStyle,
 } from "../ui.jsx";
 
 export default function Prep() {
@@ -198,7 +198,7 @@ export default function Prep() {
                   borderLeft: i === eventIdx ? "2px solid var(--teal-500)" : "2px solid transparent",
                 }}>
                   <span className="mono" style={{ fontSize: 11, color: "var(--stone-500)", lineHeight: 1.5 }}>
-                    {(e.start || "").slice(5, 10)}<br />{(e.start || "").slice(11, 16)}
+                    {fmtDate(e.start)}<br />{fmtTime(e.start)}
                   </span>
                   <span>
                     <span style={{ fontSize: "14.5px", color: "var(--ink-800)", display: "block" }}>{e.subject}</span>

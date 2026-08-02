@@ -179,11 +179,15 @@ export function setWork(id, patch) {
   emit();
 }
 
+/* busy is an ARRAY of labels so independent steps (preference screen, reply
+   drafts) can run at the same time on one message. */
 async function workCall(id, busyLabel, fn) {
-  setWork(id, { busy: busyLabel, error: null });
+  const cur = workOf(id).busy;
+  setWork(id, { busy: [...(Array.isArray(cur) ? cur : []), busyLabel], error: null });
   try { await fn(workOf(id)); }
   catch (e) { setWork(id, { error: e.message }); }
-  setWork(id, { busy: "" });
+  const after = workOf(id).busy;
+  setWork(id, { busy: (Array.isArray(after) ? after : []).filter((b) => b !== busyLabel) });
 }
 
 export function runScreen(msg) {
@@ -202,8 +206,23 @@ export function genDrafts(msg) {
       { message: msg, entity: r.entity, screen: w.screen || null,
         dedupe: r.dedupe || null });
     setWork(msg.id, { options: res.options, chosen: 0,
-                      draftBody: res.options[0]?.body || "" });
+                      draftBody: res.options[0]?.body || "",
+                      draftsHadScreen: !!w.screen });
   });
+}
+
+/* Run the preference screen and the reply drafts AT THE SAME TIME. If the
+   drafts land first (they usually do), they are regenerated once the screen
+   arrives so the verdict is folded in. */
+export async function runScreenAndDrafts(msg) {
+  await Promise.all([runScreen(msg), genDrafts(msg)]);
+  const w = workOf(msg.id);
+  if (w.screen && w.options && !w.draftsHadScreen) {
+    await genDrafts(msg);
+    setWork(msg.id, {
+      notice: "Reply options updated with the preference screen verdict.",
+    });
+  }
 }
 
 /* Per-proposal edits: the user can change any property value before the

@@ -189,3 +189,28 @@ export function Mascot({ state, width = 110, text, style }) {
     </div>
   );
 }
+
+/* ---- local-timezone date/time formatting --------------------------------- */
+/* Calendar and mail timestamps arrive as ISO strings (often UTC "Z") — always
+   render them in the viewer's own timezone (SGT in Singapore, etc.). Naive
+   strings without an offset parse as local time, which is the right default. */
+export function fmtTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? String(iso).slice(11, 16)
+    : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+export function fmtDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? String(iso).slice(0, 10)
+    : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+}
+
+export function fmtDT(iso) {
+  const dt = fmtDate(iso), tm = fmtTime(iso);
+  return dt && tm ? `${dt} ${tm}` : dt || tm;
+}

@@ -1,8 +1,20 @@
 import React from "react";
 import * as ts from "../triageStore.js";
 import {
-  Banner, Button, Card, Chip, ErrorNote, Mascot, PageHeader, Spinner,
+  Banner, Button, Card, Chip, ErrorNote, Mascot, PageHeader, Spinner, fmtDT,
 } from "../ui.jsx";
+
+/* Select/status/multi-select options per DB kind, fetched once per session so
+   proposal edits can offer dropdowns instead of free text. */
+const OPT_CACHE = {};
+async function loadOptions(kind) {
+  if (OPT_CACHE[kind]) return OPT_CACHE[kind];
+  try {
+    const res = await fetch(`/api/notion/options?kind=${kind}`);
+    OPT_CACHE[kind] = (await res.json()).options || {};
+  } catch { OPT_CACHE[kind] = {}; }
+  return OPT_CACHE[kind];
+}
 
 const FLAG_META = {
   delete: ["critical", "SUGGEST DELETE"],
@@ -159,7 +171,7 @@ export default function Triage() {
                     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                       <span className="mono" style={{ fontSize: 10, letterSpacing: ".1em",
                         textTransform: "uppercase", color: "var(--stone-400)" }}>
-                        {(m.received || "").slice(5, 16).replace("T", " ")}
+                        {fmtDT(m.received)}
                         {r && ` · ${r.category} · ${Math.round(r.confidence * 100)}%`}
                       </span>
                       {fl && fl.flag !== "none" && (
@@ -197,8 +209,19 @@ function DetailPane({ msg, result, flag }) {
   // All workflow state lives in the store, so a running preference screen or
   // draft generation keeps going when you navigate away and is here on return.
   const w = ts.getWork(msg.id);
-  const { screen, options, chosen = 0, draftBody = "", busy = "", notice, error } = w;
+  const { screen, options, chosen = 0, draftBody = "", notice, error } = w;
+  const busy = Array.isArray(w.busy) ? w.busy : [];
+  const isBusy = (k) => busy.includes(k);
   const approved = new Set(w.approved || []);
+
+  // Dropdown options for select/status/multi properties, per proposal kind.
+  const [dbOptions, setDbOptions] = React.useState({});
+  React.useEffect(() => {
+    (result?.proposals || []).forEach((p) => {
+      loadOptions(p.kind).then((o) =>
+        setDbOptions((prev) => (prev[p.kind] ? prev : { ...prev, [p.kind]: o })));
+    });
+  }, [result]);
 
   const setApproved = (next) => ts.setWork(msg.id, { approved: [...next] });
   const applyPlan = () => ts.applyPlan(msg);
@@ -232,7 +255,7 @@ function DetailPane({ msg, result, flag }) {
         </div>
         <div style={{ font: "400 24px/1.25 var(--serif)", color: "var(--ink-800)" }}>{msg.subject}</div>
         <div style={{ fontSize: "13.5px", color: "var(--stone-500)", margin: "6px 0 10px" }}>
-          {msg.sender_name} &lt;{msg.sender_email}&gt; · {msg.received}
+          {msg.sender_name} &lt;{msg.sender_email}&gt; · {fmtDT(msg.received)}
         </div>
         <p style={{ fontSize: "14.5px", lineHeight: 1.6, color: "var(--stone-600)",
                     maxWidth: "68ch", margin: 0, whiteSpace: "pre-wrap",
@@ -299,25 +322,58 @@ function DetailPane({ msg, result, flag }) {
                       </button>
                     </label>
                     <div style={{ marginLeft: 24, display: "grid",
-                      gridTemplateColumns: "130px 1fr", gap: "2px 12px", marginTop: 4 }}>
-                      {p.properties.map(([k, v]) => (
-                        <React.Fragment key={k}>
-                          <span className="microlabel" style={{ paddingTop: editing ? 6 : 0 }}>{k}</span>
-                          {editing ? (
-                            <input value={edits[k] ?? v}
-                              onChange={(e) => ts.setProposalEdit(msg.id, p.kind, k, e.target.value)}
-                              style={{ fontSize: "12.5px", padding: "4px 8px",
-                                       background: "var(--paper-050)",
-                                       border: "1px solid var(--paper-200)",
-                                       borderRadius: 4, color: "var(--ink-700)" }} />
-                          ) : (
-                            <span style={{ fontSize: "12.5px",
-                              color: k in edits ? "var(--teal-700)" : "inherit" }}>
-                              {edits[k] ?? v}
-                            </span>
-                          )}
-                        </React.Fragment>
-                      ))}
+                      gridTemplateColumns: "130px minmax(0,1fr)", gap: "2px 12px", marginTop: 4 }}>
+                      {p.properties.map(([k, v]) => {
+                        const value = edits[k] ?? v;
+                        const raw = p.raw_properties?.[k] || {};
+                        const opts = dbOptions[p.kind]?.[k];
+                        const isSelect = ("select" in raw || "status" in raw) && opts?.length;
+                        const isMulti = "multi_select" in raw && opts?.length;
+                        const fieldStyle = { fontSize: "12.5px", padding: "4px 8px",
+                                             background: "var(--paper-050)",
+                                             border: "1px solid var(--paper-200)",
+                                             borderRadius: 4, color: "var(--ink-700)",
+                                             width: "100%", fontFamily: "inherit",
+                                             lineHeight: 1.5 };
+                        return (
+                          <React.Fragment key={k}>
+                            <span className="microlabel" style={{ paddingTop: editing ? 6 : 0 }}>{k}</span>
+                            {!editing ? (
+                              <span style={{ fontSize: "12.5px", overflowWrap: "anywhere",
+                                whiteSpace: "pre-wrap", minWidth: 0,
+                                color: k in edits ? "var(--teal-700)" : "inherit" }}>
+                                {value}
+                              </span>
+                            ) : isSelect ? (
+                              <select value={value} style={fieldStyle}
+                                onChange={(e) => ts.setProposalEdit(msg.id, p.kind, k, e.target.value)}>
+                                {!opts.includes(value) && <option value={value}>{value}</option>}
+                                {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+                              </select>
+                            ) : isMulti ? (
+                              <span style={{ minWidth: 0 }}>
+                                <textarea rows={1} value={value} style={fieldStyle}
+                                  onChange={(e) => ts.setProposalEdit(msg.id, p.kind, k, e.target.value)} />
+                                <select value="" style={{ ...fieldStyle, width: "auto", marginTop: 3 }}
+                                  onChange={(e) => {
+                                    const cur = value ? value.split(",").map((x) => x.trim()) : [];
+                                    if (e.target.value && !cur.includes(e.target.value)) {
+                                      ts.setProposalEdit(msg.id, p.kind, k,
+                                        [...cur, e.target.value].join(", "));
+                                    }
+                                  }}>
+                                  <option value="">add an option…</option>
+                                  {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+                                </select>
+                              </span>
+                            ) : (
+                              <textarea value={value} style={fieldStyle}
+                                rows={Math.min(6, Math.max(1, Math.ceil((value || "").length / 70)))}
+                                onChange={(e) => ts.setProposalEdit(msg.id, p.kind, k, e.target.value)} />
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
                     </div>
 
                     {/* Possible duplicate: side-by-side against the existing
@@ -360,7 +416,7 @@ function DetailPane({ msg, result, flag }) {
                               Existing entry updated with the new details.
                             </span>
                           ) : (
-                            <Button variant="ghost" busy={busy === `update-${p.kind}`}
+                            <Button variant="ghost" busy={isBusy(`update-${p.kind}`)}
                               onClick={() => ts.updateExisting(msg, p)}>
                               Merge into the existing entry
                             </Button>
@@ -377,7 +433,7 @@ function DetailPane({ msg, result, flag }) {
               })}
               <div className="row" style={{ marginTop: 12, flexWrap: "wrap" }}>
                 {result.proposals?.length > 0 && (
-                  <Button variant="ghost" busy={busy === "apply"} disabled={!approved.size}
+                  <Button variant="ghost" busy={isBusy("apply")} disabled={!approved.size}
                     onClick={applyPlan}>
                     Create {approved.size} approved {approved.size === 1 ? "entry" : "entries"}
                   </Button>
@@ -389,7 +445,7 @@ function DetailPane({ msg, result, flag }) {
                        style={{ color: "var(--teal-700)" }}>open the note</a>
                   </span>
                 ) : !w.emailNote && (
-                  <Button variant="ghost" busy={busy === "emailnote"}
+                  <Button variant="ghost" busy={isBusy("emailnote")}
                     onClick={() => ts.previewEmailNote(msg)}>
                     Save email to Notion
                   </Button>
@@ -449,7 +505,7 @@ function DetailPane({ msg, result, flag }) {
                     ))}
                   </div>
                   <div className="row" style={{ marginTop: 12 }}>
-                    <Button variant="dark" busy={busy === "emailnote"}
+                    <Button variant="dark" busy={isBusy("emailnote")}
                       onClick={() => ts.saveEmailNote(msg)}>
                       Create the note
                     </Button>
@@ -468,9 +524,24 @@ function DetailPane({ msg, result, flag }) {
                 </span>
               )}>
               {!screen && (
-                <Button variant="ghost" busy={busy === "screen"} onClick={runScreen}>
-                  Run preference screen
-                </Button>
+                <div className="row" style={{ flexWrap: "wrap" }}>
+                  <Button variant="ghost" busy={isBusy("screen")} onClick={runScreen}>
+                    Run preference screen
+                  </Button>
+                  {!options && (
+                    <>
+                      <Button variant="dark"
+                        busy={isBusy("screen") || isBusy("drafts")}
+                        onClick={() => ts.runScreenAndDrafts(msg)}>
+                        Screen + draft replies together
+                      </Button>
+                      <span className="muted" style={{ fontSize: "12px" }}>
+                        Both run at once — if the drafts land first they are
+                        refreshed with the verdict when the screen finishes.
+                      </span>
+                    </>
+                  )}
+                </div>
               )}
               {screen && (
                 <>
@@ -497,7 +568,7 @@ function DetailPane({ msg, result, flag }) {
             <Step n={3} label="REPLY · DRAFT ONLY" state={options ? "done" : "current"} last>
               {!options && (
                 <>
-                  <Button variant="ghost" busy={busy === "drafts"} onClick={genDrafts}>
+                  <Button variant="ghost" busy={isBusy("drafts")} onClick={genDrafts}>
                     Generate reply options
                   </Button>
                   {!screen && (
@@ -526,7 +597,7 @@ function DetailPane({ msg, result, flag }) {
                       padding: "14px 16px",
                     }} />
                   <div className="row" style={{ marginTop: 10 }}>
-                    <Button variant="dark" busy={busy === "save"} onClick={saveDraft}>
+                    <Button variant="dark" busy={isBusy("save")} onClick={saveDraft}>
                       Save as draft in Outlook
                     </Button>
                     <span className="muted" style={{ fontSize: "12.5px" }}>

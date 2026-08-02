@@ -287,11 +287,56 @@ class NotionConnector:
                                 _fund_from_page, FundRecord, property_ids=pids)
 
     # -- reads: page text (CHAO preference pages, notes) ----------------- #
+
+    _PAGE_TEXT_TTL = 7 * 86400   # preference pages change rarely — weekly refresh
+
     def get_page_text(self, page_id: str, max_depth: int = 2) -> str:
-        """Return the plain-text content of a page (recursively, shallow)."""
+        """Return the plain-text content of a page (recursively, shallow).
+
+        Cached to disk with a weekly TTL: the CHAO preference pages back every
+        screen and change rarely, so re-walking their block trees per screen
+        was pure latency. `refresh_page_text_cache` drops the cache on demand.
+        """
         if not self.live:
             return _SAMPLE_PREF_TEXT.get(page_id, "")
-        return self._blocks_text(page_id, depth=0, max_depth=max_depth)
+        import time
+
+        store = self._disk_load()
+        cache = store.get("page_text", {})
+        hit = cache.get(page_id)
+        if hit and time.time() - hit.get("at", 0) < self._PAGE_TEXT_TTL:
+            return hit["text"]
+        text = self._blocks_text(page_id, depth=0, max_depth=max_depth)
+        if text:
+            cache[page_id] = {"text": text, "at": time.time()}
+            store["page_text"] = cache
+            self._disk_save(store)
+        return text
+
+    def database_options(self, db_id: str) -> dict:
+        """{property name: [option names]} for every select/status/multi_select
+        property of a database — feeds the edit dropdowns in the UI."""
+        if not self.live or not db_id:
+            return {}
+        import requests
+
+        resp = requests.get(f"{config.NOTION_BASE_URL}/databases/{db_id}",
+                            headers=self._headers(), timeout=60)
+        resp.raise_for_status()
+        out = {}
+        for name, prop in (resp.json().get("properties") or {}).items():
+            t = prop.get("type")
+            if t in ("select", "multi_select", "status"):
+                out[name] = [o["name"] for o in prop.get(t, {}).get("options", [])]
+        return out
+
+    def refresh_page_text_cache(self) -> int:
+        """Forget all cached page text (next read re-pulls). Returns count dropped."""
+        store = self._disk_load()
+        n = len(store.get("page_text", {}))
+        store["page_text"] = {}
+        self._disk_save(store)
+        return n
 
     def _blocks_text(self, block_id: str, depth: int, max_depth: int) -> str:
         import requests

@@ -444,6 +444,29 @@ def notion_apply(body: ApplyIn):
             "live": _notion.live}
 
 
+_OPTIONS_CACHE: dict = {}
+
+
+@app.get("/api/notion/options")
+def notion_options(kind: str):
+    """Select/status/multi-select options per property for a DB kind — cached
+    in memory for the process lifetime (schemas change rarely)."""
+    db_id = {"fund": config.NOTION_FUNDS_DB, "company": config.NOTION_COMPANIES_DB,
+             "contact": config.NOTION_CONTACTS_DB}.get(kind)
+    if kind not in _OPTIONS_CACHE:
+        try:
+            _OPTIONS_CACHE[kind] = _notion.database_options(db_id or "")
+        except Exception:  # noqa: BLE001 - dropdowns degrade to free text
+            _OPTIONS_CACHE[kind] = {}
+    return {"kind": kind, "options": _OPTIONS_CACHE[kind]}
+
+
+@app.post("/api/preferences/refresh")
+def refresh_preferences():
+    """Drop the cached CHAO preference-page text; the next screen re-pulls."""
+    return {"dropped": _notion.refresh_page_text_cache()}
+
+
 class UpdateExistingIn(BaseModel):
     page_id: str
     raw_properties: dict

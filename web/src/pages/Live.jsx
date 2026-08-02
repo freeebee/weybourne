@@ -4,7 +4,7 @@ import { get } from "../api.js";
 import * as live from "../liveStore.js";
 import {
   Banner, Button, Card, ErrorNote, Field, Mascot, PageHeader, SectionHead,
-  inputStyle,
+  fmtDate, fmtTime, inputStyle,
 } from "../ui.jsx";
 import { Markdown } from "./Prep.jsx";
 
@@ -42,7 +42,7 @@ function CalendarPick() {
       <option value="">— pick a meeting —</option>
       {events.map((e, i) => (
         <option key={i} value={i}>
-          {(e.start || "").slice(5, 16).replace("T", " ")} · {e.subject}
+          {fmtDate(e.start)} {fmtTime(e.start)} · {e.subject}
         </option>
       ))}
     </select>
