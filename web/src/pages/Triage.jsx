@@ -271,34 +271,70 @@ function DetailPane({ msg, result, flag }) {
                   </span>
                 </div>
               ))}
-              {result.proposals?.map((p) => (
-                <div key={p.kind} style={{ margin: "10px 0 0" }}>
-                  <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: "13.5px" }}>
-                    <input type="checkbox" checked={approved.has(p.kind)} onChange={(e) => {
-                      const next = new Set(approved);
-                      e.target.checked ? next.add(p.kind) : next.delete(p.kind);
-                      setApproved(next);
-                    }} />
-                    Create {p.kind}: <b>{p.title}</b>
-                    {p.needs_review && <Chip tone="caution">REVIEW</Chip>}
-                  </label>
-                  <div style={{ marginLeft: 24, display: "grid",
-                    gridTemplateColumns: "130px 1fr", gap: "2px 12px", marginTop: 4 }}>
-                    {p.properties.map(([k, v]) => (
-                      <React.Fragment key={k}>
-                        <span className="microlabel">{k}</span>
-                        <span style={{ fontSize: "12.5px" }}>{v}</span>
-                      </React.Fragment>
-                    ))}
+              {result.proposals?.map((p) => {
+                const editing = !!w.editing?.[p.kind];
+                const edits = w.edits?.[p.kind] || {};
+                return (
+                  <div key={p.kind} style={{ margin: "10px 0 0" }}>
+                    <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: "13.5px" }}>
+                      <input type="checkbox" checked={approved.has(p.kind)} onChange={(e) => {
+                        const next = new Set(approved);
+                        e.target.checked ? next.add(p.kind) : next.delete(p.kind);
+                        setApproved(next);
+                      }} />
+                      Create {p.kind}: <b>{edits.Name ?? p.title}</b>
+                      {p.needs_review && <Chip tone="caution">REVIEW</Chip>}
+                      <button onClick={(e) => { e.preventDefault(); ts.toggleProposalEdit(msg.id, p.kind); }}
+                        style={{ background: "none", border: "none", cursor: "pointer",
+                                 color: "var(--teal-700)", fontFamily: "var(--mono)",
+                                 fontSize: 10.5, letterSpacing: ".1em" }}>
+                        {editing ? "DONE" : "EDIT"}
+                      </button>
+                    </label>
+                    <div style={{ marginLeft: 24, display: "grid",
+                      gridTemplateColumns: "130px 1fr", gap: "2px 12px", marginTop: 4 }}>
+                      {p.properties.map(([k, v]) => (
+                        <React.Fragment key={k}>
+                          <span className="microlabel" style={{ paddingTop: editing ? 6 : 0 }}>{k}</span>
+                          {editing ? (
+                            <input value={edits[k] ?? v}
+                              onChange={(e) => ts.setProposalEdit(msg.id, p.kind, k, e.target.value)}
+                              style={{ fontSize: "12.5px", padding: "4px 8px",
+                                       background: "var(--paper-050)",
+                                       border: "1px solid var(--paper-200)",
+                                       borderRadius: 4, color: "var(--ink-700)" }} />
+                          ) : (
+                            <span style={{ fontSize: "12.5px",
+                              color: k in edits ? "var(--teal-700)" : "inherit" }}>
+                              {edits[k] ?? v}
+                            </span>
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-              {result.proposals?.length > 0 && (
-                <Button variant="ghost" busy={busy === "apply"} disabled={!approved.size}
-                  onClick={applyPlan} style={{ marginTop: 12 }}>
-                  Create {approved.size} approved {approved.size === 1 ? "entry" : "entries"}
-                </Button>
-              )}
+                );
+              })}
+              <div className="row" style={{ marginTop: 12, flexWrap: "wrap" }}>
+                {result.proposals?.length > 0 && (
+                  <Button variant="ghost" busy={busy === "apply"} disabled={!approved.size}
+                    onClick={applyPlan}>
+                    Create {approved.size} approved {approved.size === 1 ? "entry" : "entries"}
+                  </Button>
+                )}
+                {w.emailNoteUrl ? (
+                  <span className="muted" style={{ fontSize: "12.5px" }}>
+                    Saved to Notion —{" "}
+                    <a href={w.emailNoteUrl} target="_blank" rel="noreferrer"
+                       style={{ color: "var(--teal-700)" }}>open the note</a>
+                  </span>
+                ) : (
+                  <Button variant="ghost" busy={busy === "emailnote"}
+                    onClick={() => ts.saveEmailNote(msg)}>
+                    Save email to Notion
+                  </Button>
+                )}
+              </div>
             </Step>
 
             <Step n={2} label="PREFERENCE SCREEN" state={screen ? "done" : "current"}

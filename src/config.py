@@ -30,10 +30,14 @@ EXTRACTION_MODEL = os.environ.get("CLAUDE_EXTRACTION_MODEL", "claude-opus-4-8")
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
-# Model used by the connector feature modules (triage, screening, drafting,
-# meeting prep). Kept separate so the reasoning model can be tuned independently
-# of the extraction model.
+# Model used by the connector feature modules (screening, drafting, meeting
+# prep). Kept separate so the reasoning model can be tuned independently of the
+# extraction model.
 REASONING_MODEL = os.environ.get("CLAUDE_REASONING_MODEL", "claude-opus-4-8")
+
+# Fast model for mechanical classification (inbox triage, scan flags) — a
+# fraction of the latency of the reasoning model, ample for the task.
+FAST_MODEL = os.environ.get("CLAUDE_FAST_MODEL", "claude-haiku-4-5-20251001")
 
 # --------------------------------------------------------------------------- #
 # Model backend

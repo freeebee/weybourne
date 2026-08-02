@@ -266,7 +266,11 @@ class ClaudeCodeClient:
         # newline is invisible to the model and defuses it.
         if prompt.startswith("-"):
             prompt = "\n" + prompt
-        argv = [self.cli_path, "-p", prompt, "--output-format", "json"]
+        argv = [self.cli_path, "-p", prompt, "--output-format", "json",
+                # The app's model calls never use MCP tools, but the CLI would
+                # otherwise connect every configured connector (M365, Notion,
+                # Google …) on EVERY spawn — seconds of pure overhead per call.
+                "--mcp-config", '{"mcpServers":{}}', "--strict-mcp-config"]
         # NOTE: --bare is deliberately never passed; it skips OAuth and would
         # bypass the Claude account login this backend exists to use.
         if system:

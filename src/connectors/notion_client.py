@@ -378,17 +378,25 @@ class NotionConnector:
         return items
 
     # -- writes ----------------------------------------------------------- #
-    def create_page(self, db_id: str, properties: dict) -> dict:
-        """Create a page in a database. No-op preview in mock mode."""
+    def create_page(self, db_id: str, properties: dict,
+                    children: Optional[list] = None) -> dict:
+        """Create a page in a database. No-op preview in mock mode.
+
+        ``children`` are Notion block objects for the page body (e.g. the full
+        text of an email saved as a note).
+        """
         if not self.live:
             return {"id": "mock-page", "url": "https://notion.so/mock", "mock": True,
                     "properties_preview": properties}
         import requests
 
+        payload = {"parent": {"database_id": db_id}, "properties": properties}
+        if children:
+            payload["children"] = children[:100]   # Notion caps children per request
         resp = requests.post(
             f"{config.NOTION_BASE_URL}/pages",
             headers=self._headers(),
-            json={"parent": {"database_id": db_id}, "properties": properties},
+            json=payload,
             timeout=30,
         )
         resp.raise_for_status()

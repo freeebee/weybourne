@@ -155,6 +155,7 @@ def _triage_one(client, msg: EmailMessage, progress=None) -> dict:
         out["dedupe"] = {
             k: {"action": d.recommended_action, "name": d.name,
                 "match": d.best_match.matched_name if d.best_match else None,
+                "match_id": d.best_match.matched_id if d.best_match else None,
                 "score": d.best_match.score if d.best_match else None,
                 "reason": d.best_match.reason if d.best_match else None}
             for k, d in decisions.items()
@@ -191,26 +192,41 @@ def start_triage_job(body: TriageJobIn):
     client = _client()
 
     def work(job: dict):
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
         job["total"] = len(msgs)
         job["done"] = 0
         job["partial"] = {}
-        per_msg: list[float] = []
-        for msg in msgs:
-            _checkpoint(job)
+        t_start = time.time()
+
+        def one(msg: EmailMessage):
             job["current"] = msg.subject[:80]
-            t0 = time.time()
             try:
-                job["partial"][msg.id] = _triage_one(
+                return msg.id, _triage_one(
                     client, msg,
                     progress=lambda what: job.__setitem__("current", what[:90]))
             except (llm.ClaudeCodeAuthError, llm.ClaudeCodeRateLimited):
                 raise   # backend-level: stop the whole batch with a clear error
             except Exception as e:  # noqa: BLE001 - one bad message shouldn't stop the rest
-                job["partial"][msg.id] = {"error": str(e)[:200]}
-            per_msg.append(time.time() - t0)
-            job["done"] += 1
-            avg = sum(per_msg) / len(per_msg)
-            job["eta_override"] = int(job["elapsed"] + avg * (len(msgs) - job["done"]))
+                return msg.id, {"error": str(e)[:200]}
+
+        # Each triage is its own CLI process, so running three at once is a
+        # straight wall-clock win with no extra memory pressure to speak of.
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            futures = [pool.submit(one, m) for m in msgs]
+            try:
+                for fut in as_completed(futures):
+                    _checkpoint(job)
+                    mid, res = fut.result()
+                    job["partial"][mid] = res
+                    job["done"] += 1
+                    avg = (time.time() - t_start) / job["done"]
+                    job["eta_override"] = int(
+                        job["elapsed"] + avg * (len(msgs) - job["done"]))
+            except BaseException:
+                for f in futures:
+                    f.cancel()
+                raise
         job["current"] = ""
         return {"results": job["partial"]}
 
@@ -282,7 +298,7 @@ def inbox_flags(body: FlagsIn):
 
     def call():
         response = client.messages.create(
-            model=config.REASONING_MODEL,
+            model=config.FAST_MODEL,
             max_tokens=2000,
             system=FLAGS_PROMPT,
             output_config={"format": {"type": "json_schema", "schema": FLAGS_SCHEMA}},
@@ -298,17 +314,58 @@ def inbox_flags(body: FlagsIn):
 class ApplyIn(BaseModel):
     proposals: list[dict]
     approved_kinds: list[str]
+    # Per-kind user edits made in the UI: {"fund": {"Name": "…", …}, …}.
+    # Values are plain text; the payload type is preserved server-side.
+    edits: dict[str, dict[str, str]] = {}
 
 
 @app.post("/api/notion/apply")
 def notion_apply(body: ApplyIn):
-    props = [notion_sync.CreationProposal(
-        kind=p["kind"], db_id=p.get("db_id"), title=p["title"],
-        properties=p["raw_properties"], needs_review=p.get("needs_review", False),
-        review_reason=p.get("review_reason", ""),
-    ) for p in body.proposals]
+    props = []
+    for p in body.proposals:
+        raw = dict(p["raw_properties"])
+        for prop_name, value in (body.edits.get(p["kind"]) or {}).items():
+            if prop_name in raw:
+                raw[prop_name] = notion_sync.patch_property(raw[prop_name], value)
+        props.append(notion_sync.CreationProposal(
+            kind=p["kind"], db_id=p.get("db_id"), title=p["title"],
+            properties=raw, needs_review=p.get("needs_review", False),
+            review_reason=p.get("review_reason", ""),
+        ))
     res = notion_sync.apply_plan(props, _notion, approved_kinds=set(body.approved_kinds))
     return {"created": res.created, "skipped": res.skipped, "errors": res.errors,
+            "live": _notion.live}
+
+
+class SaveEmailNoteIn(BaseModel):
+    message: dict
+    summary: str = ""
+    company_name: str = ""
+    contact_ids: list[str] = []
+    company_ids: list[str] = []
+    fund_ids: list[str] = []
+
+
+@app.post("/api/notion/save-email")
+def notion_save_email(body: SaveEmailNoteIn):
+    """Save an email into the Notes DB following the workspace's convention
+    for notes with Note Type = Email (title "Email: <subject> — <sender> /
+    <company>", summary in Thoughts / Considerations, full text as the body,
+    relations to the matched records)."""
+    msg = EmailMessage.model_validate(body.message)
+    if _notion.live and not config.NOTION_NOTES_DB:
+        raise HTTPException(status_code=503, detail="NOTION_NOTES_DB is not configured")
+    props = notion_sync.email_note_properties(
+        subject=msg.subject, sender_name=msg.sender_name,
+        company_name=body.company_name,
+        received=msg.received, summary=body.summary,
+        contact_ids=body.contact_ids, company_ids=body.company_ids,
+        fund_ids=body.fund_ids,
+    )
+    children = notion_sync.email_note_children(msg.body or msg.body_preview)
+    page = _notion.create_page(config.NOTION_NOTES_DB or "mock-db", props,
+                               children=children)
+    return {"url": page.get("url", ""), "id": page.get("id", ""),
             "live": _notion.live}
 
 
@@ -344,7 +401,14 @@ def drafts(body: DraftIn):
                summary="No preference screen was run — keep the reply neutral on "
                        "fit; acknowledge, gather materials, and leave the door open.",
            ))
-    slots = _graph.find_free_slots(max_slots=4) if body.offer_slots else []
+    slots = []
+    if body.offer_slots:
+        try:
+            slots = _graph.find_free_slots(max_slots=4)
+        except Exception:
+            # A calendar hiccup must never block reply drafting — just
+            # draft without offering meeting slots.
+            slots = []
     options = _run(generate_draft_options, _client(), msg, entity, scr, slots)
     return {"options": [o.model_dump() for o in options]}
 
@@ -570,30 +634,49 @@ async def start_prep_job(
 
         result: dict = {"kind": "prep", "entity": name}
 
-        if want_screen:
-            _checkpoint(job)
-            job["stages"].append({"label": "Preference review",
-                                  "detail": "screening against the CHAO preference pages"})
+        def run_screen():
             entity = ExtractedEntity(
                 fund_name=name, company_name=company or "",
                 contact_email=email,
                 summary=(ctx.document_text[:600] or ctx.meeting_subject or name),
             )
-            screen_result = screen_opportunity(client, entity, [], _notion)
-            _checkpoint(job)
-            result["screen"] = screen_result.model_dump()
+            return screen_opportunity(client, entity, [], _notion).model_dump()
 
-        if want_brief:
+        def run_brief():
+            data = synthesize_briefing(client, ctx)
+            data["meeting_details"] = " · ".join(
+                x for x in (ctx.meeting_subject, ctx.meeting_time) if x)
+            return data
+
+        _checkpoint(job)
+        if want_screen and want_brief:
+            # Independent model calls — run them side by side rather than
+            # serially, which roughly halves the wall-clock for a full prep.
+            from concurrent.futures import ThreadPoolExecutor
+
+            job["stages"].append({
+                "label": "Preference review + briefing (in parallel)",
+                "detail": "screening against the CHAO pages while the "
+                          "briefing synthesises — typically 1–3 minutes",
+            })
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                f_screen = pool.submit(run_screen)
+                f_brief = pool.submit(run_brief)
+                result["screen"] = f_screen.result()
+                result["briefing"] = f_brief.result()
             _checkpoint(job)
+        elif want_screen:
+            job["stages"].append({"label": "Preference review",
+                                  "detail": "screening against the CHAO preference pages"})
+            result["screen"] = run_screen()
+            _checkpoint(job)
+        elif want_brief:
             job["stages"].append({
                 "label": "Synthesise the briefing",
                 "detail": "typically 1–3 minutes on the Claude account backend",
             })
-            data = synthesize_briefing(client, ctx)
+            result["briefing"] = run_brief()
             _checkpoint(job)
-            data["meeting_details"] = " · ".join(
-                x for x in (ctx.meeting_subject, ctx.meeting_time) if x)
-            result["briefing"] = data
 
         job["stages"].append({"label": "Done", "detail": ""})
         _save_prep(job, result)

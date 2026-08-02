@@ -202,13 +202,52 @@ export function genDrafts(msg) {
   });
 }
 
+/* Per-proposal edits: the user can change any property value before the
+   Notion entry is created. Stored as work.edits = {kind: {prop: value}}. */
+export function setProposalEdit(id, kind, prop, value) {
+  const w = workOf(id);
+  const edits = { ...(w.edits || {}) };
+  edits[kind] = { ...(edits[kind] || {}), [prop]: value };
+  setWork(id, { edits });
+}
+
+export function toggleProposalEdit(id, kind) {
+  const w = workOf(id);
+  const editing = { ...(w.editing || {}) };
+  editing[kind] = !editing[kind];
+  setWork(id, { editing });
+}
+
 export function applyPlan(msg) {
   const r = S.results[msg.id];
   return workCall(msg.id, "apply", async (w) => {
     const res = await post("/api/notion/apply",
-      { proposals: r.proposals, approved_kinds: w.approved || [] });
+      { proposals: r.proposals, approved_kinds: w.approved || [],
+        edits: w.edits || {} });
     setWork(msg.id, {
       notice: `Created: ${res.created.map((c) => c[0]).join(", ") || "none"}.`
+        + (res.live ? "" : " (Demo mode — nothing was actually written.)"),
+    });
+  });
+}
+
+export function saveEmailNote(msg) {
+  const r = S.results[msg.id];
+  const d = r?.dedupe || {};
+  const linked = (kind) =>
+    d[kind]?.action === "link_existing" && d[kind]?.match_id ? [d[kind].match_id] : [];
+  return workCall(msg.id, "emailnote", async () => {
+    const res = await post("/api/notion/save-email", {
+      message: msg,
+      summary: r?.entity?.summary || r?.rationale || "",
+      company_name: r?.entity?.company_name || "",
+      contact_ids: linked("contact"),
+      company_ids: linked("company"),
+      fund_ids: linked("fund"),
+    });
+    setWork(msg.id, {
+      emailNoteUrl: res.url,
+      notice: "Email saved to Notion as a note (Note Type: Email)."
         + (res.live ? "" : " (Demo mode — nothing was actually written.)"),
     });
   });

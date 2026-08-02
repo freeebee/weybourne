@@ -504,11 +504,20 @@ def _in_main_inbox(record: dict) -> bool:
     return folder.strip().lower() in _INBOX_FOLDER_NAMES
 
 
+def _naive_local(value: dt.datetime) -> dt.datetime:
+    """Normalise to naive local time — live Graph/MCP data carries offsets,
+    sample data doesn't, and mixing the two breaks comparisons."""
+    if value.tzinfo is not None:
+        value = value.astimezone().replace(tzinfo=None)
+    return value
+
+
 def _parse_busy(events: list[CalendarEvent]) -> list[tuple[dt.datetime, dt.datetime]]:
     intervals = []
     for e in events:
         try:
-            intervals.append((dt.datetime.fromisoformat(e.start), dt.datetime.fromisoformat(e.end)))
+            intervals.append((_naive_local(dt.datetime.fromisoformat(e.start)),
+                              _naive_local(dt.datetime.fromisoformat(e.end))))
         except (ValueError, TypeError):
             continue
     return intervals

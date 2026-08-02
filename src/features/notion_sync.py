@@ -118,6 +118,82 @@ def fund_properties(entity: ExtractedEntity, comments: str = "") -> dict:
     return props
 
 
+def patch_property(payload: dict, value: str) -> dict:
+    """Rebuild a property payload with a user-edited value, keeping its type.
+
+    Lets the UI expose proposals as editable plain text without knowing the
+    Notion payload shapes.
+    """
+    if "title" in payload:
+        return _title_prop(value)
+    if "rich_text" in payload:
+        return _rich_prop(value)
+    if "email" in payload:
+        return {"email": value or None}
+    if "select" in payload:
+        return {"select": {"name": value}} if value else {"select": None}
+    if "status" in payload:
+        return {"status": {"name": value}} if value else payload
+    if "multi_select" in payload:
+        return _multi_prop([v.strip() for v in value.split(",")])
+    return payload
+
+
+# --------------------------------------------------------------------------- #
+# Email notes
+# --------------------------------------------------------------------------- #
+# Convention observed in the live Notes DB (Note Type = "Email"):
+#   Name (title)      — "Email: <subject> — <sender> / <company>"
+#   Note Type         — select "Email"
+#   Date              — the day the email was received
+#   Thoughts / Considerations — a short summary of what the email says
+#   Attendees / 🏢 Companies / Fund — relations to the matched records
+#   Page body         — the full email text as paragraphs
+
+COMPANIES_RELATION_PROP = "\U0001f3e2 Companies"   # the DB property name includes the glyph
+
+
+def email_note_properties(subject: str, sender_name: str, company_name: str,
+                          received: str, summary: str,
+                          contact_ids: list[str] | None = None,
+                          company_ids: list[str] | None = None,
+                          fund_ids: list[str] | None = None) -> dict:
+    who = " / ".join(x for x in (sender_name, company_name) if x)
+    title = f"Email: {subject}" + (f" — {who}" if who else "")
+    props = {
+        "Name": _title_prop(title),
+        "Note Type": {"select": {"name": "Email"}},
+        "Thoughts / Considerations": _rich_prop(summary),
+    }
+    if received:
+        props["Date"] = {"date": {"start": received[:10]}}
+    if contact_ids:
+        props["Attendees"] = {"relation": [{"id": i} for i in contact_ids]}
+    if company_ids:
+        props[COMPANIES_RELATION_PROP] = {"relation": [{"id": i} for i in company_ids]}
+    if fund_ids:
+        props["Fund"] = {"relation": [{"id": i} for i in fund_ids]}
+    return props
+
+
+def email_note_children(body_text: str, max_blocks: int = 60) -> list[dict]:
+    """The email body as paragraph blocks (Notion caps rich_text at 2000 chars)."""
+    blocks = []
+    for para in (body_text or "").replace("\r\n", "\n").split("\n"):
+        para = para.strip()
+        if not para:
+            continue
+        while para and len(blocks) < max_blocks:
+            chunk, para = para[:1800], para[1800:]
+            blocks.append({
+                "object": "block", "type": "paragraph",
+                "paragraph": {"rich_text": [{"text": {"content": chunk}}]},
+            })
+        if len(blocks) >= max_blocks:
+            break
+    return blocks
+
+
 def describe_properties(props: dict) -> list[tuple[str, str]]:
     """Human-readable (property, value) pairs for a proposal's Notion payload.
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 
-from src.config import REASONING_MODEL
+from src.config import FAST_MODEL
 from src.schemas import EmailMessage, ExtractedEntity, InvestmentTriage
 
 TRIAGE_SCHEMA = {
@@ -111,7 +111,7 @@ def triage_email(client, email: EmailMessage) -> InvestmentTriage:
         f"{email.body or email.body_preview}"
     )
     response = client.messages.create(
-        model=REASONING_MODEL,
+        model=FAST_MODEL,
         max_tokens=1500,
         system=TRIAGE_SYSTEM_PROMPT,
         output_config={"format": {"type": "json_schema", "schema": TRIAGE_SCHEMA}},
