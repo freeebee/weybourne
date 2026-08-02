@@ -174,8 +174,8 @@ export default function Prep() {
             || (tab === "name" && !typedName)
             || (tab === "deck" && !deck)}
           onClick={() => {
-            if (tab === "calendar") prepare({ name: ev.counterparty_name, email: ev.counterparty_email, event: JSON.stringify(ev) });
-            else if (tab === "name") prepare({ name: typedName, company: typedCompany });
+            if (tab === "calendar") prepare({ name: ev.counterparty_name, email: ev.counterparty_email, event: JSON.stringify(ev) }, deck || undefined);
+            else if (tab === "name") prepare({ name: typedName, company: typedCompany }, deck || undefined);
             else prepare({ name: deckName || deck.name.replace(/\.[^.]+$/, "") }, deck);
           }}>
           Prepare
@@ -209,6 +209,10 @@ export default function Prep() {
                 </div>
               ))}
               </div>
+              <Field label="DECK OR TEARSHEET (OPTIONAL, PDF)" style={{ marginTop: 12 }}
+                hint="Attached to the selected meeting's briefing.">
+                <input type="file" accept=".pdf" onChange={(e) => setDeck(e.target.files[0])} />
+              </Field>
             </>
           )}
           {tab === "name" && (

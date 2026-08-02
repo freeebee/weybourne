@@ -29,10 +29,8 @@ function CalendarPick() {
       setIdx(e.target.value);
       const ev = events[+e.target.value];
       if (ev) {
-        live.set({
-          who: ev.counterparty_name || ev.subject,
-          goal: live.S.goal || ev.subject,
-        });
+        // Only "who" is filled from the calendar — the goal box is yours.
+        live.set({ who: ev.counterparty_name || ev.subject });
         // Pull in the key questions saved for this meeting's counterparty.
         let n = await live.loadKeyQuestions(ev.counterparty_name);
         if (!n && ev.subject) n = await live.loadKeyQuestions(ev.subject);
@@ -126,7 +124,8 @@ export default function Live() {
               <input value={s.who} onChange={(e) => live.set({ who: e.target.value })}
                 placeholder="Axiom Asia, Fund VII" style={inputStyle} />
             </Field>
-            <Field label="WHAT YOU WANT OUT OF IT" style={{ flex: "2 1 300px" }}>
+            <Field label="WHAT YOU WANT OUT OF IT" style={{ flex: "2 1 300px" }}
+              hint="Steers the AI: suggested questions, recaps and the final note all weigh what you say here.">
               <input value={s.goal} onChange={(e) => live.set({ goal: e.target.value })}
                 placeholder="e.g. re-up decision — test the capacity story" style={inputStyle} />
             </Field>

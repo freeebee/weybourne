@@ -155,8 +155,6 @@ export default function WhatsNew() {
         </section>
       </div>
 
-      {/* Meetings + insights — kept from the previous design (not in the handoff,
-          preserved so nothing the digest produces is lost). */}
       {t && (
         <>
           {t.key_insights?.length > 0 && (
@@ -168,41 +166,25 @@ export default function WhatsNew() {
                   <span className="mono" style={{ fontSize: 11, color: "var(--teal-600)" }}>
                     {String(i + 1).padStart(2, "0")}
                   </span>
-                  <span style={{ fontSize: "14px", lineHeight: 1.55 }}>{k}</span>
+                  <span style={{ fontSize: "14px", lineHeight: 1.6, maxWidth: "78ch" }}>{k}</span>
                 </div>
               ))}
             </section>
           )}
-          {t.investment_updates?.length > 0 && (
+          {t.meeting_highlights?.length > 0 && (
             <section style={{ marginTop: 34 }}>
-              <SectionHead label="MEETINGS TAKEN" right={String(t.investment_updates.length)} />
-              <div style={{ display: "grid",
-                gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: "0 36px" }}>
-                {t.investment_updates.map((u, i) => (
-                  <div key={i} className="rrow">
-                    <div className="spread">
-                      <b style={{ fontSize: "14.5px" }}>{u.title}</b>
-                      <span className="mono" style={{ fontSize: 11, color: "var(--stone-400)" }}>{u.date}</span>
-                    </div>
-                    <p style={{ fontSize: "13.5px", lineHeight: 1.55, margin: "5px 0 0" }}>{u.insight}</p>
-                    {u.follow_up && (
-                      <p className="muted" style={{ fontSize: "12.5px", margin: "4px 0 0" }}>
-                        Follow-up: {u.follow_up}
-                      </p>
-                    )}
+              <SectionHead label="MEETING HIGHLIGHTS · THE ONES WORTH READING"
+                right={String(t.meeting_highlights.length)} />
+              {t.meeting_highlights.map((u, i) => (
+                <div key={i} className="rrow" style={{ borderLeft: "2px solid var(--teal-500)",
+                                                       paddingLeft: 14, marginBottom: 12 }}>
+                  <div className="spread">
+                    <b style={{ fontSize: "15px" }}>{u.title}</b>
+                    <span className="mono" style={{ fontSize: 11, color: "var(--stone-400)" }}>{u.date}</span>
                   </div>
-                ))}
-              </div>
-            </section>
-          )}
-          {t.interesting_points?.length > 0 && (
-            <section style={{ marginTop: 34 }}>
-              <SectionHead label="WORTH REPEATING" />
-              {t.interesting_points.map((x, i) => (
-                <p key={i} style={{ font: "italic 400 15.5px/1.6 var(--serif)",
-                  borderLeft: "2px solid var(--teal-500)", paddingLeft: 14, margin: "0 0 10px" }}>
-                  {x}
-                </p>
+                  <p style={{ fontSize: "14px", lineHeight: 1.6, margin: "6px 0 0",
+                              maxWidth: "80ch" }}>{u.highlight}</p>
+                </div>
               ))}
             </section>
           )}

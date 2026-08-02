@@ -17,23 +17,9 @@ from src.config import REASONING_MODEL, SHARED_MAILBOX, WHATS_NEW_LOOKBACK_DAYS
 TEAM_SCHEMA = {
     "type": "object",
     "properties": {
-        "headline": {"type": "string", "description": "One sentence on the week"},
-        "investment_updates": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string", "description": "Meeting / note title"},
-                    "date": {"type": "string"},
-                    "insight": {"type": "string",
-                                "description": "The key takeaway, one or two sentences, "
-                                               "figures kept"},
-                    "follow_up": {"type": "string", "description": "Outstanding action, empty if none"},
-                },
-                "required": ["title", "date", "insight", "follow_up"],
-                "additionalProperties": False,
-            },
-        },
+        "headline": {"type": "string",
+                     "description": "Two or three sentences on the week — what happened "
+                                    "and what it means, not a table of contents"},
         "operational_updates": {
             "type": "array",
             "items": {
@@ -50,38 +36,57 @@ TEAM_SCHEMA = {
         "key_insights": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "3-5 cross-meeting insights on the investments side: patterns, "
-                           "shifts in view, where conviction moved and why. Synthesis, not "
-                           "a restatement of individual meetings.",
+            "description": "4-7 substantive cross-meeting insights on the investments "
+                           "side: patterns, shifts in view, where conviction moved and "
+                           "why, capacity/pricing signals. Two or three full sentences "
+                           "each, figures and names kept. Synthesis, not a restatement.",
         },
-        "interesting_points": {
+        "meeting_highlights": {
             "type": "array",
-            "items": {"type": "string"},
-            "description": "Notable one-liners worth repeating — a figure, a claim, a "
-                           "market observation someone made. Attribute the meeting it "
-                           "came from.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Meeting / note title"},
+                    "date": {"type": "string"},
+                    "highlight": {"type": "string",
+                                  "description": "Why this one is interesting: the claim, "
+                                                 "figure, or judgement that stood out and "
+                                                 "what it implies. Three to five full "
+                                                 "sentences with the specifics kept."},
+                },
+                "required": ["title", "date", "highlight"],
+                "additionalProperties": False,
+            },
+            "description": "The MOST INTERESTING meetings of the week, chosen not listed "
+                           "— a striking figure, a contrarian view, a capacity signal, a "
+                           "relationship development. Skip routine catch-ups.",
         },
     },
-    "required": ["headline", "investment_updates", "operational_updates",
-                 "key_insights", "interesting_points"],
+    "required": ["headline", "operational_updates", "key_insights",
+                 "meeting_highlights"],
     "additionalProperties": False,
 }
 
 TEAM_SYSTEM_PROMPT = """You prepare the weekly "what's going on in the team" digest for \
-Weybourne's Financial Investments team.
+Weybourne's Financial Investments team. The reader missed the week entirely — this brief \
+must genuinely catch them up, not gesture at what happened. Err towards MORE substance: \
+every figure, name, fund term, date and geography in the source material that matters \
+should survive into the digest.
 
 From the supplied Notion activity, produce:
-- investment_updates: one entry per substantive meeting/note, newest first. The insight is \
-the judgement or fact that matters — figures, names and terms kept, no filler. Note real \
-follow-ups only.
+- headline: two or three sentences that say what actually happened this week and what it \
+means for the pipeline — not a list of section names.
 - operational_updates: from the execution dashboard items, classify each as new, completed \
 or in progress. Keep detail to one line.
 - key_insights: step back from the individual meetings and synthesise what the week says on \
 the investments side — recurring themes across managers, where the team's conviction moved, \
-capacity or pricing signals, anything that changes how the pipeline should be read. These \
-must add something the per-meeting entries don't already say.
-- interesting_points: the remarks worth repeating around the desk — a striking figure, a \
-contrarian claim, a market observation — each attributed to the meeting it came from.
+capacity or pricing signals, anything that changes how the pipeline should be read. Two or \
+three full sentences each, grounded in the specifics. These must add something the meeting \
+highlights don't already say.
+- meeting_highlights: choose the genuinely interesting meetings — a striking figure, a \
+contrarian claim, a capacity opening, a relationship development — and for each write three \
+to five sentences: what was discussed, the notable specifics, and why it matters to us. \
+Skip routine internal catch-ups and administrative notes; choosing well is the point.
 
 Voice: measured, precise, plain financial English, sentence case, no hype, no emoji. \
 British English. Never invent an item not present in the input."""
@@ -161,7 +166,7 @@ def team_whats_new(client, notion, days: int = WHATS_NEW_LOOKBACK_DAYS) -> dict:
     )
     response = client.messages.create(
         model=REASONING_MODEL,
-        max_tokens=2500,
+        max_tokens=4500,
         system=TEAM_SYSTEM_PROMPT,
         output_config={"format": {"type": "json_schema", "schema": TEAM_SCHEMA}},
         messages=[{"role": "user", "content": user}],
