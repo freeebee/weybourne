@@ -236,6 +236,11 @@ class ClaudeCodeClient:
     # -- the adapter ------------------------------------------------------ #
     def _build_argv(self, system: Optional[str], prompt: str, schema: Optional[dict],
                     model: Optional[str], needs_read: bool) -> list[str]:
+        # A prompt that begins with "-" (e.g. a markdown bullet list) would be
+        # parsed by the CLI's option parser as an unknown flag. A leading
+        # newline is invisible to the model and defuses it.
+        if prompt.startswith("-"):
+            prompt = "\n" + prompt
         argv = [self.cli_path, "-p", prompt, "--output-format", "json"]
         # NOTE: --bare is deliberately never passed; it skips OAuth and would
         # bypass the Claude account login this backend exists to use.
