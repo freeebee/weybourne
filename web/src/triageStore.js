@@ -32,7 +32,7 @@ export async function scan() {
     const data = await get(`/api/inbox?days=${S.days}&top=${S.top}`);
     S.messages = data.messages;
     S.notionLive = data.notion_live;
-    S.selected = new Set(data.messages.map((m) => m.id));
+    S.selected = new Set();   // nothing pre-selected — you choose what to triage
     S.activeId = data.messages[0]?.id ?? null;
     setInboxCount(data.messages.length);
     emit();
@@ -52,13 +52,8 @@ async function fetchFlags() {
       })),
     });
     S.flags = Object.fromEntries(flags.map((f) => [f.id, f]));
-    // Suggested selection: triage + priority in; delete / shared / none out.
-    S.selected = new Set(S.messages
-      .filter((m) => ["triage", "priority"].includes(S.flags[m.id]?.flag))
-      .map((m) => m.id));
-    if (!S.selected.size) S.selected = new Set(S.messages.map((m) => m.id));
+    // Flags are suggestions only — selection stays yours.
   } catch (e) {
-    // Flags are advisory — a failure leaves everything selected.
     S.error = `Quick flags unavailable: ${e.message}`;
   }
   S.flagsBusy = false; emit();

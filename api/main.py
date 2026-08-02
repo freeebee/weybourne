@@ -236,7 +236,8 @@ FLAGS_SCHEMA = {
                 "properties": {
                     "id": {"type": "string"},
                     "flag": {"type": "string",
-                             "enum": ["delete", "shared", "triage", "priority", "none"]},
+                             "enum": ["delete", "no_response", "shared", "triage",
+                                      "read", "respond", "none"]},
                     "reason": {"type": "string", "description": "Five words or fewer"},
                 },
                 "required": ["id", "flag", "reason"],
@@ -251,12 +252,16 @@ FLAGS_SCHEMA = {
 FLAGS_PROMPT = """You pre-sort a Weybourne investment inbox. For each message, one flag:
 - "delete" — marketing, webcast replays, event blasts, system reminders (Concur etc.), \
 newsletters with no specific opportunity.
+- "no_response" — legitimate mail that requires nothing from the user (confirmations, \
+FYIs, thank-yous closing a thread) and can be deleted or filed without action.
 - "shared" — manager updates, LP letters, research and market commentary that belong in \
 the shared investments mailbox rather than a personal one.
 - "triage" — inbound from a manager or intermediary about a fund, deal, meeting or \
 introduction: the ones worth running full triage on.
-- "priority" — personal or internal mail addressed to the user needing their own reply \
-(colleagues, direct 1:1 scheduling, references).
+- "read" — worth the user's attention to read (relevant analysis, a reference reply, \
+meaningful context) but no reply needed.
+- "respond" — addressed to the user and needing their own reply: colleagues, direct 1:1 \
+scheduling, questions put to them personally.
 - "none" — anything that fits nothing above.
 Judge from sender + subject + preview only. Reply for every message."""
 
@@ -548,8 +553,8 @@ async def start_prep_job(
         # looks stuck on "Resolve the counterparty".
         job["stages"].append({
             "label": "Read Notion records",
-            "detail": ("cold cache — the first read of the workspace can take a few "
-                       "minutes; later runs are instant for 10 minutes"
+            "detail": ("syncing changes since the last run — only the first-ever "
+                       "sync pulls the whole workspace"
                        if _notion.live else "sample data"),
         })
         ctx = build_context(

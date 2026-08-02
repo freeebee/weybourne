@@ -136,6 +136,7 @@ hr.rule{border:0;border-top:1px solid var(--paper-200);margin:1.6rem 0}
 .chip.caution{background:var(--caution-100);color:var(--caution-600)}
 .chip.positive{background:var(--positive-100);color:var(--positive-600)}
 .chip.neutral{background:var(--paper-100);color:var(--stone-500)}
+.chip.critical{background:var(--critical-100);color:var(--critical-600)}
 .chip.bare-rec{color:var(--positive-600)}
 
 /* ---- Inputs --------------------------------------------------------------- */

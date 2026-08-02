@@ -7,9 +7,12 @@ import {
 
 const FLAG_META = {
   delete: ["critical", "SUGGEST DELETE"],
+  no_response: ["critical", "NO RESPONSE NEEDED · SUGGEST DELETE"],
   shared: ["neutral", "TO SHARED INBOX"],
   triage: ["teal", "TRIAGE"],
-  priority: ["caution", "PRIORITY"],
+  read: ["neutral", "SUGGEST READING"],
+  respond: ["caution", "NEEDS RESPONSE"],
+  priority: ["caution", "PRIORITY"],   // legacy value, still rendered
 };
 
 export default function Triage() {

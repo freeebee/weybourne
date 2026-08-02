@@ -115,8 +115,27 @@ export default function Prep() {
         Runs in the background — leave and come back.
       </PageHeader>
 
+      {/* Outputs — up top so there's no scrolling to find them. */}
+      <div className="row" style={{ margin: "0 0 18px", gap: 22,
+        borderBottom: "1px solid var(--paper-200)", paddingBottom: 14, flexWrap: "wrap" }}>
+        <span className="microlabel">OUTPUTS</span>
+        <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: "13.5px" }}>
+          <input type="checkbox" checked={wantBrief} onChange={(e) => setWantBrief(e.target.checked)} />
+          Full DD briefing
+        </label>
+        <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: "13.5px" }}>
+          <input type="checkbox" checked={wantScreen} onChange={(e) => setWantScreen(e.target.checked)} />
+          Preference screen (Notion CHAO pages)
+        </label>
+        {nothingPicked && (
+          <span style={{ fontSize: "12.5px", color: "var(--caution-600)" }}>
+            Pick at least one output.
+          </span>
+        )}
+      </div>
+
       <div className="panes">
-        {/* Left pane — source + outputs */}
+        {/* Left pane — source */}
         <div style={{ flex: "1 1 300px", maxWidth: 400, minWidth: "min(100%,280px)" }}>
           {tab === "calendar" && (
             <>
@@ -167,17 +186,7 @@ export default function Prep() {
           )}
 
           <div style={{ marginTop: 18, borderTop: "1px solid var(--paper-200)", paddingTop: 14 }}>
-            <span className="microlabel" style={{ display: "block", marginBottom: 8 }}>OUTPUTS</span>
-            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: "13.5px", marginBottom: 6 }}>
-              <input type="checkbox" checked={wantBrief} onChange={(e) => setWantBrief(e.target.checked)} />
-              Full DD briefing
-            </label>
-            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: "13.5px" }}>
-              <input type="checkbox" checked={wantScreen} onChange={(e) => setWantScreen(e.target.checked)} />
-              Preference screen (Notion CHAO pages)
-            </label>
-            {nothingPicked && <Banner tone="warning">Pick at least one output.</Banner>}
-            <Button style={{ marginTop: 14 }}
+            <Button
               disabled={nothingPicked
                 || (tab === "calendar" && !ev)
                 || (tab === "name" && !typedName)

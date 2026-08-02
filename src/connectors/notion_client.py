@@ -86,10 +86,16 @@ _SAMPLE_EXECUTION_ITEMS = [
 # --------------------------------------------------------------------------- #
 
 class NotionConnector:
-    # The live workspace holds ~10k contacts / ~8k companies; a full paginated
-    # pull takes tens of seconds. Dedupe hits all three lists per message, so
-    # live list results are cached for a short window.
-    _LIST_CACHE_TTL = 600  # seconds
+    # The live workspace holds ~10k contacts / ~8k companies. Full pulls take
+    # minutes, so three layers keep reads fast:
+    #   1. an in-memory cache (10 min) for within-process speed,
+    #   2. a persistent disk snapshot (data/notion_cache.json) so restarts
+    #      don't re-pull the workspace,
+    #   3. delta sync — only pages edited since the last sync are fetched and
+    #      merged into the snapshot. A full re-pull happens if the snapshot is
+    #      older than 7 days (deltas can't see deletions/archives).
+    _LIST_CACHE_TTL = 600        # seconds, in-memory
+    _FULL_REFRESH_AFTER = 7 * 86400  # seconds, disk snapshot age forcing full pull
 
     def __init__(self):
         self.live = config.notion_configured()
@@ -104,6 +110,68 @@ class NotionConnector:
         value = loader()
         self._list_cache[key] = (time.time(), value)
         return value
+
+    # -- persistent snapshot + delta sync --------------------------------- #
+
+    _DISK_PATH = config.BASE_DIR / "data" / "notion_cache.json"
+
+    def _disk_load(self) -> dict:
+        import json
+        try:
+            return json.loads(self._DISK_PATH.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 - absent or corrupt → start fresh
+            return {}
+
+    def _disk_save(self, store: dict) -> None:
+        import json
+        try:
+            self._DISK_PATH.parent.mkdir(parents=True, exist_ok=True)
+            self._DISK_PATH.write_text(json.dumps(store, ensure_ascii=False),
+                                       encoding="utf-8")
+        except Exception:  # noqa: BLE001 - a failed save just means a re-pull later
+            pass
+
+    def _collection(self, key: str, db_id: str, parse, model,
+                    property_ids: Optional[list] = None) -> list:
+        """Load a big collection via memory → disk snapshot → delta sync."""
+        import datetime as dt
+        import time
+
+        def load():
+            store = self._disk_load()
+            entry = store.get(key)
+            pull_started = dt.datetime.now(dt.timezone.utc).isoformat()
+
+            fresh_enough = (
+                entry
+                and (time.time() - entry.get("saved_epoch", 0)) < self._FULL_REFRESH_AFTER
+            )
+            if fresh_enough:
+                # Delta: only pages edited since the last sync.
+                pages = self._query_db(
+                    db_id,
+                    filter_payload={"timestamp": "last_edited_time",
+                                    "last_edited_time":
+                                        {"on_or_after": entry["synced_at"]}},
+                    property_ids=property_ids,
+                )
+                records = {r["id"]: r for r in entry["records"]}
+                for p in pages:
+                    parsed = parse(p).model_dump()
+                    records[parsed.get("id") or p["id"]] = parsed
+                merged = list(records.values())
+            else:
+                pages = self._query_db(db_id, property_ids=property_ids)
+                merged = [parse(p).model_dump() for p in pages]
+
+            store[key] = {"synced_at": pull_started,
+                          "saved_epoch": entry.get("saved_epoch", time.time())
+                              if fresh_enough else time.time(),
+                          "records": merged}
+            self._disk_save(store)
+            return [model(**r) for r in merged]
+
+        return self._cached(key, load)
 
     # -- low-level -------------------------------------------------------- #
     def _headers(self) -> dict:
@@ -197,30 +265,26 @@ class NotionConnector:
     def list_contacts(self) -> list[ContactRecord]:
         if not self.live or not config.NOTION_CONTACTS_DB:
             return list(_SAMPLE_CONTACTS)
-        return self._cached("contacts", lambda: [
-            _contact_from_page(p) for p in self._query_db(config.NOTION_CONTACTS_DB)])
+        return self._collection("contacts", config.NOTION_CONTACTS_DB,
+                                _contact_from_page, ContactRecord)
 
     def list_companies(self) -> list[CompanyRecord]:
         if not self.live or not config.NOTION_COMPANIES_DB:
             return list(_SAMPLE_COMPANIES)
-        return self._cached("companies", lambda: [
-            _company_from_page(p) for p in self._query_db(config.NOTION_COMPANIES_DB)])
+        return self._collection("companies", config.NOTION_COMPANIES_DB,
+                                _company_from_page, CompanyRecord)
 
     def list_funds(self) -> list[FundRecord]:
         if not self.live or not config.NOTION_FUNDS_DB:
             return list(_SAMPLE_FUNDS)
-
-        def load():
-            # Only the properties the app reads: the Funds DB has computed
-            # properties that 500 inside Notion when evaluated for some rows.
-            pids = self._property_ids(config.NOTION_FUNDS_DB, [
-                "Fund Name", "Name", "Asset Class", "Geographic Focus",
-                "Strategy Description", "Status", "Company Name",
-            ])
-            return [_fund_from_page(p)
-                    for p in self._query_db(config.NOTION_FUNDS_DB,
-                                            property_ids=pids)]
-        return self._cached("funds", load)
+        # Only the properties the app reads: the Funds DB has computed
+        # properties that 500 inside Notion when evaluated for some rows.
+        pids = self._property_ids(config.NOTION_FUNDS_DB, [
+            "Fund Name", "Name", "Asset Class", "Geographic Focus",
+            "Strategy Description", "Status", "Company Name",
+        ])
+        return self._collection("funds", config.NOTION_FUNDS_DB,
+                                _fund_from_page, FundRecord, property_ids=pids)
 
     # -- reads: page text (CHAO preference pages, notes) ----------------- #
     def get_page_text(self, page_id: str, max_depth: int = 2) -> str:
