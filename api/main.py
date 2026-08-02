@@ -1112,6 +1112,9 @@ threading.Thread(target=_warm_notion_cache, daemon=True).start()
 _M365_READONLY_TOOLS = ",".join([
     "mcp__claude_ai_Microsoft_365__outlook_email_search",
     "mcp__claude_ai_Microsoft_365__outlook_calendar_search",
+    # The search tool caps bodies at ~250 chars; read_resource fetches the
+    # complete message so triage and saved notes see the full email.
+    "mcp__claude_ai_Microsoft_365__read_resource",
 ])
 
 _MCP_PREAMBLE = """The claude.ai Microsoft 365 connector may still be connecting when you
@@ -1126,7 +1129,13 @@ _EMAIL_SHAPE = """[{"id": str, "subject": str, "sender_name": str,
 "sender_email": str, "received": ISO8601 str, "body_preview": str (~200 chars),
 "body": str (the COMPLETE plain-text body of the message — do not truncate,
 summarise, or abbreviate it; include signatures), "has_attachments": bool,
-"folder": "Inbox"}]"""
+"folder": "Inbox"}]
+
+IMPORTANT: the email search tool returns only a ~250-character preview of each
+body. That is NOT the complete body. For EVERY message in the result, fetch the
+full content with the read_resource tool (each search result carries a resource
+URI) and put the complete plain text in "body". Only fall back to the preview
+for a message whose full read fails."""
 
 _REFRESH_PARTS = {
     "inbox": (_MCP_PREAMBLE
@@ -1165,7 +1174,8 @@ def start_outlook_refresh():
                 [cli, "-p", prompt.replace("{shared}", config.SHARED_MAILBOX),
                  "--allowedTools", _M365_READONLY_TOOLS + ",ToolSearch"],
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
-                timeout=360, stdin=subprocess.DEVNULL,
+                # Search + a full read_resource per message takes a while.
+                timeout=560, stdin=subprocess.DEVNULL,
             )
             raw = (proc.stdout or "").strip()
             start, end = raw.find("["), raw.rfind("]")
