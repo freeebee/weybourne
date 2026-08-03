@@ -1890,6 +1890,9 @@ def felix_review(change_id: str, body: FelixReviewIn):
     if body.action == "approve":
         felix_store.update_change(change_id, {"review_status": "Approved"})
         return {"change_id": change_id, "review_status": "Approved"}
+    if body.action == "dismiss":
+        felix_store.update_change(change_id, {"review_status": "Dismissed"})
+        return {"change_id": change_id, "review_status": "Dismissed"}
     if body.action == "undo":
         felix_store.update_change(change_id,
                                   {"review_status": "Undo Requested"})
@@ -1903,7 +1906,8 @@ def felix_review(change_id: str, body: FelixReviewIn):
         return {"change_id": change_id, "review_status": "Undo Requested",
                 "job": _job_summary(_start_job(
                     "felix-undo", f"Undo {change_id}", work))}
-    raise HTTPException(status_code=400, detail="action must be approve or undo")
+    raise HTTPException(status_code=400,
+                        detail="action must be approve, dismiss or undo")
 
 
 @app.get("/api/felix/stats")

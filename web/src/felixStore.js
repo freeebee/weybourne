@@ -164,9 +164,10 @@ export async function review(changeId, action) {
   S.busy = `review-${changeId}`; emit();
   try {
     await post(`/api/felix/changes/${changeId}/review`, { action });
+    const next = { approve: "Approved", dismiss: "Dismissed",
+                   undo: "Undo Requested" }[action];
     S.changes = S.changes.map((c) => c.change_id === changeId
-      ? { ...c, review_status: action === "approve" ? "Approved" : "Undo Requested" }
-      : c);
+      ? { ...c, review_status: next } : c);
     if (action === "undo") {
       spawnLabel(UNDO_PHRASES[Math.floor(Math.random() * UNDO_PHRASES.length)],
                  "caution");

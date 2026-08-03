@@ -74,7 +74,7 @@ function Station({ kind, x, active }) {
 
 /* One 8-bit flame that fully engulfs Felix — a single silhouette rising
    around him (behind the sprite), two flickering frames. */
-function PixelFire({ width = 168 }) {
+function PixelFire({ width = 104 }) {
   const px = (cells, fill) => cells.map(([cx, cy, w = 1, h = 1], i) => (
     <rect key={fill + i} x={cx} y={cy} width={w} height={h} fill={fill} />
   ));
@@ -105,9 +105,9 @@ function PixelFire({ width = 168 }) {
   );
   return (
     <svg viewBox="0 0 20 22" width={width} shapeRendering="crispEdges"
-      style={{ position: "absolute", bottom: -6, left: "50%",
+      style={{ position: "absolute", bottom: -2, left: "50%",
                transform: "translateX(-50%)", pointerEvents: "none",
-               opacity: .92 }}>
+               opacity: .75 }}>
       <g style={{ animation: "px-swapA .26s steps(1) infinite" }}>{frameA}</g>
       <g style={{ animation: "px-swapB .26s steps(1) infinite" }}>{frameB}</g>
     </svg>
@@ -351,6 +351,51 @@ function RunPanel({ s }) {
   );
 }
 
+/* Each change in plain words: what was wrong, what Felix did (or suggests),
+   and one Approve / Discard choice. Merge sub-steps are folded into their
+   parent rather than listed. */
+function describeChange(c) {
+  const q = (v) => `“${v}”`;
+  switch (c.change_type) {
+    case "fix_formatting":
+      return { problem: `Untidy text in ${c.property_changed} — stray spaces or casing.`,
+               fix: `Changed ${q(c.previous_value)} to ${q(c.new_value)}.` };
+    case "fill_missing":
+      return { problem: `${c.property_changed} was empty.`,
+               fix: `Filled it in with ${q(c.new_value)}.`,
+               source: c.source };
+    case "fix_relation":
+      return { problem: `${c.property_changed} pointed at a record that no longer exists.`,
+               fix: "Removed the dead link and kept the valid ones." };
+    case "fix_icon":
+      return { problem: "The page had no icon.",
+               fix: `Added the standard ${q(c.new_value)} icon.` };
+    case "merge":
+      return { problem: "This record exists twice — a duplicate.",
+               fix: "Merged everything into the richer copy and archived this one. "
+                    + "Nothing was lost, and it can be unwound in one click.",
+               source: c.source };
+    case "recommendation":
+      return { problem: c.reason || "Something needs your judgement.",
+               fix: c.new_value ? `Suggestion: ${c.new_value}` :
+                    "Nothing was changed — this one is your call.",
+               source: c.source };
+    default:
+      return { problem: c.reason || c.change_type.replaceAll("_", " "),
+               fix: c.new_value ? `${q(c.previous_value || "(empty)")} → ${q(c.new_value)}` : "" };
+  }
+}
+
+const STATUS_WORDS = {
+  "Applied": ["FIXED", "positive"],
+  "Planned (dry-run)": ["WOULD FIX (DRY RUN)", "teal"],
+  "Recommended": ["SUGGESTION", "caution"],
+  "Failed": ["COULDN'T FIX", "critical"],
+  "Undone": ["UNDONE", "neutral"],
+  "Skipped": ["SKIPPED", "neutral"],
+  "Pending": ["IN PROGRESS", "teal"],
+};
+
 function ReviewTable({ s }) {
   const f = s.changesFilter;
   const setF = (patch) => fx.fetchChanges({ ...f, ...patch });
@@ -360,89 +405,82 @@ function ReviewTable({ s }) {
       {opts.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
     </select>
   );
+  const rows = s.changes.filter((c) => !c.parent_change_id);
   return (
     <div style={{ marginTop: 22 }}>
-      <SectionHead label="CHANGE LOG" right={`${s.changes.length} SHOWN`} />
+      <SectionHead label="WHAT FELIX FOUND" right={`${rows.length} SHOWN`} />
       <div className="row" style={{ marginBottom: 10, flexWrap: "wrap" }}>
-        {sel("review", [["", "All review states"], ["Awaiting Review", "Awaiting review"],
-                        ["Approved", "Approved"], ["Undo Requested", "Undo requested"]])}
-        {sel("status", [["", "All statuses"], ["Applied", "Applied"],
-                        ["Planned (dry-run)", "Planned (dry-run)"],
-                        ["Recommended", "Recommended"], ["Failed", "Failed"],
-                        ["Undone", "Undone"], ["Skipped", "Skipped"]])}
+        {sel("review", [["Awaiting Review", "Needs your OK"], ["", "Everything"],
+                        ["Approved", "Approved"], ["Dismissed", "Discarded"],
+                        ["Undo Requested", "Undo requested"]])}
         {sel("db", [["", "All databases"], ["contacts", "Contacts"],
                     ["companies", "Companies"], ["funds", "Funds"], ["notes", "Notes"]])}
       </div>
-      {s.changes.length === 0 && (
-        <p className="muted small">Nothing here yet — run Felix to populate the log.</p>
+      {rows.length === 0 && (
+        <p className="muted small">Nothing waiting — run Felix, or switch the
+          filter to Everything to see past changes.</p>
       )}
-      {s.changes.map((c) => (
-        <Card key={c.change_id} style={{ padding: "12px 16px", marginBottom: 8 }}>
-          <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
-            <span className="mono" style={{ fontSize: 10, letterSpacing: ".08em",
-                  color: "var(--stone-400)" }}>
-              {c.change_id} · {fmtDT(c.timestamp)} · {c.database.toUpperCase()}
-            </span>
-            <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <Chip tone={c.confidence === "High" ? "positive"
-                : c.confidence === "Medium" ? "teal" : "neutral"}>
-                {(c.confidence || "?").toUpperCase()}
-              </Chip>
-              <Chip tone={c.execution_status === "Applied" ? "positive"
-                : c.execution_status === "Failed" ? "critical"
-                : c.execution_status === "Undone" ? "neutral" : "teal"}>
-                {c.execution_status.toUpperCase()}
-              </Chip>
-            </span>
-          </div>
-          <div style={{ fontSize: "13.5px", marginTop: 5 }}>
-            <b>{c.record_name || c.record_id}</b>
-            {" — "}{c.change_type.replaceAll("_", " ")}
-            {c.property_changed && c.property_changed !== "(whole record)"
-              ? ` · ${c.property_changed}` : ""}
-            {c.record_url && (
-              <a href={c.record_url} target="_blank" rel="noreferrer"
-                 className="mono" style={{ marginLeft: 8, fontSize: 10.5,
-                   letterSpacing: ".08em", color: "var(--teal-700)" }}>
-                OPEN
-              </a>
-            )}
-          </div>
-          {(c.previous_value || c.new_value) && (
-            <div style={{ fontSize: "12.5px", marginTop: 4,
-                          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <span style={{ color: "var(--stone-500)", overflowWrap: "anywhere" }}>
-                {c.previous_value || "(empty)"}
-              </span>
-              <span style={{ color: "var(--teal-700)", overflowWrap: "anywhere" }}>
-                {c.new_value || "(empty)"}
-              </span>
+      {rows.map((c) => {
+        const d = describeChange(c);
+        const [statusWord, statusTone] = STATUS_WORDS[c.execution_status]
+          || [c.execution_status.toUpperCase(), "neutral"];
+        const awaiting = c.review_status === "Awaiting Review";
+        const applied = c.execution_status === "Applied";
+        return (
+          <Card key={c.change_id} style={{ padding: "13px 16px", marginBottom: 8 }}>
+            <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
+              <b style={{ fontSize: "14px" }}>
+                {c.record_name || "(unnamed record)"}
+                <span className="mono" style={{ fontSize: 10, marginLeft: 8,
+                      letterSpacing: ".1em", color: "var(--stone-400)" }}>
+                  {c.database.toUpperCase()} · {fmtDT(c.timestamp)}
+                </span>
+              </b>
+              <Chip tone={statusTone}>{statusWord}</Chip>
             </div>
-          )}
-          {(c.source || c.reason) && (
-            <div className="muted" style={{ fontSize: "12px", marginTop: 4 }}>
-              {c.reason}{c.source ? ` — ${c.source}` : ""}
+            <div style={{ fontSize: "13.5px", marginTop: 6 }}>
+              <span style={{ color: "var(--caution-600)", fontWeight: 600 }}>Problem: </span>
+              {d.problem}
             </div>
-          )}
-          <div className="row" style={{ marginTop: 8 }}>
-            {c.review_status === "Awaiting Review" &&
-              c.execution_status === "Applied" && (
-              <>
-                <Button variant="ghost" busy={s.busy === `review-${c.change_id}`}
-                  onClick={() => fx.review(c.change_id, "approve")}>Approve</Button>
-                <Button variant="ghost" busy={s.busy === `review-${c.change_id}`}
-                  onClick={() => fx.review(c.change_id, "undo")}>Undo</Button>
-              </>
+            {d.fix && (
+              <div style={{ fontSize: "13.5px", marginTop: 3 }}>
+                <span style={{ color: "var(--teal-700)", fontWeight: 600 }}>Fix: </span>
+                {d.fix}
+              </div>
             )}
-            {c.review_status !== "Awaiting Review" && (
-              <span className="microlabel">{c.review_status.toUpperCase()}</span>
+            {d.source && (
+              <div className="muted" style={{ fontSize: "12px", marginTop: 3 }}>
+                Why Felix is confident: {d.source}
+              </div>
             )}
-            {c.undo_result && (
-              <span className="muted" style={{ fontSize: "12px" }}>{c.undo_result}</span>
-            )}
-          </div>
-        </Card>
-      ))}
+            <div className="row" style={{ marginTop: 9, alignItems: "center" }}>
+              {awaiting ? (
+                <>
+                  <Button variant="dark" busy={s.busy === `review-${c.change_id}`}
+                    onClick={() => fx.review(c.change_id, "approve")}>Approve</Button>
+                  <Button variant="ghost" busy={s.busy === `review-${c.change_id}`}
+                    onClick={() => fx.review(c.change_id,
+                                             applied ? "undo" : "dismiss")}>
+                    Discard{applied ? " (undo it)" : ""}
+                  </Button>
+                </>
+              ) : (
+                <span className="microlabel">{c.review_status.toUpperCase()}</span>
+              )}
+              {c.record_url && (
+                <a href={c.record_url} target="_blank" rel="noreferrer"
+                   className="mono" style={{ fontSize: 10.5, letterSpacing: ".08em",
+                     color: "var(--teal-700)" }}>
+                  OPEN IN NOTION
+                </a>
+              )}
+              {c.undo_result && (
+                <span className="muted" style={{ fontSize: "12px" }}>{c.undo_result}</span>
+              )}
+            </div>
+          </Card>
+        );
+      })}
     </div>
   );
 }
