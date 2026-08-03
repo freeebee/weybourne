@@ -43,7 +43,7 @@ from src.features.felix import store as felix_store
 from src.features.felix import undo as felix_undo
 from src.features.felix.models import RunOptions as FelixRunOptions
 from src.features.felix.run import felix_run
-from src.features.dedupe import dedupe_entity
+from src.features.dedupe import dedupe_entity, domain_of, match_company, match_contact
 from src.features.draft_reply import generate_draft_options
 from src.features.inbox_triage import triage_email
 from src.features.meeting_prep import build_context, counterparty_from_event
@@ -1948,6 +1948,199 @@ def _auto_felix_run():
 
 
 threading.Thread(target=_auto_felix_run, daemon=True).start()
+
+
+# --------------------------------------------------------------------------- #
+# Contact creator — business card (photo / file / paste) → a Notion contact.
+# Vision extraction via the existing image path (base64 → temp file → Read),
+# dedupe against live contacts/companies, schema-aware property mapping, and
+# a best-effort LinkedIn lookup whose photo becomes the page icon.
+# --------------------------------------------------------------------------- #
+
+_CARD_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "email": {"type": "string"},
+        "phone": {"type": "string"},
+        "title": {"type": "string", "description": "Job title / role"},
+        "company": {"type": "string"},
+        "website": {"type": "string"},
+        "address": {"type": "string"},
+        "linkedin_url": {"type": "string"},
+        "notes": {"type": "string",
+                  "description": "Anything else legible on the card"},
+    },
+    "required": ["name", "email", "phone", "title", "company", "website",
+                 "address", "linkedin_url", "notes"],
+    "additionalProperties": False,
+}
+
+_CARD_SYSTEM = """You read business cards. Extract ONLY what is actually printed \
+on the card image — no inference, no completion of partial text. Empty string for \
+anything not present. Emails and websites verbatim; keep phone numbers exactly as \
+formatted on the card."""
+
+
+@app.post("/api/contact-card")
+async def contact_card(file: UploadFile):
+    """Extract a business card image into prefilled, editable contact fields."""
+    import base64
+
+    client = _client()
+    if client is None:
+        raise HTTPException(status_code=503, detail="No AI backend available")
+    data = await file.read()
+    media = file.content_type if (file.content_type or "").startswith("image/") \
+        else "image/jpeg"
+    response = _run(
+        client.messages.create,
+        model=config.FAST_MODEL, max_tokens=700, system=_CARD_SYSTEM,
+        output_config={"format": {"type": "json_schema", "schema": _CARD_SCHEMA}},
+        messages=[{"role": "user", "content": [
+            {"type": "image", "source": {"type": "base64", "media_type": media,
+                                         "data": base64.b64encode(data).decode()}},
+            {"type": "text", "text": "Extract this business card."},
+        ]}],
+    )
+    raw = next((b.text for b in response.content
+                if getattr(b, "type", None) == "text"), "{}")
+    card = json.loads(raw)
+
+    # Dedupe against the live workspace.
+    contacts = _notion.list_contacts()
+    companies = _notion.list_companies()
+    dup = match_contact(card.get("email", ""), card.get("name", ""), contacts)
+    co_dup = match_company(card.get("company", ""),
+                           domain_of(card.get("email", "")), companies)
+    existing = None
+    if dup.action in ("link_existing", "review") and dup.matches:
+        m = dup.matches[0]
+        rec = next((c for c in contacts if c.id == m.id), None)
+        existing = {"id": m.id, "name": m.name,
+                    "score": round(m.score, 2), "action": dup.action,
+                    "email": getattr(rec, "email", ""),
+                    "title": getattr(rec, "title", "")}
+
+    # Editable fields, shaped by what the live Contacts DB actually has.
+    schema = _notion.retrieve_database(config.NOTION_CONTACTS_DB or "")
+    props = schema.get("properties") or {}
+    linkedin_prop = next((n for n, p in props.items()
+                          if p.get("type") == "url" and "linked" in n.lower()), "")
+    phone_prop = next((n for n, p in props.items()
+                       if p.get("type") == "phone_number"), "")
+    editable = {
+        "Name": card.get("name", ""),
+        "Email": card.get("email", ""),
+        "Title": card.get("title", ""),
+        "Type": "GP - Investments",
+        "Employed By": (co_dup.matches[0].name
+                        if co_dup.action == "link_existing" and co_dup.matches
+                        else card.get("company", "")),
+    }
+    if phone_prop or not _notion.live:
+        editable["Phone"] = card.get("phone", "")
+    if linkedin_prop or not _notion.live:
+        editable["LinkedIn"] = card.get("linkedin_url", "")
+    editable["Description"] = " · ".join(
+        x for x in (card.get("website", ""), card.get("address", ""),
+                    card.get("notes", "")) if x)
+    return {"card": card, "editable": editable, "existing": existing,
+            "company_known": bool(co_dup.action == "link_existing"),
+            "props": {"linkedin": linkedin_prop, "phone": phone_prop},
+            "live": _notion.live}
+
+
+class ContactCreateIn(BaseModel):
+    fields: dict
+    icon_url: str = ""
+    linkedin_prop: str = ""
+    phone_prop: str = ""
+
+
+@app.post("/api/contact-card/create")
+def contact_card_create(body: ContactCreateIn):
+    """Create the contact page from the reviewed fields."""
+    f = {k: (v or "").strip() for k, v in body.fields.items()}
+    if not f.get("Name"):
+        raise HTTPException(status_code=400, detail="The contact needs a name")
+    props: dict = {"Name": {"title": [{"text": {"content": f["Name"][:200]}}]}}
+    if f.get("Email"):
+        props["Email"] = {"email": f["Email"]}
+    if f.get("Title"):
+        props["Title"] = {"rich_text": [{"text": {"content": f["Title"][:500]}}]}
+    if f.get("Type"):
+        props["Type"] = {"select": {"name": f["Type"]}}
+    if f.get("Description"):
+        props["Description"] = {"rich_text": [{"text": {"content": f["Description"][:1900]}}]}
+    if f.get("Phone") and body.phone_prop:
+        props[body.phone_prop] = {"phone_number": f["Phone"][:100]}
+    if f.get("LinkedIn") and body.linkedin_prop:
+        props[body.linkedin_prop] = {"url": f["LinkedIn"][:500]}
+    if f.get("Employed By"):
+        try:
+            ids = _ids_for_names_or_create(
+                f["Employed By"], _notion.list_companies(),
+                config.NOTION_COMPANIES_DB, "company")
+            if ids:
+                props["Employed By"] = {"relation": [{"id": i} for i in ids]}
+        except Exception:  # noqa: BLE001 - the relation is best-effort
+            pass
+    props = _snap_to_options("contact", props)
+    icon = ({"type": "external", "external": {"url": body.icon_url}}
+            if body.icon_url.startswith("http") else None)
+    page = _notion.create_page(config.NOTION_CONTACTS_DB or "mock-db", props,
+                               icon=icon)
+    _NAMES_CACHE.pop("contact", None)
+    return {"url": page.get("url", ""), "id": page.get("id", ""),
+            "live": _notion.live}
+
+
+_LINKEDIN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "profile_url": {"type": "string"},
+        "confidence": {"type": "string", "enum": ["high", "medium", "low", "none"]},
+        "image_url": {"type": "string",
+                      "description": "Direct URL of the profile photo, if one "
+                                     "could be found; empty otherwise"},
+        "evidence": {"type": "string"},
+    },
+    "required": ["profile_url", "confidence", "image_url", "evidence"],
+    "additionalProperties": False,
+}
+
+_LINKEDIN_SYSTEM = """You verify a person's LinkedIn profile using real web \
+searches. Search for the person's name together with their company. Report high \
+confidence ONLY when a public LinkedIn profile clearly matches BOTH the name and \
+the company; a name match alone is medium at best. If you can retrieve a direct \
+profile-photo URL (media.licdn.com), include it; if the page is blocked, leave \
+image_url empty — do not guess. Report none if no plausible profile is found."""
+
+
+class LinkedInIn(BaseModel):
+    name: str
+    company: str = ""
+
+
+@app.post("/api/contact-card/linkedin")
+def contact_card_linkedin(body: LinkedInIn):
+    client = _client()
+    if client is None:
+        raise HTTPException(status_code=503, detail="No AI backend available")
+    response = _run(
+        client.messages.create,
+        model=config.REASONING_MODEL, max_tokens=800, system=_LINKEDIN_SYSTEM,
+        output_config={"format": {"type": "json_schema",
+                                  "schema": _LINKEDIN_SCHEMA}},
+        extra_allowed_tools=["WebSearch", "WebFetch"],
+        messages=[{"role": "user", "content":
+                   f"Find the LinkedIn profile of {body.name}"
+                   + (f" at {body.company}" if body.company else "") + "."}],
+    )
+    raw = next((b.text for b in response.content
+                if getattr(b, "type", None) == "text"), "{}")
+    return json.loads(raw)
 
 
 # --------------------------------------------------------------------------- #

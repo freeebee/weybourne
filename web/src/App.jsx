@@ -1,7 +1,10 @@
 import React from "react";
 import { NavLink, Route, HashRouter as Router, Routes } from "react-router-dom";
 import { get } from "./api.js";
+import * as felixStore from "./felixStore.js";
 import * as liveStore from "./liveStore.js";
+import ContactCard from "./pages/ContactCard.jsx";
+import FixItFelix from "./pages/FixItFelix.jsx";
 import FundData from "./pages/FundData.jsx";
 import Home from "./pages/Home.jsx";
 import Live from "./pages/Live.jsx";
@@ -16,16 +19,21 @@ const GROUPS = [
   ["OVERVIEW", [["/", "Home"]]],
   ["WORKFLOW", [["/triage", "Inbox triage"], ["/prep", "Meeting prep"], ["/live", "Note taker"]]],
   ["ANALYSIS", [["/track-records", "Track records"], ["/fund-data", "Fund data"], ["/whats-new", "What's new"]]],
+  ["UPKEEP", [["/felix", "Fix-it Felix"], ["/contact-card", "Contact creator"]]],
 ];
 
 function NavMeta({ to }) {
   React.useSyncExternalStore(uiStore.subscribe, uiStore.getVersion);
   React.useSyncExternalStore(liveStore.subscribe, liveStore.getVersion);
+  React.useSyncExternalStore(felixStore.subscribe, felixStore.getVersion);
   if (to === "/triage" && uiStore.ui.inboxCount != null) {
     return <span className="meta">{uiStore.ui.inboxCount}</span>;
   }
   if (to === "/live" && liveStore.S.running) {
     return <span className="dot" style={{ background: "var(--teal-300)", animation: "wb-pulse 1.6s ease-in-out infinite" }} />;
+  }
+  if (to === "/felix" && felixStore.S.runJob?.status === "running") {
+    return <span className="dot" style={{ background: "var(--brass-500)", animation: "wb-pulse 1.6s ease-in-out infinite" }} />;
   }
   return null;
 }
@@ -102,6 +110,8 @@ function useWarmWhatsNew() {
     });
     // Re-attach to a running Outlook refresh no matter which page loads first.
     uiStore.restoreOutlookRefresh();
+    // Same for a running Felix clean-up (and the sidebar's activity dot).
+    felixStore.restore();
   }, []);
 }
 
@@ -152,6 +162,8 @@ function AppShell() {
             <Route path="/live" element={<Live />} />
             <Route path="/fund-data" element={<FundData />} />
             <Route path="/whats-new" element={<WhatsNew />} />
+            <Route path="/felix" element={<FixItFelix />} />
+            <Route path="/contact-card" element={<ContactCard />} />
           </Routes>
         </main>
       </div>
