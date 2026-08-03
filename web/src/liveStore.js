@@ -13,7 +13,7 @@ export const S = {
   manager: null,     // the loaded manager thread (entity, Notion links, history)
   transcript: "", entries: [], items: [], batches: [], reads: 0, unreadWords: 0,
   lastTail: "", lastReadAt: 0, startedAt: 0, reading: false, nextIn: CADENCE_S,
-  error: null, note: null, sharp: null, busy: "", seq: 1, version: 0,
+  error: null, note: null, sharp: null, sharpPending: "", busy: "", seq: 1, version: 0,
   noteSave: null, noteSaveEdits: {}, noteSaveEditing: {}, noteSaveUrl: "",
 };
 
@@ -215,13 +215,13 @@ export async function addPaste(text, read) {
 }
 
 export async function sharpen(rough) {
-  S.busy = "sharpen"; S.error = null; emit();
+  S.busy = "sharpen"; S.sharpPending = rough; S.sharp = null; S.error = null; emit();
   try {
     S.sharp = await post("/api/live/sharpen", {
       transcript: S.transcript, rough, context: context(),
     });
   } catch (e) { S.error = e.message; }
-  S.busy = ""; emit();
+  S.busy = ""; S.sharpPending = ""; emit();
 }
 
 export function keepSharp() {
@@ -294,7 +294,7 @@ export function newSession() {
   Object.assign(S, {
     transcript: "", entries: [], items: [], batches: [], reads: 0, unreadWords: 0,
     lastTail: "", lastReadAt: 0, startedAt: 0, nextIn: CADENCE_S, error: null,
-    note: null, sharp: null, busy: "", seq: 1, manager: null,
+    note: null, sharp: null, sharpPending: "", busy: "", seq: 1, manager: null,
     noteSave: null, noteSaveEdits: {}, noteSaveEditing: {}, noteSaveUrl: "",
   });
   emit();

@@ -198,13 +198,13 @@ export default function Live() {
                 ))}
               </select>
             </Field>
-            <Field label="LIVE QUESTIONS" style={{ flex: "1 1 200px" }}
-              hint="Suggested questions with each 30-second read, or notes only.">
+            <Field label="SUGGESTED QUESTIONS" style={{ flex: "1 1 200px" }}
+              hint="Whether each 30-second read adds suggested questions. Sketching your own always works.">
               <select value={s.questions ? "on" : "off"}
                 onChange={(e) => live.set({ questions: e.target.value === "on" })}
                 style={inputStyle}>
-                <option value="on">Suggest questions live</option>
-                <option value="off">Note taking only</option>
+                <option value="on">Suggest questions at each read</option>
+                <option value="off">My own questions only</option>
               </select>
             </Field>
           </div>
@@ -228,12 +228,12 @@ export default function Live() {
             {s.busy === "read" ? "READING…" : s.nextIn > 0 ? `NEXT READ ${s.nextIn}S` : "READ DUE"}
           </span>
           <button onClick={() => live.set({ questions: !s.questions })}
-            className="mono" title="Toggle live question suggestions"
+            className="mono" title="Toggle suggested questions from reads — your own sketches always work"
             style={{ background: "none", border: "1px solid var(--ink-500)",
                      borderRadius: 4, cursor: "pointer", padding: "3px 8px",
                      fontSize: 10.5, letterSpacing: ".1em",
                      color: s.questions ? "var(--teal-300)" : "var(--slate-300)" }}>
-            QUESTIONS {s.questions ? "ON" : "OFF"}
+            SUGGESTIONS {s.questions ? "ON" : "OFF"}
           </button>
         </div>
       )}
@@ -241,8 +241,8 @@ export default function Live() {
       <ErrorNote error={s.error} />
 
       <div className="panes">
-        {/* Questions pane — hidden entirely in note-taking-only mode */}
-        {s.questions && (
+        {/* Questions pane — always visible: the toggle only controls whether
+            reads ADD suggestions; sketching your own works either way. */}
         <div style={{ flex: "1.4 1 440px", minWidth: "min(100%,320px)" }}>
           <SectionHead label="QUESTIONS WORTH ASKING" right={`${openItems.length} OPEN`} />
 
@@ -253,10 +253,18 @@ export default function Live() {
               placeholder="sketch a question — rough is fine"
               style={{ flex: 1, minWidth: 180 }} />
             <Button variant="ghost" busy={s.busy === "sharpen"} disabled={!rough}
-              onClick={() => live.sharpen(rough).then(() => setRough(""))}>Sharpen</Button>
+              onClick={() => { const r = rough; setRough(""); live.sharpen(r); }}>Sharpen</Button>
             <Button variant="ghost" disabled={!rough}
               onClick={() => { live.addOwnQuestion(rough); setRough(""); }}>Add as key</Button>
           </div>
+          {s.busy === "sharpen" && s.sharpPending && (
+            <Card style={{ marginBottom: 14, borderLeft: "2px solid var(--teal-500)" }}>
+              <span className="microlabel" style={{ color: "var(--teal-700)" }}>SHARPENING…</span>
+              <div style={{ fontSize: 15, margin: "6px 0", color: "var(--stone-400)" }}>
+                {s.sharpPending}
+              </div>
+            </Card>
+          )}
           {s.sharp && (
             <Card accent="teal" style={{ marginBottom: 14 }}>
               <span className="microlabel" style={{
@@ -276,7 +284,11 @@ export default function Live() {
           )}
 
           {openItems.length === 0 && s.batches.length === 0 && (
-            <p className="muted small">Questions appear here after the first read.</p>
+            <p className="muted small">
+              {s.questions
+                ? "Questions appear here after the first read — or sketch your own above."
+                : "Automatic suggestions are off — sketch your own questions above."}
+            </p>
           )}
           {[...openItems]
             .sort((a, b) => ((b.starred ? 1 : 0) - (a.starred ? 1 : 0)) || (b.id - a.id))
@@ -335,10 +347,9 @@ export default function Live() {
             </div>
           )}
         </div>
-        )}
 
         {/* Right pane — audio check + what was said */}
-        <div style={{ flex: "1 1 300px", maxWidth: s.questions ? 420 : "none",
+        <div style={{ flex: "1 1 300px", maxWidth: 420,
                       minWidth: "min(100%,280px)" }}>
           {s.running && <ContextChip />}
           {s.running && (

@@ -195,8 +195,10 @@ READ_SCHEMA = {
         "changed": {"type": "boolean"},
         "recap": {
             "type": "string",
-            "description": "One tight paragraph on the concrete points just made: "
-                           "figures, names, terms, claims, commitments. Empty if nothing new.",
+            "description": "Two or three flowing sentences of running minutes on the "
+                           "concrete points just made: figures, names, terms, claims, "
+                           "commitments. Plain past-tense prose that continues the "
+                           "earlier recaps. Empty if nothing new.",
         },
         "answered": {
             "type": "array",
@@ -251,6 +253,12 @@ claim IMPLIES: where it breaks, what it contradicts, what decision hangs on it, 
 the stated edge survives scale. Strategy over collection.
 - Flag true for AT MOST two questions: the ones probing a weak spot, a contradiction with \
 something said earlier, or an unresolved decision. Everything else is flag false.
+- The recap is running meeting minutes, not commentary on the recording. Write plain \
+past-tense prose that reads as a continuation of the earlier recaps, without repeating \
+them. NEVER mention the transcript, the recording, "new speech", or that a sentence was \
+cut off, incomplete, trailing, or unclear — if speech trails off mid-thought, summarise \
+what was said and move on as if the minutes simply continue. No headers, no labels, no \
+meta-observations of any kind: only the substance of what was discussed.
 - The transcript is machine generated and imperfect. NEVER produce questions about audio \
 quality, unclear speech, or what someone "said earlier that was hard to hear" — if a \
 passage is garbled, simply skip it; if a specific figure looks mistranscribed but matters, \
@@ -296,10 +304,25 @@ def read_transcript_batch(
     return json.loads(raw)
 
 
+SHARPEN_SYSTEM_PROMPT = """You polish an investor's rough question sketch during a live \
+meeting. Weybourne, a single family office, is on the LP side probing the counterparty in \
+the room, so the question must be answerable by that counterparty.
+
+Rules:
+- LIGHT TOUCH. This is the investor's question, not yours: keep their wording, framing and \
+intent, fix grammar, cut hedging, and anchor to a specific figure or name from the \
+transcript ONLY where one clearly fits what they are already asking. Do not broaden, \
+narrow, or redirect the question. If the sketch is already clear, return it with at most \
+trivial changes.
+- One sentence a person can say out loud. Never use em dashes.
+- Then check it against the transcript: answered, partial, or open. Never invent an answer \
+or a figure. A vague or dodged reply is not an answer.
+- Never comment on audio quality or garbled speech."""
+
 SHARPEN_SCHEMA = {
     "type": "object",
     "properties": {
-        "question": {"type": "string", "description": "The rewritten question, under 45 words"},
+        "question": {"type": "string", "description": "The polished question, under 45 words"},
         "status": {"type": "string", "enum": ["answered", "partial", "open"]},
         "evidence": {"type": "string",
                      "description": "If answered or partial: what they said, under 30 words. "
@@ -315,21 +338,15 @@ def sharpen_question(client, buffer: TranscriptBuffer, rough: str, context: str 
     """Rewrite a rough mid-call sketch into one sharp question, checked against the transcript."""
     user = (
         f"MEETING CONTEXT\n{context or '(none supplied)'}\n\n"
-        "The investor has sketched a rough question mid-call and wants it sharpened and "
-        "checked against what has been said.\n\n"
         f"THEIR SKETCH (possibly shorthand)\n\"\"\"{rough}\"\"\"\n\n"
-        "Rewrite it as one sharp question the counterparty can answer: keep the intent, make "
-        "it specific, anchor it to figures, names or claims actually made, cut hedging. Then "
-        "decide whether the transcript already covers it. Never invent an answer or figure. "
-        "Never use em dashes.\n\n"
-        f"TRANSCRIPT (recent window)\n{buffer.recent_text()}"
+        f"TRANSCRIPT (recent window)\n{buffer.recent_text(3500)}"
     )
     response = client.messages.create(
-        # Sonnet: the user is waiting mid-conversation, but the rewrite must
-        # actually be sharper than what they typed.
+        # Sonnet: the user is waiting mid-conversation. The lean dedicated
+        # system prompt and trimmed window keep the round trip short.
         model=LIVE_MODEL,
-        max_tokens=800,
-        system=READ_SYSTEM_PROMPT,
+        max_tokens=400,
+        system=SHARPEN_SYSTEM_PROMPT,
         output_config={"format": {"type": "json_schema", "schema": SHARPEN_SCHEMA}},
         messages=[{"role": "user", "content": user}],
     )
