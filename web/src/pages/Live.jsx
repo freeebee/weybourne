@@ -93,6 +93,49 @@ function ContextChip() {
   );
 }
 
+/* Past sessions, autosaved to disk and filed on Stop — reopen any of them to
+   draft the note or pick the meeting back up. */
+function TranscriptLibrary() {
+  const [list, setList] = React.useState([]);
+  const [showAll, setShowAll] = React.useState(false);
+
+  React.useEffect(() => {
+    get("/api/transcripts").then((d) => setList(d.transcripts || [])).catch(() => {});
+  }, []);
+
+  if (!list.length) return null;
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <SectionHead label="TRANSCRIPT LIBRARY" right={`${list.length} SAVED`} />
+      {(showAll ? list : list.slice(0, 4)).map((t) => (
+        <Card key={t.id} style={{ padding: "12px 16px", marginBottom: 8 }}>
+          <div className="spread" style={{ alignItems: "center", gap: 12 }}>
+            <div style={{ minWidth: 0 }}>
+              <b style={{ fontSize: "13.5px" }}>{t.title}</b>
+              <span className="mono" style={{ fontSize: 10.5, marginLeft: 10,
+                letterSpacing: ".06em", color: "var(--stone-500)" }}>
+                {(t.started || t.saved_at)
+                  ? `${fmtDate(t.started || t.saved_at)} ${fmtTime(t.started || t.saved_at)} · ` : ""}
+                {(t.words || 0).toLocaleString()} WORDS
+                {t.unfinished && <span style={{ color: "var(--caution-600)" }}> · UNFINISHED</span>}
+              </span>
+              {t.goal && (
+                <div className="muted" style={{ fontSize: "12.5px", marginTop: 2 }}>{t.goal}</div>
+              )}
+            </div>
+            <Button variant="ghost" onClick={() => live.loadFromLibrary(t.id)}>Reopen</Button>
+          </div>
+        </Card>
+      ))}
+      {list.length > 4 && (
+        <Button variant="ghost" onClick={() => setShowAll(!showAll)}>
+          {showAll ? "Show fewer" : `Show all ${list.length}`}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function fmtElapsed(ms) {
   const s = Math.floor(ms / 1000);
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
@@ -156,6 +199,7 @@ export default function Live() {
             </>}>
         {s.who ? `With ${s.who}. ` : ""}
         {s.goal || "Transcribes the meeting continuously and drafts the Weybourne note at the end. Live question suggestions are optional — recaps land every 30 seconds either way."}
+        {!s.running && s.librarySaved && s.transcript ? " Transcript saved to the library." : ""}
       </PageHeader>
 
       {!s.running && (
@@ -210,6 +254,8 @@ export default function Live() {
           </div>
         </Card>
       )}
+
+      {!s.running && !s.transcript && <TranscriptLibrary />}
 
       {/* Control strip */}
       {s.running && (

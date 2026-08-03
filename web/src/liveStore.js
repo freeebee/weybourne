@@ -15,6 +15,7 @@ export const S = {
   lastTail: "", lastReadAt: 0, startedAt: 0, reading: false, nextIn: CADENCE_S,
   error: null, note: null, sharp: null, sharpPending: "", busy: "", seq: 1, version: 0,
   noteSave: null, noteSaveEdits: {}, noteSaveEditing: {}, noteSaveUrl: "",
+  sessionId: "", librarySaved: false,
 };
 
 function stamp() {
@@ -48,6 +49,39 @@ function context() {
 
 export function attachCanvas(el) { canvas = el; }
 
+// ---- autosave: mirror the session to disk so a crash loses nothing -------- //
+
+function ensureSessionId() {
+  if (!S.sessionId) {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, "0");
+    S.sessionId = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+    S.librarySaved = false;
+  }
+}
+
+function sessionPayload() {
+  return {
+    id: S.sessionId, who: S.who, goal: S.goal,
+    started: S.startedAt ? new Date(S.startedAt).toISOString() : "",
+    transcript: S.transcript,
+    entries: S.entries,
+    recaps: S.batches.map((b) => ({ at: b.at, recap: b.recap })).filter((b) => b.recap),
+    questions: S.items.map((it) => ({
+      q: it.q, starred: !!it.starred, flag: !!it.flag, answer: it.answer || null,
+    })),
+  };
+}
+
+let autosaving = false;
+async function autosaveNow() {
+  if (autosaving || !S.sessionId || !S.transcript.trim()) return;
+  autosaving = true;
+  try { await post("/api/live/autosave", sessionPayload()); }
+  catch { /* best-effort — never disturb the recording */ }
+  autosaving = false;
+}
+
 // ---- read loop ------------------------------------------------------------ //
 
 export async function performRead() {
@@ -80,12 +114,15 @@ export async function performRead() {
     }
   } catch (e) { S.error = e.message; }
   S.reading = false; S.busy = ""; emit();
+  autosaveNow();     // capture the fresh recap and questions on disk too
 }
 
 // ---- audio pipeline ------------------------------------------------------- //
 
 export async function start() {
-  S.error = null; S.note = null; emit();
+  S.error = null; S.note = null;
+  ensureSessionId();
+  emit();
   try {
     audioCtx = new AudioContext();
     const mixed = audioCtx.createMediaStreamDestination();
@@ -138,6 +175,7 @@ export async function start() {
             S.entries = [...S.entries, { at: stamp(), text }];
             S.unreadWords += text.split(/\s+/).length;
             emit();
+            autosaveNow();
           }
         } catch (e) { S.error = e.message; emit(); }
       };
@@ -171,6 +209,7 @@ export async function start() {
 }
 
 export function stop() {
+  const wasRunning = S.running;
   S.running = false;
   clearTimeout(chunkTimer); clearInterval(countdown);
   cancelAnimationFrame(raf);
@@ -181,6 +220,16 @@ export function stop() {
   micAnalyser = null; sysAnalyser = null;
   S.hearMic = false; S.hearSystem = false;
   emit();
+  // File the session in the transcript library. The last audio chunk may still
+  // be transcribing, so give it a moment to land before the final write.
+  if (wasRunning && S.sessionId && S.transcript.trim()) {
+    setTimeout(async () => {
+      try {
+        await post("/api/live/finish", sessionPayload());
+        S.librarySaved = true; emit();
+      } catch { /* the autosave copy still exists on disk */ }
+    }, 2500);
+  }
 }
 
 function drawLoop() {
@@ -207,10 +256,12 @@ function drawLoop() {
 // ---- user actions --------------------------------------------------------- //
 
 export async function addPaste(text, read) {
+  ensureSessionId();
   S.transcript += (S.transcript ? " " : "") + text;
   S.entries = [...S.entries, { at: stamp(), text }];
   S.unreadWords += text.split(/\s+/).length;
   emit();
+  autosaveNow();
   if (read) await performRead();
 }
 
@@ -296,8 +347,28 @@ export function newSession() {
     lastTail: "", lastReadAt: 0, startedAt: 0, nextIn: CADENCE_S, error: null,
     note: null, sharp: null, sharpPending: "", busy: "", seq: 1, manager: null,
     noteSave: null, noteSaveEdits: {}, noteSaveEditing: {}, noteSaveUrl: "",
+    sessionId: "", librarySaved: false,
   });
   emit();
+}
+
+/* Reopen a library transcript: restores the text, context and questions so the
+   note can be drafted (or the meeting resumed) as if the session never closed. */
+export async function loadFromLibrary(sid) {
+  const rec = await get(`/api/transcripts/${encodeURIComponent(sid)}`);
+  newSession();
+  S.sessionId = rec.id; S.librarySaved = !rec.unfinished;
+  S.who = rec.who || ""; S.goal = rec.goal || "";
+  S.transcript = rec.transcript || "";
+  S.entries = rec.entries || [];
+  S.batches = (rec.recaps || []).map((r, i) => ({ id: i + 1, at: r.at, recap: r.recap }));
+  S.items = (rec.questions || []).map((q) => ({
+    id: S.seq++, batch: 0, q: q.q, flag: !!q.flag, starred: !!q.starred,
+    answer: q.answer || null,
+  }));
+  if (rec.started) S.startedAt = Date.parse(rec.started) || 0;
+  emit();
+  if (rec.who) resolveManager(rec.who);
 }
 
 // ---- save the drafted note to Notion (preview → edit → create) ----------- //

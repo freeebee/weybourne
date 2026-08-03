@@ -27,3 +27,8 @@ web/dist/
 .DS_Store
 data/questions/
 data/managers/
+
+# Live-meeting autosaves and the transcript library hold real meeting audio
+# transcripts - never commit them.
+data/live_sessions/
+data/transcripts/

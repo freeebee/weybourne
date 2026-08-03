@@ -37,7 +37,7 @@ from src import config, llm
 from src.connectors.graph import CALENDAR_SNAPSHOT, INBOX_SNAPSHOT, GraphConnector
 from src.connectors.notion_client import NotionConnector
 from src.db import init_db
-from src.features import managers, notion_sync
+from src.features import managers, notion_sync, transcript_library
 from src.features.dedupe import dedupe_entity
 from src.features.draft_reply import generate_draft_options
 from src.features.inbox_triage import triage_email
@@ -1364,6 +1364,54 @@ def live_note(body: NoteIn):
     note = _run(draft_meeting_note, _client(), _buffer_from(body.transcript),
                 body.context, body.unanswered)
     return {"note": note, "markdown": note_to_markdown(note)}
+
+
+# --------------------------------------------------------------------------- #
+# Live-session autosave + transcript library. The browser is the only place a
+# recording lives, so the store mirrors its state to disk every few seconds
+# (autosave) and files the session permanently on Stop (finish).
+# --------------------------------------------------------------------------- #
+
+class LiveSessionIn(BaseModel):
+    id: str
+    who: str = ""
+    goal: str = ""
+    started: str = ""
+    transcript: str = ""
+    entries: list[dict] = []
+    recaps: list[dict] = []
+    questions: list[dict] = []
+
+
+def _session_record(body: LiveSessionIn) -> dict:
+    return {"id": body.id, "who": body.who, "goal": body.goal,
+            "started": body.started, "transcript": body.transcript,
+            "entries": body.entries, "recaps": body.recaps,
+            "questions": body.questions}
+
+
+@app.post("/api/live/autosave")
+def live_autosave(body: LiveSessionIn):
+    transcript_library.autosave(_session_record(body))
+    return {"ok": True}
+
+
+@app.post("/api/live/finish")
+def live_finish(body: LiveSessionIn):
+    return transcript_library.finish(_session_record(body))
+
+
+@app.get("/api/transcripts")
+def transcripts_list():
+    return {"transcripts": transcript_library.list_all()}
+
+
+@app.get("/api/transcripts/{sid}")
+def transcript_detail(sid: str):
+    rec = transcript_library.load(sid)
+    if rec is None:
+        raise HTTPException(status_code=404, detail="No such transcript")
+    return rec
 
 
 # --------------------------------------------------------------------------- #
