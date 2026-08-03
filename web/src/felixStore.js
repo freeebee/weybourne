@@ -172,6 +172,7 @@ export async function review(changeId, action) {
       spawnLabel(UNDO_PHRASES[Math.floor(Math.random() * UNDO_PHRASES.length)],
                  "caution");
     }
+    fetchChanges();   // twins of this finding get superseded server-side
   } catch (e) { S.error = e.message; }
   S.busy = ""; emit();
 }

@@ -1887,11 +1887,26 @@ def felix_review(change_id: str, body: FelixReviewIn):
     change = felix_store.find_change(change_id)
     if change is None:
         raise HTTPException(status_code=404, detail="No such change")
+    def _supersede_siblings():
+        """The same finding often appears twice across runs (a dry-run row
+        plus the applied one, or a re-detected duplicate). Deciding one
+        decides them all — the twins are marked Superseded, not left queued."""
+        for other in felix_store.list_all_changes(review="Awaiting Review",
+                                                  limit=5000):
+            if (other.change_id != change_id
+                    and other.record_id == change.record_id
+                    and other.change_type == change.change_type
+                    and other.property_changed == change.property_changed):
+                felix_store.update_change(other.change_id,
+                                          {"review_status": "Superseded"})
+
     if body.action == "approve":
         felix_store.update_change(change_id, {"review_status": "Approved"})
+        _supersede_siblings()
         return {"change_id": change_id, "review_status": "Approved"}
     if body.action == "dismiss":
         felix_store.update_change(change_id, {"review_status": "Dismissed"})
+        _supersede_siblings()
         return {"change_id": change_id, "review_status": "Dismissed"}
     if body.action == "undo":
         felix_store.update_change(change_id,

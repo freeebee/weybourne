@@ -137,6 +137,13 @@ class TestOtherIssues:
         clean = card("b", name="ACME LLC", email="x@acme.com")
         assert detect.find_formatting_issues([clean]) == []
 
+    def test_email_with_display_name_left_alone(self):
+        # "Allison Stavro <allison@sinefine.co>" — the capitals belong to the
+        # display name; lowercasing the whole value would mangle it.
+        c = card("a", name="Allison Stavro",
+                 email="Allison Stavro <allison@sinefine.co>")
+        assert detect.find_formatting_issues([c]) == []
+
     def test_employer_inference_exact_domain_only(self):
         co = card("co1", db="companies", name="Fife Capital", email=None,
                   extra_props={"Website": {"type": "url",

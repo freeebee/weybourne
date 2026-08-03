@@ -223,9 +223,20 @@ def find_dangling_relations(cards: list[dict], relation_map: dict,
     return out
 
 
+import re as _re
+
+_BARE_EMAIL = _re.compile(r"^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$")
+
+
 def find_formatting_issues(cards: list[dict]) -> list[dict]:
     """High-confidence mechanical fixes only: title whitespace and email
-    casing. Word-casing rewrites are acronym-hazardous and are NOT proposed."""
+    casing. Word-casing rewrites are acronym-hazardous and are NOT proposed.
+
+    Email lowercasing applies ONLY to a bare address: a value like
+    "Allison Stavro <allison@sinefine.co>" carries a display name whose
+    capitalisation is correct — lowercasing the whole string would mangle it,
+    so those values are left entirely alone.
+    """
     out = []
     for c in cards:
         if c["archived"]:
@@ -235,14 +246,13 @@ def find_formatting_issues(cards: list[dict]) -> list[dict]:
         if name and cleaned != name:
             out.append({"card": c, "kind": "title_whitespace",
                         "property": c["title_prop"], "from": name, "to": cleaned})
-        email_raw = ""
         for prop, payload in c["raw"].items():
             if payload.get("type") == "email" and payload.get("email"):
                 email_raw = payload["email"]
-                if email_raw != email_raw.strip().lower():
+                addr = email_raw.strip()
+                if _BARE_EMAIL.match(addr) and email_raw != addr.lower():
                     out.append({"card": c, "kind": "email_case", "property": prop,
-                                "from": email_raw,
-                                "to": email_raw.strip().lower()})
+                                "from": email_raw, "to": addr.lower()})
     return out
 
 

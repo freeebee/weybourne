@@ -72,48 +72,6 @@ function Station({ kind, x, active }) {
   );
 }
 
-/* One 8-bit flame that fully engulfs Felix — a single silhouette rising
-   around him (behind the sprite), two flickering frames. */
-function PixelFire({ width = 104 }) {
-  const px = (cells, fill) => cells.map(([cx, cy, w = 1, h = 1], i) => (
-    <rect key={fill + i} x={cx} y={cy} width={w} height={h} fill={fill} />
-  ));
-  // Outer silhouette (red), inner body (orange), core (yellow) — one blob.
-  const frameA = (
-    <>
-      {px([[9, 0], [10, 1], [8, 2], [13, 2], [5, 4], [14, 3], [16, 5], [3, 6],
-           [17, 7], [2, 8], [18, 9], [1, 10],
-           [7, 1, 2, 2], [9, 2, 4, 3], [6, 3, 8, 3], [4, 5, 12, 3],
-           [3, 7, 14, 4], [2, 9, 16, 5], [1, 11, 18, 9], [2, 20, 16, 2]],
-          "#E25822")}
-      {px([[8, 4], [12, 5], [6, 6, 8, 3], [5, 8, 10, 4], [4, 11, 12, 6],
-           [5, 17, 10, 3], [15, 12, 2, 3]], "#F59E0B")}
-      {px([[9, 7], [7, 9, 6, 3], [6, 12, 8, 5], [8, 17, 4, 2]], "#FDE68A")}
-    </>
-  );
-  const frameB = (
-    <>
-      {px([[10, 0], [12, 1], [7, 2], [15, 3], [4, 3], [17, 5], [2, 6], [18, 8],
-           [1, 9], [16, 6],
-           [9, 1, 3, 2], [7, 3, 7, 2], [5, 4, 11, 3], [3, 6, 14, 4],
-           [2, 8, 16, 4], [1, 11, 18, 9], [2, 20, 16, 2]],
-          "#E25822")}
-      {px([[11, 4], [6, 5], [8, 6, 6, 3], [5, 9, 11, 4], [4, 12, 13, 5],
-           [6, 17, 9, 3], [3, 10, 2, 4]], "#F59E0B")}
-      {px([[10, 8], [8, 10, 5, 3], [7, 13, 7, 4], [9, 17, 3, 2]], "#FDE68A")}
-    </>
-  );
-  return (
-    <svg viewBox="0 0 20 22" width={width} shapeRendering="crispEdges"
-      style={{ position: "absolute", bottom: -2, left: "50%",
-               transform: "translateX(-50%)", pointerEvents: "none",
-               opacity: .75 }}>
-      <g style={{ animation: "px-swapA .26s steps(1) infinite" }}>{frameA}</g>
-      <g style={{ animation: "px-swapB .26s steps(1) infinite" }}>{frameB}</g>
-    </svg>
-  );
-}
-
 function Scene({ scene }) {
   const x = STATION_X[scene.zone] ?? 50;
   const fixing = scene.activity === "fix";
@@ -149,7 +107,6 @@ function Scene({ scene }) {
                    top: 118, width: 110,
                    animation: scene.activity === "walk"
                      ? "fx-hop .38s ease-in-out infinite" : "none" }}>
-          {scene.power && <PixelFire />}
           <div style={{ position: "relative", height: 134 }}>
             {fixing ? (
               <>
