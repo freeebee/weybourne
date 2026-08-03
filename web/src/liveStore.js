@@ -41,7 +41,27 @@ function emit() { S.version++; listeners.forEach((f) => f()); }
 export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 export function getVersion() { return S.version; }
 
-export function set(patch) { Object.assign(S, patch); emit(); }
+export function set(patch) {
+  const renamed = ("who" in patch && patch.who !== S.who)
+    || ("goal" in patch && patch.goal !== S.goal);
+  Object.assign(S, patch);
+  emit();
+  if (renamed) persistLibraryRecord();
+}
+
+/* A stopped session that lives in the library keeps its stored copy fresh:
+   picking who the meeting was with (calendar, managers, typing) retitles the
+   library record from "Untitled meeting" to the real name. Debounced. */
+let persistTimer = null;
+export function persistLibraryRecord() {
+  if (!S.sessionId || S.running || !S.transcript.trim()) return;
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    post("/api/live/finish", sessionPayload())
+      .then(() => { S.librarySaved = true; emit(); })
+      .catch(() => { /* the autosave copy still stands */ });
+  }, 800);
+}
 
 function context() {
   return [S.who ? `Meeting with ${S.who}.` : "", S.goal].filter(Boolean).join(" ");
@@ -303,6 +323,7 @@ export function setManagerContext(thread) {
   S.who = S.who || thread.entity;
   (thread.questions || []).forEach((k) => addOwnQuestion(k.q, true));
   emit();
+  persistLibraryRecord();   // retitle the stored session if one is loaded
 }
 
 /* Fuzzy-resolve any name (calendar counterparty, subject, typed) to a
