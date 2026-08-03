@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { get } from "../api.js";
 import * as live from "../liveStore.js";
 import {
-  Banner, Button, Card, ErrorNote, Field, Mascot, PageHeader, SectionHead,
-  fmtDate, fmtTime, inputStyle,
+  Banner, Button, Card, ErrorNote, Field, FilePick, Mascot, PageHeader,
+  SectionHead, fmtDate, fmtTime, inputStyle,
 } from "../ui.jsx";
 
 export default function Prep() {
@@ -244,7 +244,7 @@ export default function Prep() {
               </div>
               <Field label="DECK OR TEARSHEET (OPTIONAL, PDF)" style={{ marginTop: 12 }}
                 hint="Attached to the selected meeting's briefing.">
-                <input type="file" accept=".pdf" onChange={(e) => setDeck(e.target.files[0])} />
+                <FilePick file={deck} onChange={setDeck} accept=".pdf" label="Choose PDF" />
               </Field>
             </>
           )}
@@ -262,7 +262,7 @@ export default function Prep() {
           {tab === "deck" && (
             <>
               <Field label="DECK OR TEARSHEET (PDF)">
-                <input type="file" accept=".pdf" onChange={(e) => setDeck(e.target.files[0])} />
+                <FilePick file={deck} onChange={setDeck} accept=".pdf" label="Choose PDF" />
               </Field>
               <Field label="COUNTERPARTY NAME (OPTIONAL)">
                 <input value={deckName} onChange={(e) => setDeckName(e.target.value)} style={inputStyle} />

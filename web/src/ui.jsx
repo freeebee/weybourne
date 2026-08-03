@@ -155,6 +155,41 @@ export function SearchSelect({ value = "", onChange, options = [], multi = false
   );
 }
 
+/* Styled file picker — the native "Choose File" control hidden behind a quiet
+   mono button, with the chosen filename (and a clear ×) beside it. */
+export function FilePick({ file, onChange, accept, label = "Choose file" }) {
+  const ref = React.useRef(null);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+      <input ref={ref} type="file" accept={accept} hidden
+        onChange={(e) => onChange(e.target.files[0] || null)} />
+      <button type="button" onClick={() => ref.current?.click()} className="mono"
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--teal-500)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--paper-200)"; }}
+        style={{ background: "var(--paper-000)", border: "1px solid var(--paper-200)",
+                 borderRadius: 4, padding: "8px 15px", cursor: "pointer",
+                 fontSize: 11, letterSpacing: ".12em", color: "var(--ink-700)",
+                 transition: "border-color .2s" }}>
+        {label.toUpperCase()}
+      </button>
+      {file ? (
+        <span style={{ fontSize: "13px", display: "inline-flex", gap: 8,
+                       alignItems: "center", minWidth: 0, overflowWrap: "anywhere" }}>
+          {file.name}
+          <button type="button" title="Remove"
+            onClick={() => { onChange(null); if (ref.current) ref.current.value = ""; }}
+            style={{ background: "none", border: "none", cursor: "pointer",
+                     color: "var(--stone-400)", fontSize: 15, padding: 0, lineHeight: 1 }}>
+            ×
+          </button>
+        </span>
+      ) : (
+        <span className="muted" style={{ fontSize: "12.5px" }}>No file chosen</span>
+      )}
+    </div>
+  );
+}
+
 export function Chip({ tone = "neutral", dot, children }) {
   return (
     <span className={`chip ${tone}`}>
