@@ -119,10 +119,10 @@ function applyResult(id, r) {
       && !Object.entries(S.results).some(([k, x]) => k !== id && x.is_investment)) {
     S.activeId = id;   // jump to the first investment-relevant hit
   }
-  // Auto-draft the reply (step 2) for mail that plausibly needs one:
-  // investment-relevant, or pre-flagged as needing the user's response.
-  const flag = S.flags[id]?.flag;
-  if ((r.is_investment || flag === "respond") && !S.work[id].options) {
+  // Auto-draft the reply (step 2) for EVERY triaged email — step 1's Notion
+  // check already runs on all mail, and drafts now follow suit regardless of
+  // investment relevance.
+  if (!S.work[id].options) {
     const m = S.messages?.find((x) => x.id === id);
     if (m) genDrafts(m);
   }
