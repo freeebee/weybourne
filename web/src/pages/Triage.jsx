@@ -311,22 +311,42 @@ function DetailPane({ msg, result, flag }) {
                 const edits = w.edits?.[p.kind] || {};
                 const drow = result.dedupe?.[p.kind];
                 const updated = (w.updatedKinds || []).includes(p.kind);
+                const createdUrl = (w.created || {})[p.kind];
                 return (
                   <div key={p.kind} style={{ margin: "10px 0 0" }}>
                     <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: "13.5px" }}>
-                      <input type="checkbox" checked={approved.has(p.kind)} onChange={(e) => {
-                        const next = new Set(approved);
-                        e.target.checked ? next.add(p.kind) : next.delete(p.kind);
-                        setApproved(next);
-                      }} />
-                      Create {p.kind}: <b>{edits.Name ?? p.title}</b>
-                      {p.needs_review && <Chip tone="caution">REVIEW</Chip>}
-                      <button onClick={(e) => { e.preventDefault(); ts.toggleProposalEdit(msg.id, p.kind); }}
-                        style={{ background: "none", border: "none", cursor: "pointer",
-                                 color: "var(--teal-700)", fontFamily: "var(--mono)",
-                                 fontSize: 10.5, letterSpacing: ".1em" }}>
-                        {editing ? "DONE" : "EDIT"}
-                      </button>
+                      {!createdUrl && (
+                        <input type="checkbox" checked={approved.has(p.kind)} onChange={(e) => {
+                          const next = new Set(approved);
+                          e.target.checked ? next.add(p.kind) : next.delete(p.kind);
+                          setApproved(next);
+                        }} />
+                      )}
+                      {createdUrl ? <>{p.kind}: <b>{edits.Name ?? p.title}</b></>
+                        : <>Create {p.kind}: <b>{edits.Name ?? p.title}</b></>}
+                      {createdUrl ? (
+                        <>
+                          <Chip tone="positive">ENTRY CREATED</Chip>
+                          {String(createdUrl).startsWith("http") && (
+                            <a href={createdUrl} target="_blank" rel="noreferrer"
+                               className="mono"
+                               style={{ fontSize: 10.5, letterSpacing: ".1em",
+                                        color: "var(--teal-700)" }}>
+                              OPEN IN NOTION
+                            </a>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {p.needs_review && <Chip tone="caution">REVIEW</Chip>}
+                          <button onClick={(e) => { e.preventDefault(); ts.toggleProposalEdit(msg.id, p.kind); }}
+                            style={{ background: "none", border: "none", cursor: "pointer",
+                                     color: "var(--teal-700)", fontFamily: "var(--mono)",
+                                     fontSize: 10.5, letterSpacing: ".1em" }}>
+                            {editing ? "DONE" : "EDIT"}
+                          </button>
+                        </>
+                      )}
                     </label>
                     <div style={{ marginLeft: 24, display: "grid",
                       gridTemplateColumns: "130px minmax(0,1fr)", gap: "2px 12px", marginTop: 4 }}>
@@ -385,7 +405,7 @@ function DetailPane({ msg, result, flag }) {
 
                     {/* Possible duplicate: side-by-side against the existing
                         record, with merge-or-create as YOUR call. */}
-                    {p.needs_review && drow?.existing && (
+                    {p.needs_review && drow?.existing && !createdUrl && (
                       <div style={{ marginLeft: 24, marginTop: 10, padding: "12px 14px",
                                     background: "var(--paper-050)",
                                     border: "1px solid var(--paper-200)",
@@ -440,10 +460,18 @@ function DetailPane({ msg, result, flag }) {
               })}
               <div className="row" style={{ marginTop: 12, flexWrap: "wrap" }}>
                 {result.proposals?.length > 0 && (
-                  <Button variant="ghost" busy={isBusy("apply")} disabled={!approved.size}
-                    onClick={applyPlan}>
-                    Create {approved.size} approved {approved.size === 1 ? "entry" : "entries"}
-                  </Button>
+                  result.proposals.every((p) => (w.created || {})[p.kind]) ? (
+                    <span style={{ fontSize: "12.5px", color: "var(--positive-600)" }}>
+                      {result.proposals.length === 1
+                        ? "Entry created in Notion."
+                        : `All ${result.proposals.length} entries created in Notion.`}
+                    </span>
+                  ) : (
+                    <Button variant="ghost" busy={isBusy("apply")} disabled={!approved.size}
+                      onClick={applyPlan}>
+                      Create {approved.size} approved {approved.size === 1 ? "entry" : "entries"}
+                    </Button>
+                  )
                 )}
                 {w.emailNoteUrl ? (
                   <span className="muted" style={{ fontSize: "12.5px" }}>

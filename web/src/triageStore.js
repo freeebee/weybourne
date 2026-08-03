@@ -268,7 +268,13 @@ export function applyPlan(msg) {
     const res = await post("/api/notion/apply",
       { proposals: r.proposals, approved_kinds: w.approved || [],
         edits: w.edits || {} });
+    // Mark each created kind (with its Notion URL) so the rows can show
+    // "entry created" in place of the create checkbox.
+    const created = { ...(w.created || {}) };
+    res.created.forEach(([kind, url]) => { created[kind] = url || "done"; });
     setWork(msg.id, {
+      created,
+      approved: (w.approved || []).filter((k) => !(k in created)),
       notice: `Created: ${res.created.map((c) => c[0]).join(", ") || "none"}.`
         + (res.live ? "" : " (Demo mode — nothing was actually written.)"),
     });
