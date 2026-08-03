@@ -39,6 +39,11 @@ REASONING_MODEL = os.environ.get("CLAUDE_REASONING_MODEL", "claude-opus-4-8")
 # fraction of the latency of the reasoning model, ample for the task.
 FAST_MODEL = os.environ.get("CLAUDE_FAST_MODEL", "claude-haiku-4-5-20251001")
 
+# Live-meeting model (30-second reads, question sharpening): needs real
+# reasoning sharpness but must land within the read cadence — Sonnet sits
+# between Haiku's speed and Opus's depth and fits both constraints.
+LIVE_MODEL = os.environ.get("CLAUDE_LIVE_MODEL", "claude-sonnet-5")
+
 # --------------------------------------------------------------------------- #
 # Model backend
 # --------------------------------------------------------------------------- #

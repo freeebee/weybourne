@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Protocol
 
-from src.config import FAST_MODEL, REASONING_MODEL
+from src.config import LIVE_MODEL, REASONING_MODEL
 
 
 # --------------------------------------------------------------------------- #
@@ -284,9 +284,9 @@ def read_transcript_batch(
         f"TRANSCRIPT (recent window)\n{buffer.recent_text()}"
     )
     response = client.messages.create(
-        # Fast model: this fires every 30 seconds mid-call — latency beats
-        # marginal quality here, and the read task is well within its range.
-        model=FAST_MODEL,
+        # Sonnet: sharp enough to spot contradictions and probe implications,
+        # fast enough to land within the 30-second read cadence.
+        model=LIVE_MODEL,
         max_tokens=1500,
         system=READ_SYSTEM_PROMPT,
         output_config={"format": {"type": "json_schema", "schema": READ_SCHEMA}},
@@ -325,8 +325,9 @@ def sharpen_question(client, buffer: TranscriptBuffer, rough: str, context: str 
         f"TRANSCRIPT (recent window)\n{buffer.recent_text()}"
     )
     response = client.messages.create(
-        # Fast model: the user is waiting mid-conversation for this rewrite.
-        model=FAST_MODEL,
+        # Sonnet: the user is waiting mid-conversation, but the rewrite must
+        # actually be sharper than what they typed.
+        model=LIVE_MODEL,
         max_tokens=800,
         system=READ_SYSTEM_PROMPT,
         output_config={"format": {"type": "json_schema", "schema": SHARPEN_SCHEMA}},
