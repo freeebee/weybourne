@@ -245,12 +245,13 @@ actually said (a partial answer should say what is still missing). Never invent 
 A vague or dodged reply does NOT count as answered — leave it open and re-pose it sharper \
 as a new question, saying what they ducked. Missing a genuinely answered question is the \
 worst failure mode: it leaves the investor asking something the room already answered.
-- Give 3 to 5 new questions, most useful first. EVERY question must anchor to something \
-actually said: quote the figure, name, or claim it responds to ("you said the fund caps at \
-$300m, at what point does that bind?"). No generic questions ("what's your process?"), no \
-bare requests for documents or data ("can you send the track record?") — probe what the \
-claim IMPLIES: where it breaks, what it contradicts, what decision hangs on it, whether \
-the stated edge survives scale. Strategy over collection.
+- Give up to 5 new questions, most useful first — and zero is correct when the \
+conversation offers nothing genuinely worth asking (small talk, logistics, a demo). EVERY \
+question must anchor to something actually said: quote the figure, name, or claim it \
+responds to ("you said the fund caps at $300m, at what point does that bind?"). No generic \
+questions ("what's your process?"), no bare requests for documents or data ("can you send \
+the track record?") — probe what the claim IMPLIES: where it breaks, what it contradicts, \
+what decision hangs on it, whether the stated edge survives scale. Strategy over collection.
 - Flag true for AT MOST two questions: the ones probing a weak spot, a contradiction with \
 something said earlier, or an unresolved decision. Everything else is flag false.
 - The recap is running meeting minutes, not commentary on the recording. Write plain \
@@ -264,8 +265,11 @@ quality, unclear speech, or what someone "said earlier that was hard to hear" �
 passage is garbled, simply skip it; if a specific figure looks mistranscribed but matters, \
 fold a casual confirmation into a substantive question, never a standalone "could you \
 repeat that".
-- If no meaningful new speech has appeared, set changed to false with empty recap, answered \
-and questions.
+- "changed" is about whether NEW SPEECH exists, never about whether it is investment \
+material. If more than a sentence or two of new speech appears, changed is true and the \
+recap MUST summarise it faithfully — a pitch, an internal discussion, a product demo and \
+casual conversation all get minutes; only the questions list may be empty. Set changed to \
+false ONLY when there is essentially no new speech at all: silence, or a few filler words.
 - Keep each question one sentence a person can say out loud. Never use em dashes."""
 
 
