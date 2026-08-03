@@ -13,10 +13,41 @@ Property parsing follows the Property Guidebook:
 """
 from __future__ import annotations
 
+import threading
+import time as _time
 from typing import Optional
 
 from src import config
 from src.schemas import CompanyRecord, ContactRecord, FundRecord
+
+
+class NotionPartialResult(Exception):
+    """A strict query could not fetch the complete database.
+
+    Carries the rows fetched so far; raised only when ``strict=True`` — callers
+    that must reason about the WHOLE database (the clean-up agent) treat a
+    partial scan as a hard failure rather than silently acting on missing data.
+    """
+
+    def __init__(self, db_id: str, rows: list):
+        self.db_id, self.rows = db_id, rows
+        super().__init__(f"partial result for {db_id}: only {len(rows)} rows fetched")
+
+
+# One integration shares a ~3 req/s budget across every thread in the process;
+# a single gate in front of ALL requests keeps bulk work inside it.
+_REQ_LOCK = threading.Lock()
+_LAST_REQ = 0.0
+_MIN_INTERVAL = 0.35
+
+
+def _throttle() -> None:
+    global _LAST_REQ
+    with _REQ_LOCK:
+        wait = _MIN_INTERVAL - (_time.time() - _LAST_REQ)
+        if wait > 0:
+            _time.sleep(wait)
+        _LAST_REQ = _time.time()
 
 # --------------------------------------------------------------------------- #
 # Sample data (mock mode)
@@ -184,7 +215,8 @@ class NotionConnector:
     def _query_db(self, db_id: str, page_size: int = 100,
                   filter_payload: Optional[dict] = None,
                   sorts: Optional[list] = None,
-                  property_ids: Optional[list] = None) -> list[dict]:
+                  property_ids: Optional[list] = None,
+                  strict: bool = False) -> list[dict]:
         """Paginated query with 5xx resilience.
 
         Live databases can 500 server-side — either on payload size or on a
@@ -192,6 +224,10 @@ class NotionConnector:
         5xx the page size is halved and retried; if a tiny page still 500s the
         rows fetched so far are returned rather than failing the caller (the
         app degrades to a partial list instead of a dead feature).
+
+        ``strict=True`` inverts that: an incomplete fetch raises
+        ``NotionPartialResult`` instead — for callers whose decisions depend on
+        having seen EVERY row (dedupe, dangling-relation checks).
 
         ``property_ids`` (Notion property IDs, not names) narrows the returned
         properties via filter_properties — both smaller payloads and a way to
@@ -216,6 +252,7 @@ class NotionConnector:
             if cursor:
                 payload["start_cursor"] = cursor
             try:
+                _throttle()
                 resp = requests.post(url, headers=self._headers(), params=params,
                                      json=payload, timeout=90)
             except (requests.exceptions.Timeout,
@@ -224,6 +261,8 @@ class NotionConnector:
                     size = max(5, size // 4)
                     time.sleep(1)
                     continue
+                if strict:
+                    raise NotionPartialResult(db_id, results) from e
                 print(f"[notion] {type(e).__name__} on {db_id} after "
                       f"{len(results)} rows — returning partial list",
                       file=sys.stderr)
@@ -233,6 +272,8 @@ class NotionConnector:
                     size = max(5, size // 4)
                     time.sleep(1)
                     continue
+                if strict:
+                    raise NotionPartialResult(db_id, results)
                 print(f"[notion] persistent 5xx on {db_id} after "
                       f"{len(results)} rows — returning partial list",
                       file=sys.stderr)
@@ -248,11 +289,25 @@ class NotionConnector:
             cursor = data.get("next_cursor")
         return results
 
+    def query_database_raw(self, db_id: str,
+                           filter_payload: Optional[dict] = None,
+                           sorts: Optional[list] = None,
+                           property_ids: Optional[list] = None,
+                           strict: bool = False) -> list[dict]:
+        """Every page of a database as raw Notion page dicts (all requested
+        properties, url, icon, archived, timestamps). Empty in mock mode —
+        callers that need offline data supply their own fixtures."""
+        if not self.live or not db_id:
+            return []
+        return self._query_db(db_id, filter_payload=filter_payload, sorts=sorts,
+                              property_ids=property_ids, strict=strict)
+
     def _property_ids(self, db_id: str, names: list[str]) -> list[str]:
         """Property IDs for the given property names (empty on any failure)."""
         import requests
 
         try:
+            _throttle()
             resp = requests.get(f"{config.NOTION_BASE_URL}/databases/{db_id}",
                                 headers=self._headers(), timeout=30)
             resp.raise_for_status()
@@ -320,6 +375,7 @@ class NotionConnector:
             return {}
         import requests
 
+        _throttle()
         resp = requests.get(f"{config.NOTION_BASE_URL}/databases/{db_id}",
                             headers=self._headers(), timeout=60)
         resp.raise_for_status()
@@ -343,6 +399,7 @@ class NotionConnector:
 
         lines, cursor = [], None
         while True:
+            _throttle()
             resp = requests.get(
                 f"{config.NOTION_BASE_URL}/blocks/{block_id}/children",
                 headers=self._headers(),
@@ -422,46 +479,162 @@ class NotionConnector:
             })
         return items
 
+    # -- single-page + schema reads --------------------------------------- #
+
+    def get_page(self, page_id: str) -> dict:
+        """One page with all its properties — pre-apply race checks and
+        post-apply verification. Mock mode returns a stub."""
+        if not self.live:
+            return {"id": page_id, "mock": True, "properties": {}}
+        import requests
+
+        _throttle()
+        resp = requests.get(f"{config.NOTION_BASE_URL}/pages/{page_id}",
+                            headers=self._headers(), timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+
+    def retrieve_database(self, db_id: str) -> dict:
+        """The raw database schema JSON (property types, relation targets)."""
+        if not self.live or not db_id:
+            return {}
+        import requests
+
+        _throttle()
+        resp = requests.get(f"{config.NOTION_BASE_URL}/databases/{db_id}",
+                            headers=self._headers(), timeout=60)
+        resp.raise_for_status()
+        return resp.json()
+
+    def page_property_items(self, page_id: str, prop_id: str) -> list[dict]:
+        """All items of a paginated page property (relations with >25 ids
+        arrive truncated on the page object; this fetches the full list)."""
+        if not self.live:
+            return []
+        import requests
+
+        items, cursor = [], None
+        while True:
+            _throttle()
+            resp = requests.get(
+                f"{config.NOTION_BASE_URL}/pages/{page_id}/properties/{prop_id}",
+                headers=self._headers(),
+                params={"page_size": 100, **({"start_cursor": cursor} if cursor else {})},
+                timeout=30,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            items.extend(data.get("results", []))
+            if not data.get("has_more"):
+                break
+            cursor = data.get("next_cursor")
+        return items
+
     # -- writes ----------------------------------------------------------- #
+
+    def _write_request(self, method: str, url: str, payload: dict) -> dict:
+        """All mutating requests: throttled, with retry on 429/5xx/409.
+
+        The read path has long had 5xx resilience; writes used to die on the
+        first 429, which a bulk clean-up run would hit within seconds.
+        """
+        import requests
+
+        last = None
+        for attempt in range(4):
+            _throttle()
+            resp = requests.request(method, url, headers=self._headers(),
+                                    json=payload, timeout=30)
+            if resp.status_code == 429:
+                _time.sleep(float(resp.headers.get("Retry-After", 1)))
+                continue
+            if resp.status_code >= 500 or resp.status_code == 409:
+                last = resp
+                _time.sleep(1 + attempt)
+                continue
+            resp.raise_for_status()
+            return resp.json()
+        (last or resp).raise_for_status()
+        return {}
+
     def create_page(self, db_id: str, properties: dict,
-                    children: Optional[list] = None) -> dict:
+                    children: Optional[list] = None,
+                    icon: Optional[dict] = None) -> dict:
         """Create a page in a database. No-op preview in mock mode.
 
         ``children`` are Notion block objects for the page body (e.g. the full
-        text of an email saved as a note).
+        text of an email saved as a note). ``icon`` is a Notion icon object
+        ({"type": "emoji", ...} or {"type": "external", ...}).
         """
         if not self.live:
             return {"id": "mock-page", "url": "https://notion.so/mock", "mock": True,
                     "properties_preview": properties}
-        import requests
-
         payload = {"parent": {"database_id": db_id}, "properties": properties}
         if children:
             payload["children"] = children[:100]   # Notion caps children per request
-        resp = requests.post(
-            f"{config.NOTION_BASE_URL}/pages",
-            headers=self._headers(),
-            json=payload,
-            timeout=30,
-        )
-        resp.raise_for_status()
-        return resp.json()
+        if icon:
+            payload["icon"] = icon
+        return self._write_request("POST", f"{config.NOTION_BASE_URL}/pages", payload)
 
-    def update_page(self, page_id: str, properties: dict) -> dict:
-        """Update properties on an existing page. No-op preview in mock mode."""
+    def update_page(self, page_id: str, properties: Optional[dict] = None,
+                    icon: Optional[dict] = None,
+                    archived: Optional[bool] = None) -> dict:
+        """Update a page: properties, icon and/or archived state. The body is
+        built from whichever arguments are given, so icons and (un)archiving —
+        previously impossible through this method — ride the same call.
+        No-op preview in mock mode."""
         if not self.live:
             return {"id": page_id, "url": "https://notion.so/mock", "mock": True,
-                    "properties_preview": properties}
-        import requests
+                    "properties_preview": properties or {},
+                    "icon": icon, "archived": archived}
+        payload: dict = {}
+        if properties:
+            payload["properties"] = properties
+        if icon is not None:
+            payload["icon"] = icon
+        if archived is not None:
+            payload["archived"] = archived
+        if not payload:
+            return {"id": page_id}
+        return self._write_request(
+            "PATCH", f"{config.NOTION_BASE_URL}/pages/{page_id}", payload)
 
-        resp = requests.patch(
-            f"{config.NOTION_BASE_URL}/pages/{page_id}",
-            headers=self._headers(),
-            json={"properties": properties},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        return resp.json()
+    def append_blocks(self, block_id: str, children: list) -> dict:
+        """Append blocks to a page/block (e.g. a 'Merged into X' pointer)."""
+        if not self.live:
+            return {"mock": True, "results": [{"id": "mock-block"}]}
+        return self._write_request(
+            "PATCH", f"{config.NOTION_BASE_URL}/blocks/{block_id}/children",
+            {"children": children[:100]})
+
+    def set_block_archived(self, block_id: str, archived: bool) -> dict:
+        """Archive/unarchive a single block (undo of an appended pointer)."""
+        if not self.live:
+            return {"mock": True, "id": block_id, "archived": archived}
+        return self._write_request(
+            "PATCH", f"{config.NOTION_BASE_URL}/blocks/{block_id}",
+            {"archived": archived})
+
+    # -- cache control ----------------------------------------------------- #
+
+    def invalidate_cache(self, keys: Optional[list] = None) -> None:
+        """Drop list caches (memory + disk snapshot) for the given collection
+        keys ('contacts', 'companies', 'funds'), or all of them.
+
+        Required after any run that archives pages: delta sync cannot see
+        archives, so without this the app's lists would resurrect archived
+        records for up to 7 days."""
+        keys = keys or ["contacts", "companies", "funds"]
+        for k in keys:
+            self._list_cache.pop(k, None)
+        store = self._disk_load()
+        changed = False
+        for k in keys:
+            if k in store:
+                store.pop(k)
+                changed = True
+        if changed:
+            self._disk_save(store)
 
 
 # --------------------------------------------------------------------------- #
@@ -496,6 +669,69 @@ def _status(page: dict, name: str) -> str:
 
 def _multi(page: dict, name: str) -> list[str]:
     return [o.get("name", "") for o in _prop(page, name).get("multi_select", [])]
+
+
+def relation_ids(page: dict, name: str) -> list[str]:
+    """Related page ids of a relation property (order-insensitive callers
+    should sort). NOTE: Notion truncates at 25 on the page object — when the
+    property carries has_more, fetch page_property_items for the full list."""
+    return [r.get("id", "") for r in _prop(page, name).get("relation", [])]
+
+
+def relation_has_more(page: dict, name: str) -> bool:
+    return bool(_prop(page, name).get("has_more"))
+
+
+def files_of(page: dict, name: str) -> list[dict]:
+    """[{name, url}] for a files property (file.url is a signed, expiring
+    link; external.url is stable)."""
+    out = []
+    for f in _prop(page, name).get("files", []):
+        url = (f.get("file") or {}).get("url") or (f.get("external") or {}).get("url", "")
+        out.append({"name": f.get("name", ""), "url": url})
+    return out
+
+
+def page_icon(page: dict) -> Optional[dict]:
+    return page.get("icon")
+
+
+def plain_value(payload: dict) -> tuple[str, object]:
+    """(type, comparable plain value) for ANY property payload.
+
+    The single normaliser used for snapshots' display values, verify-compare
+    and log rendering — Notion re-splits rich_text spans and normalises dates
+    on write, so raw JSON equality is meaningless; this is the stable form.
+    Lists come back sorted so comparisons are order-insensitive.
+    """
+    t = payload.get("type") or next(
+        (k for k in payload if k not in ("id", "type", "has_more")), "")
+    v = payload.get(t)
+    if t in ("title", "rich_text"):
+        return t, "".join(x.get("plain_text", "")
+                          or (x.get("text") or {}).get("content", "")
+                          for x in (v or []))
+    if t in ("email", "phone_number", "url", "number", "checkbox"):
+        return t, v if v is not None else ""
+    if t in ("select", "status"):
+        return t, (v or {}).get("name", "")
+    if t == "multi_select":
+        return t, sorted(o.get("name", "") for o in (v or []))
+    if t == "relation":
+        return t, sorted(r.get("id", "") for r in (v or []))
+    if t == "date":
+        d = v or {}
+        return t, f"{d.get('start') or ''}/{d.get('end') or ''}".rstrip("/")
+    if t == "people":
+        return t, sorted(p.get("id", "") for p in (v or []))
+    if t == "files":
+        return t, sorted(f.get("name", "") for f in (v or []))
+    if t == "formula":
+        inner = v or {}
+        return t, inner.get(inner.get("type", ""), "")
+    if t in ("created_time", "last_edited_time"):
+        return t, v or ""
+    return t, ""
 
 
 def _contact_from_page(p: dict) -> ContactRecord:

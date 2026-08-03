@@ -25,6 +25,7 @@ import json
 import sqlite3
 import threading
 import time
+from typing import Optional
 
 import pandas as pd
 from fastapi import FastAPI, Form, HTTPException, UploadFile
@@ -38,6 +39,10 @@ from src.connectors.graph import CALENDAR_SNAPSHOT, INBOX_SNAPSHOT, GraphConnect
 from src.connectors.notion_client import NotionConnector
 from src.db import init_db
 from src.features import managers, notion_sync, transcript_library
+from src.features.felix import store as felix_store
+from src.features.felix import undo as felix_undo
+from src.features.felix.models import RunOptions as FelixRunOptions
+from src.features.felix.run import felix_run
 from src.features.dedupe import dedupe_entity
 from src.features.draft_reply import generate_draft_options
 from src.features.inbox_triage import triage_email
@@ -1116,7 +1121,7 @@ _JOBS_LOCK = threading.Lock()
 # rough first-run figures so the very first job still shows an estimate.
 _DURATIONS: dict[str, list[float]] = {}
 _ETA_SEED = {"prep": 150, "whats-new-team": 60, "whats-new-inbox": 50,
-             "outlook-refresh": 180}
+             "outlook-refresh": 180, "felix": 600, "felix-undo": 30}
 
 
 def _eta(kind: str) -> int:
@@ -1781,6 +1786,168 @@ def _auto_outlook_refresh():
 
 
 threading.Thread(target=_auto_outlook_refresh, daemon=True).start()
+
+
+# --------------------------------------------------------------------------- #
+# Felix — the autonomous Notion clean-up agent (src/features/felix/).
+# Runs go through the jobs framework; the change log, snapshots and config
+# live under data/felix/, so review and stats never round-trip to Notion.
+# --------------------------------------------------------------------------- #
+
+class FelixRunIn(BaseModel):
+    dry_run: Optional[bool] = None      # None → dry unless live mode is enabled
+    max_writes: Optional[int] = None
+    databases: Optional[list[str]] = None
+
+
+@app.post("/api/jobs/felix")
+def start_felix_job(body: Optional[FelixRunIn] = None):
+    body = body or FelixRunIn()
+    cfg = felix_store.load_config()
+    live_ok = bool(cfg.get("live_enabled"))
+    dry = body.dry_run if body.dry_run is not None else (not live_ok)
+    if not dry and not live_ok:
+        raise HTTPException(status_code=400,
+                            detail="Live runs are disabled — review a dry run "
+                                   "and enable live mode first")
+    with _JOBS_LOCK:
+        if any(j["kind"] == "felix" and j["status"] == "running"
+               for j in _JOBS.values()):
+            raise HTTPException(status_code=409,
+                                detail="A Felix run is already in progress")
+    opts = FelixRunOptions(dry_run=dry)
+    if body.max_writes:
+        opts.max_writes = max(1, min(200, body.max_writes))
+    if body.databases:
+        opts.databases = [d for d in body.databases
+                          if d in ("contacts", "companies", "funds", "notes")]
+    client = _client()
+
+    def work(job: dict):
+        return felix_run(job, _notion, client, opts,
+                         checkpoint=lambda: _checkpoint(job))
+
+    label = "Felix clean-up" + (" (dry run)" if dry else "")
+    return _job_summary(_start_job("felix", label, work))
+
+
+@app.get("/api/felix/runs")
+def felix_runs():
+    return {"runs": [r.model_dump() for r in felix_store.list_runs()]}
+
+
+@app.get("/api/felix/runs/{run_id}")
+def felix_run_detail(run_id: str):
+    run = felix_store.load_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="No such run")
+    return {**run.model_dump(),
+            "changes": [c.model_dump()
+                        for c in felix_store.load_changes(run_id)]}
+
+
+@app.get("/api/felix/changes")
+def felix_changes(status: str = "", review: str = "", db: str = "",
+                  change_type: str = "", run_id: str = "", limit: int = 100,
+                  offset: int = 0):
+    rows = felix_store.list_all_changes(
+        status=status, review=review, db=db, change_type=change_type,
+        run_id=run_id, limit=max(1, min(500, limit)), offset=max(0, offset))
+    return {"changes": [c.model_dump() for c in rows]}
+
+
+class FelixReviewIn(BaseModel):
+    action: str          # approve | undo
+
+
+@app.post("/api/felix/changes/{change_id}/review")
+def felix_review(change_id: str, body: FelixReviewIn):
+    change = felix_store.find_change(change_id)
+    if change is None:
+        raise HTTPException(status_code=404, detail="No such change")
+    if body.action == "approve":
+        felix_store.update_change(change_id, {"review_status": "Approved"})
+        return {"change_id": change_id, "review_status": "Approved"}
+    if body.action == "undo":
+        felix_store.update_change(change_id,
+                                  {"review_status": "Undo Requested"})
+
+        def work(job: dict):
+            out = felix_undo.undo_change(_notion, change_id)
+            if out.get("status") == "Undone":
+                _notion.invalidate_cache()
+            return out
+
+        return {"change_id": change_id, "review_status": "Undo Requested",
+                "job": _job_summary(_start_job(
+                    "felix-undo", f"Undo {change_id}", work))}
+    raise HTTPException(status_code=400, detail="action must be approve or undo")
+
+
+@app.get("/api/felix/stats")
+def felix_stats():
+    return felix_store.stats()
+
+
+@app.get("/api/felix/status")
+def felix_status():
+    cfg = felix_store.load_config()
+    with _JOBS_LOCK:
+        running = next((_job_summary(j) for j in _JOBS.values()
+                        if j["kind"] == "felix" and j["status"] == "running"),
+                       None)
+    return {"live": _notion.live, "live_enabled": bool(cfg.get("live_enabled")),
+            "auto_run_enabled": bool(cfg.get("auto_run_enabled")),
+            "auto_run_hour": cfg.get("auto_run_hour", 7),
+            "running": running,
+            "stats": felix_store.stats()}
+
+
+class FelixConfigIn(BaseModel):
+    live_enabled: Optional[bool] = None
+    auto_run_enabled: Optional[bool] = None
+    auto_run_hour: Optional[int] = None
+
+
+@app.post("/api/felix/config")
+def felix_config(body: FelixConfigIn):
+    patch = {k: v for k, v in body.model_dump().items() if v is not None}
+    if "auto_run_hour" in patch:
+        patch["auto_run_hour"] = max(0, min(23, patch["auto_run_hour"]))
+    felix_store.save_config(patch)
+    return felix_store.load_config()
+
+
+def _auto_felix_run():
+    """One automatic clean-up run per day at the configured hour — only once
+    live mode has been explicitly enabled (auto dry-runs would just spam)."""
+    time.sleep(120)
+    while True:
+        try:
+            cfg = felix_store.load_config()
+            now = time.localtime()
+            today = time.strftime("%Y-%m-%d", now)
+            due = (cfg.get("auto_run_enabled") and cfg.get("live_enabled")
+                   and now.tm_hour >= int(cfg.get("auto_run_hour", 7))
+                   and cfg.get("last_auto_run_date") != today)
+            if due:
+                with _JOBS_LOCK:
+                    busy = any(j["kind"] == "felix" and j["status"] == "running"
+                               for j in _JOBS.values())
+                if not busy:
+                    felix_store.save_config({"last_auto_run_date": today})
+                    opts = FelixRunOptions(dry_run=False)
+                    client = _client()
+                    _start_job("felix", "Felix clean-up (scheduled)",
+                               lambda job: felix_run(
+                                   job, _notion, client, opts,
+                                   checkpoint=lambda: _checkpoint(job)))
+        except Exception:  # noqa: BLE001 - the scheduler must never die
+            pass
+        time.sleep(600)
+
+
+threading.Thread(target=_auto_felix_run, daemon=True).start()
 
 
 # --------------------------------------------------------------------------- #
