@@ -192,6 +192,13 @@ export default function Live() {
   const [refine, setRefine] = React.useState("");
   const [copied, setCopied] = React.useState(false);
 
+  // Writing the note minimises the questions + recap panes so the draft gets
+  // the room; they come back via SHOW, or when the note is gone.
+  const [panesMin, setPanesMin] = React.useState(false);
+  React.useEffect(() => {
+    if (!s.note && s.busy !== "note") setPanesMin(false);
+  }, [!!s.note, s.busy]);
+
   const openItems = s.items.filter((it) => !it.answer);
   const answeredItems = s.items.filter((it) => it.answer);
   const words = s.transcript ? s.transcript.split(/\s+/).length : 0;
@@ -206,11 +213,13 @@ export default function Live() {
         actions={s.running
           ? <>
               <Button variant="ghost" onClick={live.stop}>Stop</Button>
-              <Button variant="dark" busy={s.busy === "note"} onClick={live.draftNote}>Write the note</Button>
+              <Button variant="dark" busy={s.busy === "note"}
+                onClick={() => { setPanesMin(true); live.draftNote(); }}>Write the note</Button>
             </>
           : <>
               {s.transcript && (
-                <Button variant="dark" busy={s.busy === "note"} onClick={live.draftNote}>
+                <Button variant="dark" busy={s.busy === "note"}
+                  onClick={() => { setPanesMin(true); live.draftNote(); }}>
                   Write the note
                 </Button>
               )}
@@ -305,6 +314,24 @@ export default function Live() {
 
       <ErrorNote error={s.error} />
 
+      {panesMin ? (
+        <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap",
+                      padding: "10px 15px", background: "var(--paper-000)",
+                      border: "1px solid var(--paper-200)",
+                      borderRadius: "var(--radius)", marginBottom: 4 }}>
+          <span className="mono" style={{ fontSize: 10.5, letterSpacing: ".1em",
+                                          color: "var(--stone-500)" }}>
+            QUESTIONS · {openItems.length} OPEN · {answeredItems.length} ANSWERED
+            &nbsp;&nbsp;RECAPS · {s.batches.filter((b) => b.recap).length}
+          </span>
+          <button className="mono" onClick={() => setPanesMin(false)}
+            style={{ background: "none", border: "1px solid var(--paper-200)",
+                     borderRadius: 4, cursor: "pointer", padding: "3px 10px",
+                     fontSize: 10.5, letterSpacing: ".1em", color: "var(--teal-700)" }}>
+            SHOW
+          </button>
+        </div>
+      ) : (
       <div className="panes">
         {/* Questions pane — always visible: the toggle only controls whether
             reads ADD suggestions; sketching your own works either way. */}
@@ -482,6 +509,7 @@ export default function Live() {
           </div>
         </div>
       </div>
+      )}
 
       {/* The draft forming in real time — replaced by the finished card below */}
       {!s.note && s.busy === "note" && (
