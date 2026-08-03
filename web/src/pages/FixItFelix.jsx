@@ -70,10 +70,39 @@ function Station({ kind, x }) {
   );
 }
 
+/* 8-bit flames, two frames flipped by the px-swap pair — shown when Felix is
+   in POWER UP mode (a run is underway). */
+function PixelFire({ width = 150 }) {
+  const px = (cells, fill) => cells.map(([cx, cy, w = 1, h = 1], i) => (
+    <rect key={fill + i} x={cx} y={cy} width={w} height={h} fill={fill} />
+  ));
+  return (
+    <svg viewBox="0 0 26 14" width={width} shapeRendering="crispEdges"
+      style={{ position: "absolute", bottom: -4, left: "50%",
+               transform: "translateX(-50%)", pointerEvents: "none" }}>
+      <g style={{ animation: "px-swapA .28s steps(1) infinite" }}>
+        {px([[1, 6], [2, 4], [3, 8], [5, 3], [6, 6], [19, 5], [21, 3], [22, 7],
+             [24, 5], [0, 9, 2, 4], [3, 10, 3, 3], [18, 9, 3, 4], [23, 8, 3, 5]],
+            "#E25822")}
+        {px([[2, 7], [4, 9], [5, 6], [20, 6], [22, 9], [24, 7],
+             [1, 11, 2, 2], [19, 11, 2, 2]], "#F59E0B")}
+        {px([[2, 10], [4, 11], [20, 10], [24, 11]], "#FDE68A")}
+      </g>
+      <g style={{ animation: "px-swapB .28s steps(1) infinite" }}>
+        {px([[0, 4], [2, 6], [4, 2], [5, 7], [20, 2], [21, 6], [23, 4], [25, 7],
+             [1, 8, 3, 5], [4, 9, 2, 4], [19, 8, 3, 5], [23, 9, 3, 4]],
+            "#E25822")}
+        {px([[1, 6], [3, 8], [5, 10], [20, 7], [22, 8], [24, 10],
+             [2, 11, 2, 2], [21, 11, 3, 2]], "#F59E0B")}
+        {px([[3, 11], [1, 10], [21, 9], [23, 12]], "#FDE68A")}
+      </g>
+    </svg>
+  );
+}
+
 function Scene({ scene }) {
-  const state = { walk: "felix-walk", fix: "felix-fix", inspect: "felix-inspect",
-                  sleep: "felix-sleep" }[scene.activity] || "felix-inspect";
-  const x = scene.activity === "sleep" ? 50 : STATION_X[scene.zone] ?? 50;
+  const state = scene.activity === "walk" ? "felix-walk" : "felix-fix";
+  const x = STATION_X[scene.zone] ?? 50;
   return (
     <Card style={{ padding: 0, overflow: "hidden" }}>
       <div style={{ position: "relative", height: 330,
@@ -81,54 +110,117 @@ function Scene({ scene }) {
         {Object.entries(STATION_X).map(([kind, sx]) => (
           <Station key={kind} kind={kind} x={sx} />
         ))}
+
+        {/* POWER UP splash on run start */}
+        {scene.power && scene.powerBanner > 0 && (
+          <div key={scene.powerBanner} className="mono"
+            style={{ position: "absolute", left: "50%", top: "42%", zIndex: 5,
+                     transform: "translate(-50%,-50%)",
+                     background: "var(--ink-800)", color: "#FDE68A",
+                     border: "3px solid #E25822", borderRadius: 4,
+                     padding: "10px 22px", fontSize: 20, fontWeight: 700,
+                     letterSpacing: ".22em", textIndent: ".22em",
+                     animation: "fx-power 2.8s steps(24) forwards" }}>
+            POWER UP
+          </div>
+        )}
+
         {/* Felix */}
-        <div className="fx-sprite" style={{ position: "absolute",
-              left: `calc(${x}% - 62px)`, top: 158, width: 124 }}>
-          <Mascot state={state} width={124} />
+        <div className={"fx-sprite" + (scene.power ? " powered" : "")}
+          style={{ position: "absolute", left: `calc(${x}% - 62px)`,
+                   top: 158, width: 124 }}>
+          {scene.power && <PixelFire />}
+          <div style={{ position: "relative" }}>
+            <Mascot state={state} width={124} />
+          </div>
           {scene.labels.map((l, i) => (
-            <div key={l.id} className="mono"
+            <div key={l.id}
               onAnimationEnd={() => fx.dropLabel(l.id)}
-              style={{ position: "absolute", top: -6 - i * 4, left: "50%",
-                       transform: "translateX(-50%)", whiteSpace: "nowrap",
-                       fontSize: 11, letterSpacing: ".08em", padding: "3px 9px",
-                       borderRadius: 4, background: "var(--paper-000)",
-                       border: "1px solid var(--paper-200)",
-                       color: l.tone === "positive" ? "var(--positive-600)"
+              style={{ position: "absolute", top: -14 - i * 6, left: "50%",
+                       whiteSpace: "nowrap", zIndex: 6,
+                       fontSize: 13.5, fontWeight: 700, padding: "5px 12px",
+                       borderRadius: 10, background: "#FFFFFF",
+                       border: "2px solid var(--ink-800)",
+                       boxShadow: "2px 2px 0 rgba(28,36,48,.25)",
+                       color: l.tone === "positive" ? "var(--teal-700)"
                          : l.tone === "caution" ? "var(--caution-600)"
-                         : "var(--teal-700)",
-                       animation: "fx-label 2.6s ease-out forwards" }}>
+                         : "var(--ink-700)",
+                       animation: "fx-bubble 2.4s steps(20) forwards" }}>
               {l.text}
+              <span style={{ position: "absolute", left: 16, bottom: -7,
+                             width: 0, height: 0,
+                             borderLeft: "6px solid transparent",
+                             borderRight: "6px solid transparent",
+                             borderTop: "7px solid var(--ink-800)" }} />
             </div>
           ))}
         </div>
         <div className="mono" style={{ position: "absolute", left: 14, bottom: 10,
               fontSize: 10.5, letterSpacing: ".1em", color: "var(--stone-500)" }}>
-          {scene.caption.toUpperCase()}
+          {scene.caption.toUpperCase()}{scene.power ? " · POWERED UP" : ""}
         </div>
       </div>
     </Card>
   );
 }
 
-function Hud({ stats }) {
+/* Game-Dev-Story-style tracker: pixel icon + chunky count, everything Felix
+   has cleaned up since the start. */
+function Tracker({ stats }) {
   if (!stats) return null;
+  const icon = (draw) => (
+    <svg viewBox="0 0 10 10" width="22" shapeRendering="crispEdges">{draw}</svg>
+  );
+  const wrench = icon(<>
+    <rect x="2" y="6" width="6" height="2" fill="#9FB2BD" transform="rotate(-45 5 7)" />
+    <rect x="6" y="1" width="3" height="3" fill="#9FB2BD" />
+    <rect x="7" y="2" width="2" height="1" fill="#F7F3EA" /></>);
+  const pair = icon(<>
+    <rect x="1" y="2" width="3" height="3" fill="#41688A" />
+    <rect x="6" y="2" width="3" height="3" fill="#B0894E" />
+    <rect x="2" y="6" width="6" height="2" fill="#249692" /></>);
+  const link = icon(<>
+    <rect x="1" y="4" width="4" height="2" fill="#249692" />
+    <rect x="5" y="4" width="4" height="2" fill="#41688A" />
+    <rect x="4" y="3" width="2" height="4" fill="#1C2430" /></>);
+  const drop = icon(<>
+    <rect x="4" y="1" width="2" height="2" fill="#41688A" />
+    <rect x="3" y="3" width="4" height="4" fill="#41688A" />
+    <rect x="2" y="5" width="6" height="3" fill="#2F6688" /></>);
+  const flag = icon(<>
+    <rect x="2" y="1" width="1" height="8" fill="#1C2430" />
+    <rect x="3" y="1" width="5" height="3" fill="#D97706" /></>);
+  const rewind = icon(<>
+    <rect x="1" y="4" width="3" height="2" fill="#8C4038" />
+    <rect x="4" y="3" width="2" height="4" fill="#8C4038" />
+    <rect x="6" y="2" width="2" height="6" fill="#8C4038" /></>);
   const items = [
-    ["FIXES ALL-TIME", stats.applied_total],
-    ["TODAY", stats.applied_today],
-    ["MERGES", stats.by_type?.merge || 0],
-    ["FOR REVIEW", stats.recommendations],
-    ["UNDONE", stats.undone],
-    ["RUNS", stats.runs],
+    [wrench, stats.applied_total, "fixes"],
+    [pair, stats.by_type?.merge || 0, "merges"],
+    [drop, stats.by_type?.fill_missing || 0, "fills"],
+    [link, stats.by_type?.fix_relation || 0, "links"],
+    [flag, stats.recommendations, "flagged"],
+    [rewind, stats.undone, "undone"],
   ];
   return (
-    <div style={{ display: "flex", gap: 22, flexWrap: "wrap", margin: "16px 2px" }}>
-      {items.map(([k, v]) => (
-        <div key={k}>
-          <div style={{ fontFamily: "var(--serif)", fontSize: 30, lineHeight: 1 }}>
+    <div style={{ display: "flex", gap: 26, alignItems: "center",
+                  flexWrap: "wrap", padding: "10px 16px", margin: "14px 0 18px",
+                  background: "var(--paper-000)",
+                  border: "1px solid var(--paper-200)",
+                  borderRadius: "var(--radius)" }}>
+      <span className="mono" style={{ fontSize: 9.5, letterSpacing: ".14em",
+                                      color: "var(--stone-400)" }}>
+        CLEANED UP SINCE THE START
+      </span>
+      {items.map(([ic, v, label], i) => (
+        <span key={i} title={label}
+          style={{ display: "inline-flex", gap: 7, alignItems: "center" }}>
+          {ic}
+          <b style={{ fontSize: 21, color: "var(--ink-600)",
+                      fontVariantNumeric: "tabular-nums" }}>
             {(v ?? 0).toLocaleString()}
-          </div>
-          <div className="microlabel" style={{ marginTop: 3 }}>{k}</div>
-        </div>
+          </b>
+        </span>
       ))}
     </div>
   );
@@ -343,7 +435,7 @@ export default function FixItFelix() {
       )}
 
       <Scene scene={s.scene} />
-      <Hud stats={s.stats} />
+      <Tracker stats={s.stats} />
       <RunPanel s={s} />
       <ReviewTable s={s} />
     </div>

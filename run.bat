@@ -163,7 +163,11 @@ echo.
 echo Keep this window open while you use the app. Press Ctrl+C to stop.
 echo.
 start "" http://localhost:8000
-"%PY%" -m uvicorn api.main:app --host 0.0.0.0 --port 8000
+REM --reload watches ONLY the code directories: backend updates apply
+REM themselves without anyone killing this window. data/ is deliberately not
+REM watched - the app writes there constantly (autosaves, caches) and each
+REM write would otherwise bounce the server mid-meeting.
+"%PY%" -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir api --reload-dir src
 
 echo.
 echo The app has stopped.

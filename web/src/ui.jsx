@@ -309,11 +309,9 @@ const MASCOT_MOTION = {
   coffee: "wb-float 3.4s ease-in-out infinite",
   sleeping: "wb-float 4.2s ease-in-out infinite",
   avatar: "none",
-  // Felix carries his own inner part animations — no outer wrapper motion.
+  // Felix is 8-bit: his SVGs frame-flip internally; the walk adds a hop.
   "felix-fix": "none",
-  "felix-walk": "none",
-  "felix-inspect": "none",
-  "felix-sleep": "none",
+  "felix-walk": "fx-hop .3s steps(2) infinite",
 };
 
 const mascotCache = {};

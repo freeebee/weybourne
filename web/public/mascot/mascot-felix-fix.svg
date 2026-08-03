@@ -1,79 +1,78 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-label="Felix — fixing">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="240" height="240" role="img" aria-label="Felix — tinkering" shape-rendering="crispEdges">
 <title>mascot-felix-fix</title>
+<!-- 8-bit Felix: two frames swapped by the px-swap keyframes (steps feel). -->
 <defs>
-  <g id="faceG">
-    <ellipse cx="24" cy="60" rx="5" ry="7.5" fill="#EBBB94"></ellipse>
-    <ellipse cx="76" cy="60" rx="5" ry="7.5" fill="#EBBB94"></ellipse>
-    <path d="M26 40 C26 31 34 25 50 25 C66 25 74 31 74 40 V57 C74 76 64 88 50 88 C36 88 26 76 26 57 Z" fill="#F3CBA8"></path>
-    <path d="M50 11 C32 11 23 24 24 40 C24.3 44 26 44 26.6 41 C27.8 37 30 35 34.5 33.4 C44 36 62 35.5 70 39.5 C73.4 41.2 74.8 43 75.4 45 C76.2 47.6 78 47 78 42 C78 23 68 11 50 11 Z" fill="#5C3A21"></path>
-    <path d="M28 44 C29 31 37 25 50 25 C59 25 65 27.5 69 32 C60 29.5 45 30.5 37 36 C33 38.6 30 41 28 44 Z" fill="#6B4526"></path>
-    <path d="M36 13 l4 -7 l3 7 Z M46 10 l4 -8 l4 8 Z M57 12 l4 -7 l3 8 Z" fill="#5C3A21"></path>
-  </g>
-  <g id="glassesG">
-    <g fill="#FFFFFF" opacity=".45"><rect x="28.5" y="50.5" width="18" height="14" rx="4.5"></rect><rect x="53.5" y="50.5" width="18" height="14" rx="4.5"></rect></g>
-    <g fill="none" stroke="#23272E" stroke-width="2.6" stroke-linecap="round">
-      <rect x="28.5" y="50.5" width="18" height="14" rx="4.5"></rect>
-      <rect x="53.5" y="50.5" width="18" height="14" rx="4.5"></rect>
-      <path d="M46.5 55.5 h7"></path>
-      <path d="M28.5 54 l-5.5 3"></path>
-      <path d="M71.5 54 l5.5 3"></path>
-    </g>
-  </g>
-  <g id="browFocus" stroke="#1C2430" stroke-width="2.8" stroke-linecap="round" fill="none">
-    <path d="M31 44 q6 1 12 3"></path><path d="M69 44 q-6 1 -12 3"></path>
-  </g>
-  <g id="eyesDot" fill="#1C2430">
-    <circle cx="37.5" cy="58" r="2.9"></circle><circle cx="62.5" cy="58" r="2.9"></circle>
-  </g>
-  <path id="mouthGrit" d="M42 73 h16 a4 4 0 0 1 -4 7 h-8 a4 4 0 0 1 -4 -7 Z" fill="#8C4038"></path>
-  <symbol id="headFix" viewBox="0 0 100 100">
-    <use href="#faceG"></use><use href="#browFocus"></use><use href="#glassesG"></use><use href="#eyesDot"></use><use href="#mouthGrit"></use>
-  </symbol>
-
-  <g id="felixBody">
-    <path d="M110 92 h20 v16 h-20 Z" fill="#E0AC85"></path>
-    <path d="M120 106 C103 106 91 114 87 129 C83 143 84 158 85 166 H155 C156 158 157 143 153 129 C149 114 137 106 120 106 Z" fill="#7FA6C0"></path>
-    <path d="M98 131 h44 v35 h-44 Z" fill="#2F6688"></path>
-    <path d="M98 112 l8 20 h-8 Z" fill="#41688A"></path>
-    <path d="M142 112 l-8 20 h8 Z" fill="#41688A"></path>
-    <circle cx="104" cy="136" r="2.6" fill="#B0894E"></circle>
-    <circle cx="136" cy="136" r="2.6" fill="#B0894E"></circle>
-    <rect x="112" y="142" width="16" height="13" rx="2.5" fill="#41688A"></rect>
-    <rect x="93" y="159" width="54" height="9" rx="3" fill="#8A6642"></rect>
-    <rect x="115" y="160" width="10" height="7" rx="1.5" fill="#B0894E"></rect>
-    <rect x="97" y="164" width="13" height="15" rx="2.5" fill="#7A5A3C"></rect>
-    <rect x="101.5" y="155" width="3.4" height="11" rx="1.6" fill="#9FB2BD"></rect>
-    <rect x="101.9" y="150" width="2.6" height="6" rx="1.2" fill="#B0894E"></rect>
-    <path d="M101 166 h15 v26 h-15 Z" fill="#2F6688"></path>
-    <path d="M124 166 h15 v26 h-15 Z" fill="#2F6688"></path>
-    <path d="M99 192 h19 a3.5 3.5 0 0 1 3 7 h-22 Z" fill="#6B4A2F"></path>
-    <path d="M122 192 h19 a3.5 3.5 0 0 1 3 7 h-22 Z" fill="#6B4A2F"></path>
-  </g>
-
-  <g id="wrenchG">
-    <rect x="-3.6" y="-2" width="7.2" height="34" rx="3.4" fill="#9FB2BD"></rect>
-    <path d="M-10 -6 a11.5 11.5 0 0 1 20 0 l-4.5 6 a6.5 6.5 0 0 0 -11 0 Z" fill="#9FB2BD"></path>
-    <path d="M-10 -6 a11.5 11.5 0 0 1 20 0" fill="none" stroke="#8298A6" stroke-width="1.6"></path>
+  <g id="felixCore">
+    <!-- hair spikes + mop -->
+    <rect x="3" y="0" width="1" height="1" fill="#5C3A21"/>
+    <rect x="6" y="0" width="1" height="1" fill="#5C3A21"/>
+    <rect x="9" y="0" width="1" height="1" fill="#5C3A21"/>
+    <rect x="2" y="1" width="9" height="1" fill="#5C3A21"/>
+    <rect x="2" y="2" width="10" height="1" fill="#6B4526"/>
+    <!-- face -->
+    <rect x="3" y="3" width="8" height="1" fill="#F3CBA8"/>
+    <!-- glasses band + arms -->
+    <rect x="2" y="4" width="1" height="1" fill="#1C2430"/>
+    <rect x="3" y="4" width="3" height="1" fill="#1C2430"/>
+    <rect x="6" y="4" width="2" height="1" fill="#3A4454"/>
+    <rect x="8" y="4" width="3" height="1" fill="#1C2430"/>
+    <rect x="11" y="4" width="1" height="1" fill="#1C2430"/>
+    <!-- eyes -->
+    <rect x="3" y="5" width="8" height="1" fill="#F3CBA8"/>
+    <rect x="4" y="5" width="1" height="1" fill="#FFFFFF"/>
+    <rect x="9" y="5" width="1" height="1" fill="#FFFFFF"/>
+    <!-- mouth -->
+    <rect x="3" y="6" width="8" height="1" fill="#F3CBA8"/>
+    <rect x="6" y="6" width="2" height="1" fill="#8C4038"/>
+    <!-- neck -->
+    <rect x="5" y="7" width="4" height="1" fill="#F3CBA8"/>
+    <!-- shoulders / shirt -->
+    <rect x="3" y="8" width="8" height="1" fill="#7FA6C0"/>
+    <rect x="4" y="8" width="1" height="1" fill="#41688A"/>
+    <rect x="9" y="8" width="1" height="1" fill="#41688A"/>
+    <!-- overalls bib + shirt sides -->
+    <rect x="3" y="9" width="1" height="2" fill="#7FA6C0"/>
+    <rect x="10" y="9" width="1" height="2" fill="#7FA6C0"/>
+    <rect x="4" y="9" width="6" height="4" fill="#2F6688"/>
+    <rect x="6" y="10" width="2" height="1" fill="#41688A"/>
+    <!-- left arm on hip -->
+    <rect x="2" y="9" width="1" height="3" fill="#7FA6C0"/>
+    <rect x="2" y="12" width="1" height="1" fill="#E5B84C"/>
+    <!-- toolbelt -->
+    <rect x="3" y="13" width="8" height="1" fill="#8A6642"/>
+    <rect x="7" y="13" width="1" height="1" fill="#E5B84C"/>
+    <!-- legs -->
+    <rect x="4" y="14" width="2" height="3" fill="#2F6688"/>
+    <rect x="8" y="14" width="2" height="3" fill="#2F6688"/>
+    <!-- boots -->
+    <rect x="3" y="17" width="3" height="1" fill="#6B4A2F"/>
+    <rect x="8" y="17" width="3" height="1" fill="#6B4A2F"/>
   </g>
 </defs>
 
-<use href="#felixBody"></use>
-<use href="#headFix" x="70" y="4" width="100" height="100"></use>
-
-<!-- left arm on hip -->
-<path d="M92 122 C82 132 82 146 92 154" stroke="#7FA6C0" stroke-width="13" fill="none" stroke-linecap="round"></path>
-<circle cx="93" cy="155" r="7.2" fill="#E5B84C" stroke="#C99B33" stroke-width="1.8"></circle>
-
-<!-- right arm swinging the wrench -->
-<g style="animation:m-swing 1s ease-in-out infinite;transform-origin:146px 122px">
-  <path d="M146 122 C160 126 169 138 171 150" stroke="#7FA6C0" stroke-width="13" fill="none" stroke-linecap="round"></path>
-  <circle cx="171" cy="151" r="7.5" fill="#E5B84C" stroke="#C99B33" stroke-width="1.8"></circle>
-  <g transform="translate(176 132) rotate(38)"><use href="#wrenchG"></use></g>
+<!-- frame A: wrench raised -->
+<g style="animation:px-swapA .42s steps(1) infinite">
+  <use href="#felixCore"/>
+  <rect x="11" y="8" width="1" height="1" fill="#7FA6C0"/>
+  <rect x="12" y="7" width="1" height="1" fill="#7FA6C0"/>
+  <rect x="12" y="6" width="1" height="1" fill="#E5B84C"/>
+  <rect x="13" y="3" width="1" height="3" fill="#9FB2BD"/>
+  <rect x="12" y="2" width="1" height="1" fill="#9FB2BD"/>
+  <rect x="14" y="2" width="1" height="1" fill="#9FB2BD"/>
+  <rect x="12" y="1" width="1" height="1" fill="#9FB2BD"/>
+  <rect x="14" y="1" width="1" height="1" fill="#9FB2BD"/>
 </g>
 
-<!-- sparks where the wrench lands -->
-<g fill="#B0894E">
-  <path d="M196 108 l2.4 5 5 2.4 -5 2.4 -2.4 5 -2.4 -5 -5 -2.4 5 -2.4 Z" style="animation:m-spark 1s ease-in-out infinite"></path>
-  <path d="M206 128 l1.8 3.8 3.8 1.8 -3.8 1.8 -1.8 3.8 -1.8 -3.8 -3.8 -1.8 3.8 -1.8 Z" style="animation:m-spark 1s ease-in-out infinite;animation-delay:.5s"></path>
+<!-- frame B: wrench slammed down, spark -->
+<g style="animation:px-swapB .42s steps(1) infinite">
+  <use href="#felixCore"/>
+  <rect x="11" y="9" width="1" height="1" fill="#7FA6C0"/>
+  <rect x="12" y="10" width="1" height="1" fill="#7FA6C0"/>
+  <rect x="13" y="10" width="1" height="1" fill="#E5B84C"/>
+  <rect x="14" y="10" width="3" height="1" fill="#9FB2BD"/>
+  <rect x="17" y="9" width="1" height="1" fill="#9FB2BD"/>
+  <rect x="17" y="11" width="1" height="1" fill="#9FB2BD"/>
+  <rect x="18" y="8" width="1" height="1" fill="#E5B84C"/>
+  <rect x="19" y="10" width="1" height="1" fill="#E5B84C"/>
 </g>
 </svg>

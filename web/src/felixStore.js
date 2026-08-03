@@ -16,8 +16,10 @@ export const S = {
   runJob: null,            // summary of the running/last-polled felix job
   lastResult: null,
   scene: {
-    zone: "contacts", activity: "sleep",   // walk | fix | inspect | sleep
-    labels: [], caption: "asleep at the toolbox",
+    zone: "contacts", activity: "tinker",  // tinker | walk | fix
+    labels: [], caption: "tinkering…",
+    power: false,          // POWER UP: a run is underway — flames on
+    powerBanner: 0,        // timestamp key; re-renders the POWER UP splash
   },
   busy: "", error: null, version: 0,
 };
@@ -32,16 +34,32 @@ let eventQueue = [];             // real change events awaiting theatrics
 let seenEvents = new Set();
 let lastEventAt = 0, phaseUntil = 0, restored = false;
 
-const LABEL_TEXT = {
-  fix_formatting: "Record tidied!",
-  fix_icon: "Icon polished!",
-  fix_relation: "Relation repaired!",
-  fill_missing: "Detail filled in!",
-  merge: "Duplicate merged!",
-  merge_transfer: "Detail transferred!",
-  archive: "Duplicate archived!",
-  recommendation: "Flagged for review",
+// Speech-bubble phrase pools — spawned ONLY from real change events.
+const PHRASES = {
+  fix_formatting: ["Nice!", "Record sorted!", "Tidy!", "Spick and span!"],
+  fix_icon: ["Icon polished!", "Nice!", "Shiny!"],
+  fix_relation: ["Link repaired!", "Rewired!", "Reconnected!"],
+  fill_missing: ["Gap filled!", "Detail sorted!", "Nice!"],
+  merge: ["Duplicates squashed!", "Merged!", "Two became one!"],
+  merge_transfer: ["Detail carried over!", "Nothing lost!"],
+  archive: ["Duplicate shelved!", "Filed away!"],
+  recommendation: ["Hmm — flagged it.", "One for you to check."],
 };
+const DB_PHRASES = {
+  contacts: "Contact sorted!", companies: "Company sorted!",
+  funds: "Fund sorted!", notes: "Note sorted!",
+};
+const UNDO_PHRASES = ["Whoopsie!", "Oops, my bad!", "Undoing that one!",
+                      "Sorry! Rolling it back."];
+
+function phraseFor(ev) {
+  const pool = PHRASES[ev.type] || ["Nice!"];
+  // Every third fix or so, name the database GDS-style.
+  if (Math.random() < 0.34 && DB_PHRASES[ev.db] && ev.type !== "recommendation") {
+    return DB_PHRASES[ev.db];
+  }
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 // ---- data loading --------------------------------------------------------- //
 
@@ -81,9 +99,25 @@ export async function startRun({ dryRun } = {}) {
     const job = await post("/api/jobs/felix",
                            dryRun === undefined ? {} : { dry_run: dryRun });
     attach(job.id);
+    powerUp();
     lastEventAt = Date.now();
   } catch (e) { S.error = e.message; }
   S.busy = ""; emit();
+}
+
+function powerUp() {
+  if (!S.scene.power) {
+    S.scene.power = true;
+    S.scene.powerBanner = Date.now();
+    emit();
+  }
+}
+
+function powerDown() {
+  if (S.scene.power) {
+    S.scene.power = false;
+    emit();
+  }
 }
 
 export async function cancelRun() {
@@ -102,6 +136,7 @@ function attach(jobId) {
         get(`/api/jobs/${jobId}/partial`).catch(() => null),
       ]);
       S.runJob = summary;
+      if (summary.status === "running") powerUp();
       const events = partial?.partial?.events || [];
       for (const ev of events) {
         const key = ev.change_id + ev.status;
@@ -113,6 +148,7 @@ function attach(jobId) {
       }
       if (summary.status !== "running") {
         clearInterval(pollTimer); pollTimer = null;
+        powerDown();
         S.lastResult = summary.result || null;
         refreshStatus();
         fetchChanges();
@@ -131,6 +167,10 @@ export async function review(changeId, action) {
     S.changes = S.changes.map((c) => c.change_id === changeId
       ? { ...c, review_status: action === "approve" ? "Approved" : "Undo Requested" }
       : c);
+    if (action === "undo") {
+      spawnLabel(UNDO_PHRASES[Math.floor(Math.random() * UNDO_PHRASES.length)],
+                 "caution");
+    }
   } catch (e) { S.error = e.message; }
   S.busy = ""; emit();
 }
@@ -158,56 +198,58 @@ function set(activity, caption, ms) {
 
 function ensureSceneLoop() {
   if (sceneTimer) return;
-  sceneTimer = setInterval(tick, 700);
+  sceneTimer = setInterval(tick, 400);
 }
+
+const TINKER_LINES = ["tinkering…", "tightening bolts…", "oiling the hinges…",
+                      "checking the wiring…", "calibrating…", "polishing…"];
 
 function tick() {
   const now = Date.now();
   if (now < phaseUntil) return;
-  const running = S.runJob?.status === "running";
+  const power = S.scene.power;
+  const walkMs = power ? 850 : 900;      // matches .fx-sprite's .8s travel
+  const fixMs = power ? 900 : 1400;
 
-  // A real event: walk to its zone, then fix, then float the label.
+  // A real event: dash to its zone, wrench it, say something.
   if (eventQueue.length) {
     const ev = eventQueue.shift();
     const zone = ZONES.includes(ev.db) ? ev.db : S.scene.zone;
     if (S.scene.zone !== zone && S.scene.activity !== "walk") {
       S.scene.zone = zone;
-      set("walk", `heading to ${zone}…`, 1700);
-      eventQueue.unshift(ev);          // fix it after arriving
+      set("walk", `dashing to ${zone}…`, walkMs);
+      eventQueue.unshift(ev);            // wrench it after arriving
     } else {
-      set("fix", `${ev.record || "record"} — ${ev.label || "fixing"}`, 1500);
+      set("fix", `${ev.record || "record"} — ${ev.label || "fixing"}`, fixMs);
       if (["Applied", "Planned (dry-run)"].includes(ev.status)) {
-        spawnLabel(LABEL_TEXT[ev.type] || "Fixed!",
+        spawnLabel(phraseFor(ev),
                    ev.status === "Applied" ? "positive" : "teal");
       } else if (ev.status === "Recommended") {
-        spawnLabel("Flagged for review", "caution");
+        spawnLabel(phraseFor({ ...ev, type: "recommendation" }), "caution");
       } else if (ev.status === "Failed") {
-        spawnLabel("Couldn't fix — logged", "caution");
+        spawnLabel("Hmm, that one wouldn't budge.", "caution");
       }
     }
     emit();
     return;
   }
 
-  const idleFor = now - lastEventAt;
-  if (running) {
-    // Between events mid-run: keep inspecting the current zone.
-    set("inspect", `checking ${S.scene.zone}…`, 2600);
-  } else if (idleFor > 180000) {
-    if (S.scene.activity !== "sleep") set("sleep", "asleep at the toolbox", 8000);
-    else phaseUntil = now + 8000;
-  } else if (idleFor > 20000) {
-    // Gentle patrol — never claims a fix.
-    if (S.scene.activity === "walk") {
-      set("inspect", `inspecting ${S.scene.zone}…`, 4000 + Math.random() * 4000);
-    } else {
+  // No sleep, ever: Felix is always tinkering with SOMETHING — hopping
+  // between stations and wrenching away (without claiming fixes).
+  if (S.scene.activity === "walk") {
+    set("fix", TINKER_LINES[Math.floor(Math.random() * TINKER_LINES.length)],
+        power ? 1500 : 3200 + Math.random() * 2500);
+  } else {
+    // Wander roughly every other phase; otherwise keep tinkering here.
+    if (Math.random() < 0.45) {
       const next = ZONES[(ZONES.indexOf(S.scene.zone) + 1 +
                           Math.floor(Math.random() * 3)) % ZONES.length];
       S.scene.zone = next;
-      set("walk", `patrolling…`, 1700);
+      set("walk", "dashing over…", walkMs);
+    } else {
+      set("fix", TINKER_LINES[Math.floor(Math.random() * TINKER_LINES.length)],
+          power ? 1500 : 3200 + Math.random() * 2500);
     }
-  } else {
-    set("inspect", `looking things over…`, 3000);
   }
   emit();
 }
