@@ -38,8 +38,11 @@ TEAM_SCHEMA = {
             "items": {"type": "string"},
             "description": "4-7 substantive cross-meeting insights on the investments "
                            "side: patterns, shifts in view, where conviction moved and "
-                           "why, capacity/pricing signals. Two or three full sentences "
-                           "each, figures and names kept. Synthesis, not a restatement.",
+                           "why, capacity/pricing signals. Each MUST open with the key "
+                           "point in markdown bold — '**Asia venture pricing is "
+                           "resetting.** ' — followed by two or three full sentences of "
+                           "substance with figures and names kept. Synthesis, not a "
+                           "restatement.",
         },
         "meeting_highlights": {
             "type": "array",
@@ -80,9 +83,10 @@ means for the pipeline — not a list of section names.
 or in progress. Keep detail to one line.
 - key_insights: step back from the individual meetings and synthesise what the week says on \
 the investments side — recurring themes across managers, where the team's conviction moved, \
-capacity or pricing signals, anything that changes how the pipeline should be read. Two or \
-three full sentences each, grounded in the specifics. These must add something the meeting \
-highlights don't already say.
+capacity or pricing signals, anything that changes how the pipeline should be read. Open \
+each with the key point in **markdown bold** (a short, declarative claim), then two or \
+three full sentences of substance grounded in the specifics. These must add something the \
+meeting highlights don't already say.
 - meeting_highlights: choose the genuinely interesting meetings — a striking figure, a \
 contrarian claim, a capacity opening, a relationship development — and for each write three \
 to five sentences: what was discussed, the notable specifics, and why it matters to us. \

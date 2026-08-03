@@ -288,6 +288,13 @@ export default function Live() {
         <div style={{ flex: "1 1 300px", maxWidth: s.questions ? 420 : "none",
                       minWidth: "min(100%,280px)" }}>
           {s.running && (
+            <Field label="WHAT YOU WANT OUT OF IT" style={{ marginBottom: 12 }}
+              hint="Editable mid-meeting — steers the reads and the final note.">
+              <input value={s.goal} onChange={(e) => live.set({ goal: e.target.value })}
+                placeholder="e.g. re-up decision — test the capacity story" style={inputStyle} />
+            </Field>
+          )}
+          {s.running && (
             <Card style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
                 <Mascot state="call" width={54} />

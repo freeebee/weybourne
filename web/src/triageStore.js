@@ -118,6 +118,13 @@ function applyResult(id, r) {
       && !Object.entries(S.results).some(([k, x]) => k !== id && x.is_investment)) {
     S.activeId = id;   // jump to the first investment-relevant hit
   }
+  // Auto-draft the reply (step 2) for mail that plausibly needs one:
+  // investment-relevant, or pre-flagged as needing the user's response.
+  const flag = S.flags[id]?.flag;
+  if ((r.is_investment || flag === "respond") && !S.work[id].options) {
+    const m = S.messages?.find((x) => x.id === id);
+    if (m) genDrafts(m);
+  }
 }
 
 function poll(jobId) {
@@ -196,6 +203,16 @@ export function runScreen(msg) {
     const screen = await post("/api/screen",
       { entity: r.entity, key_facts: r.key_facts });
     setWork(msg.id, { screen });
+  }).then(async () => {
+    // The screen sharpens the drafts: if reply options already exist (or are
+    // still generating) without the verdict, refresh them once it lands.
+    const w = workOf(msg.id);
+    if (w.screen && w.options && !w.draftsHadScreen) {
+      await genDrafts(msg);
+      setWork(msg.id, {
+        notice: "Reply options sharpened with the preference screen verdict.",
+      });
+    }
   });
 }
 
@@ -204,25 +221,11 @@ export function genDrafts(msg) {
   return workCall(msg.id, "drafts", async (w) => {
     const res = await post("/api/drafts",
       { message: msg, entity: r.entity, screen: w.screen || null,
-        dedupe: r.dedupe || null });
+        dedupe: r.dedupe || null, slot_minutes: w.slotMinutes || 30 });
     setWork(msg.id, { options: res.options, chosen: 0,
                       draftBody: res.options[0]?.body || "",
                       draftsHadScreen: !!w.screen });
   });
-}
-
-/* Run the preference screen and the reply drafts AT THE SAME TIME. If the
-   drafts land first (they usually do), they are regenerated once the screen
-   arrives so the verdict is folded in. */
-export async function runScreenAndDrafts(msg) {
-  await Promise.all([runScreen(msg), genDrafts(msg)]);
-  const w = workOf(msg.id);
-  if (w.screen && w.options && !w.draftsHadScreen) {
-    await genDrafts(msg);
-    setWork(msg.id, {
-      notice: "Reply options updated with the preference screen verdict.",
-    });
-  }
 }
 
 /* Per-proposal edits: the user can change any property value before the

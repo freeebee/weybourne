@@ -347,7 +347,7 @@ export default function Prep() {
                 label={`BRIEF · ${(viewing.result.briefing.entity || viewing.name || "").toUpperCase()}`}
                 onExpand={() => setMinimized((m) => ({ ...m, brief: false }))} />
             ) : (
-            <Card accent="brass" style={{ padding: "26px 28px 28px",
+            <Card accent="brass" style={{ padding: "20px 22px 26px",
                                           marginTop: viewing?.result?.screen ? 20 : 0 }}>
               <div className="spread" style={{ marginBottom: 12 }}>
                 <span className="microlabel">
@@ -370,16 +370,30 @@ export default function Prep() {
                 {viewing.result.briefing.relationship}
                 {viewing.result.briefing.vehicle ? ` · ${viewing.result.briefing.vehicle}` : ""}
               </p>
-              <SectionHead label="QUESTIONS THAT WOULD CHANGE THE VIEW" />
-              {(viewing.result.briefing.questions_a || []).slice(0, 5).map((q, i) => (
-                <div key={i} className="rrow" style={{ display: "grid",
-                  gridTemplateColumns: "28px minmax(0,1fr)", gap: 10 }}>
-                  <span className="mono" style={{ fontSize: 11, color: "var(--brass-500)" }}>
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span style={{ fontSize: 14 }}>{q.q}</span>
-                </div>
-              ))}
+              <SectionHead label="WHERE WE LEFT IT · MEETING HISTORY" />
+              {(viewing.result.briefing.meetings || []).length ? (
+                viewing.result.briefing.meetings.slice(0, 3).map((m, i) => (
+                  <div key={i} className="rrow">
+                    <div className="spread">
+                      <b style={{ fontSize: "14px" }}>{m.title}</b>
+                      <span className="mono" style={{ fontSize: 11, color: "var(--stone-400)" }}>{m.date}</span>
+                    </div>
+                    <p style={{ fontSize: "13.5px", lineHeight: 1.55, margin: "4px 0 0" }}>
+                      {(m.summary || "").slice(0, 240)}{(m.summary || "").length > 240 ? "…" : ""}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p style={{ fontSize: "13.5px", lineHeight: 1.55 }}>
+                  {viewing.result.briefing.no_meetings_text || "No qualifying meetings on record."}
+                </p>
+              )}
+              <SectionHead label="BACKGROUND IN BRIEF" style={{ marginTop: 16 }} />
+              <p style={{ fontSize: "13.5px", lineHeight: 1.6, maxWidth: "70ch" }}>
+                {((viewing.result.briefing.manager_bg_md || viewing.result.briefing.landscape_md || "")
+                  .replace(/[#*]/g, "").split("\n").map((x) => x.replace(/^- /, "").trim())
+                  .filter(Boolean).join(" ")).slice(0, 420)}…
+              </p>
               <div className="row" style={{ marginTop: 16 }}>
                 <Button onClick={() => setShowFull(!showFull)}>
                   {showFull ? "Collapse full briefing" : "Open full briefing"}
@@ -461,21 +475,44 @@ function ScreenView({ screen, onMinimize, entityName }) {
           {onMinimize && <MiniBtn onClick={onMinimize}>MINIMIZE</MiniBtn>}
         </span>
       </div>
-      <p style={{ fontSize: 14, lineHeight: 1.55, margin: "0 0 12px" }}>{screen.summary}</p>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 16 }}>
+      <p style={{ fontSize: 14.5, lineHeight: 1.6, margin: "0 0 16px", maxWidth: "72ch" }}>
+        {screen.summary}
+      </p>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
+                    gap: 24 }}>
         <div>
           <span className="microlabel" style={{ color: "var(--positive-600)" }}>FITS</span>
-          <div style={{ fontSize: "13.5px", marginTop: 4 }}>{screen.fit_points.join(" · ") || "—"}</div>
+          {(screen.fit_points.length ? screen.fit_points : ["—"]).map((x, i) => (
+            <div key={i} style={{ display: "flex", gap: 9, padding: "6px 0",
+                                  borderBottom: "1px solid var(--paper-200)" }}>
+              <span className="mono" style={{ fontSize: 10, color: "var(--positive-600)",
+                                              paddingTop: 3, flex: "none" }}>
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <span style={{ fontSize: "13.5px", lineHeight: 1.55 }}>{x}</span>
+            </div>
+          ))}
         </div>
         <div>
           <span className="microlabel" style={{ color: "var(--critical-600)" }}>NON-FITS</span>
-          <div style={{ fontSize: "13.5px", marginTop: 4 }}>{screen.non_fit_points.join(" · ") || "—"}</div>
+          {(screen.non_fit_points.length ? screen.non_fit_points : ["—"]).map((x, i) => (
+            <div key={i} style={{ display: "flex", gap: 9, padding: "6px 0",
+                                  borderBottom: "1px solid var(--paper-200)" }}>
+              <span className="mono" style={{ fontSize: 10, color: "var(--critical-600)",
+                                              paddingTop: 3, flex: "none" }}>
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <span style={{ fontSize: "13.5px", lineHeight: 1.55 }}>{x}</span>
+            </div>
+          ))}
         </div>
       </div>
       {screen.open_questions?.length > 0 && (
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 16 }}>
           <span className="microlabel">OPEN QUESTIONS</span>
-          <div style={{ fontSize: "13.5px", marginTop: 4 }}>{screen.open_questions.join(" · ")}</div>
+          {screen.open_questions.map((q, i) => (
+            <div key={i} style={{ fontSize: "13.5px", lineHeight: 1.55, padding: "4px 0" }}>{q}</div>
+          ))}
         </div>
       )}
     </Card>

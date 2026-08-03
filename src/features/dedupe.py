@@ -29,9 +29,10 @@ from src.schemas import (
 
 # Tokens that carry no distinguishing signal when comparing fund/company names.
 _NOISE_TOKENS = {
-    "the", "fund", "funds", "lp", "llc", "ltd", "limited", "l.p", "l.p.", "plc",
-    "inc", "co", "company", "partners", "capital", "management", "advisors",
-    "group", "holdings", "gp", "sicav", "ucits", "vehicle",
+    "the", "fund", "funds", "lp", "llc", "llp", "ltd", "limited", "l.p", "l.p.",
+    "plc", "inc", "co", "company", "corporation", "corp", "partners", "capital",
+    "management", "advisors", "advisers", "group", "holdings", "gp", "sicav",
+    "ucits", "vehicle",
 }
 _ROMAN_ARABIC = {
     "i": "1", "ii": "2", "iii": "3", "iv": "4", "v": "5", "vi": "6",

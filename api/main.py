@@ -426,6 +426,52 @@ class ApplyIn(BaseModel):
     edits: dict[str, dict[str, str]] = {}
 
 
+def _snap_to_options(kind: str, raw: dict) -> dict:
+    """Map select/multi-select values onto the DB's ACTUAL options.
+
+    The model writes e.g. 'Venture Capital' where the database's option is
+    'PE - Venture'; without snapping, applying the page silently creates a new
+    stray option. Exact (case-insensitive) match first, then containment, then
+    a fuzzy match; a value with no plausible option is kept as written.
+    """
+    import difflib
+
+    try:
+        options = _OPTIONS_CACHE.get(kind)
+        if options is None:
+            db_id = {"fund": config.NOTION_FUNDS_DB, "company": config.NOTION_COMPANIES_DB,
+                     "contact": config.NOTION_CONTACTS_DB}.get(kind)
+            options = _notion.database_options(db_id or "")
+            _OPTIONS_CACHE[kind] = options
+    except Exception:  # noqa: BLE001
+        return raw
+
+    def snap(prop_name: str, value: str) -> str:
+        opts = options.get(prop_name) or []
+        if not value or not opts:
+            return value
+        low = value.strip().lower()
+        for o in opts:
+            if o.strip().lower() == low:
+                return o
+        contains = [o for o in opts if low in o.lower() or o.lower() in low]
+        if len(contains) == 1:
+            return contains[0]
+        best = difflib.get_close_matches(value, opts, n=1, cutoff=0.6)
+        return best[0] if best else value
+
+    out = {}
+    for name, payload in raw.items():
+        if "select" in payload and payload["select"]:
+            out[name] = {"select": {"name": snap(name, payload["select"]["name"])}}
+        elif "multi_select" in payload:
+            out[name] = {"multi_select": [{"name": snap(name, o["name"])}
+                                          for o in payload["multi_select"]]}
+        else:
+            out[name] = payload
+    return out
+
+
 @app.post("/api/notion/apply")
 def notion_apply(body: ApplyIn):
     props = []
@@ -434,6 +480,7 @@ def notion_apply(body: ApplyIn):
         for prop_name, value in (body.edits.get(p["kind"]) or {}).items():
             if prop_name in raw:
                 raw[prop_name] = notion_sync.patch_property(raw[prop_name], value)
+        raw = _snap_to_options(p["kind"], raw)
         props.append(notion_sync.CreationProposal(
             kind=p["kind"], db_id=p.get("db_id"), title=p["title"],
             properties=raw, needs_review=p.get("needs_review", False),
@@ -487,6 +534,11 @@ def notion_update(body: UpdateExistingIn):
         if "multi_select" in payload and not payload["multi_select"]:
             continue
         props[name] = payload
+    # Snap select/multi values to the DBs' actual options before writing; the
+    # target kind isn't sent, so run all three snappers (each only touches
+    # properties it has options for).
+    props = _snap_to_options("fund", _snap_to_options("company",
+            _snap_to_options("contact", props)))
     if not props:
         return {"updated": False, "detail": "nothing to update", "live": _notion.live}
     page = _notion.update_page(body.page_id, props)
@@ -812,6 +864,7 @@ class DraftIn(BaseModel):
     screen: dict | None = None
     dedupe: dict | None = None
     offer_slots: bool = True
+    slot_minutes: int = 30   # 30 / 45 / 60-minute blocks, checked against the calendar
 
 
 def _relationship_context(dedupe: dict | None) -> str:
@@ -841,7 +894,8 @@ def drafts(body: DraftIn):
     slots = []
     if body.offer_slots:
         try:
-            slots = _graph.find_free_slots(max_slots=4)
+            slots = _graph.find_free_slots(
+                max_slots=4, slot_minutes=max(15, min(120, body.slot_minutes)))
         except Exception:
             # A calendar hiccup must never block reply drafting — just
             # draft without offering meeting slots.

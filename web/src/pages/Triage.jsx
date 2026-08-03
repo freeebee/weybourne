@@ -517,68 +517,37 @@ function DetailPane({ msg, result, flag }) {
               )}
             </Step>
 
-            <Step n={2} label="PREFERENCE SCREEN" state={screen ? "done" : "current"}
-              right={screen && (
-                <span style={{ color: verdictColor }}>
-                  {screen.overall_fit.toUpperCase()} · {screen.sleeve.toUpperCase()}
-                </span>
-              )}>
-              {!screen && (
-                <div className="row" style={{ flexWrap: "wrap" }}>
-                  <Button variant="ghost" busy={isBusy("screen")} onClick={runScreen}>
-                    Run preference screen
-                  </Button>
-                  {!options && (
-                    <>
-                      <Button variant="dark"
-                        busy={isBusy("screen") || isBusy("drafts")}
-                        onClick={() => ts.runScreenAndDrafts(msg)}>
-                        Screen + draft replies together
-                      </Button>
-                      <span className="muted" style={{ fontSize: "12px" }}>
-                        Both run at once — if the drafts land first they are
-                        refreshed with the verdict when the screen finishes.
-                      </span>
-                    </>
-                  )}
-                </div>
-              )}
-              {screen && (
-                <>
-                  <p style={{ fontSize: 14, lineHeight: 1.55, margin: "0 0 10px" }}>{screen.summary}</p>
-                  <div style={{ display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 16 }}>
-                    <div>
-                      <span className="microlabel" style={{ color: "var(--positive-600)" }}>FITS</span>
-                      <div style={{ fontSize: "13.5px", marginTop: 4 }}>
-                        {screen.fit_points.join(" · ") || "—"}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="microlabel" style={{ color: "var(--critical-600)" }}>NON-FITS</span>
-                      <div style={{ fontSize: "13.5px", marginTop: 4 }}>
-                        {screen.non_fit_points.join(" · ") || "—"}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </Step>
-
-            <Step n={3} label="REPLY · DRAFT ONLY" state={options ? "done" : "current"} last>
-              {!options && (
-                <>
+            <Step n={2} label="REPLY · DRAFT ONLY"
+              state={options ? "done" : isBusy("drafts") ? "current" : "current"}
+              right={isBusy("drafts") && <span style={{ color: "var(--teal-700)" }}>DRAFTING…</span>}>
+              <div className="row" style={{ marginBottom: options ? 10 : 0, flexWrap: "wrap" }}>
+                {!options && !isBusy("drafts") && (
+                  <Button variant="ghost" onClick={genDrafts}>Generate reply options</Button>
+                )}
+                {isBusy("drafts") && !options && (
+                  <span className="muted" style={{ fontSize: "12.5px" }}>
+                    Drafting automatically from the triage…
+                  </span>
+                )}
+                <label className="microlabel" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  MEETING SLOTS
+                  <select value={w.slotMinutes || 30}
+                    onChange={(e) => ts.setWork(msg.id, { slotMinutes: +e.target.value })}
+                    style={{ fontSize: "12px" }}>
+                    <option value={30}>30 min</option>
+                    <option value={45}>45 min</option>
+                    <option value={60}>1 hour</option>
+                  </select>
+                </label>
+                {options && (
                   <Button variant="ghost" busy={isBusy("drafts")} onClick={genDrafts}>
-                    Generate reply options
+                    Regenerate
                   </Button>
-                  {!screen && (
-                    <span className="muted" style={{ fontSize: "12.5px", marginLeft: 10 }}>
-                      Works without the preference screen — run it first and the reply
-                      will reflect the verdict.
-                    </span>
-                  )}
-                </>
-              )}
+                )}
+                <span className="muted" style={{ fontSize: "12px" }}>
+                  Offered times are checked against your Outlook calendar.
+                </span>
+              </div>
               {options && (
                 <>
                   <div className="row" style={{ marginBottom: 10 }}>
@@ -603,6 +572,47 @@ function DetailPane({ msg, result, flag }) {
                     <span className="muted" style={{ fontSize: "12.5px" }}>
                       Replies are drafts only — nothing is ever sent from here.
                     </span>
+                  </div>
+                </>
+              )}
+            </Step>
+
+            <Step n={3} label="PREFERENCE SCREEN" state={screen ? "done" : "current"} last
+              right={screen && (
+                <span style={{ color: verdictColor }}>
+                  {screen.overall_fit.toUpperCase()} · {screen.sleeve.toUpperCase()}
+                </span>
+              )}>
+              {!screen && (
+                <div className="row" style={{ flexWrap: "wrap" }}>
+                  <Button variant="ghost" busy={isBusy("screen")} onClick={runScreen}>
+                    Run preference screen
+                  </Button>
+                  <span style={{ fontSize: "12.5px", color: "var(--teal-700)" }}>
+                    Sharpens the reply drafts — they are refreshed with the
+                    verdict when the screen lands, even while still drafting.
+                  </span>
+                </div>
+              )}
+              {screen && (
+                <>
+                  <p style={{ fontSize: 14, lineHeight: 1.55, margin: "0 0 10px" }}>{screen.summary}</p>
+                  <div style={{ display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 16 }}>
+                    <div>
+                      <span className="microlabel" style={{ color: "var(--positive-600)" }}>FITS</span>
+                      {(screen.fit_points.length ? screen.fit_points : ["—"]).map((x, i) => (
+                        <div key={i} style={{ fontSize: "13.5px", lineHeight: 1.5,
+                                              padding: "4px 0" }}>{x}</div>
+                      ))}
+                    </div>
+                    <div>
+                      <span className="microlabel" style={{ color: "var(--critical-600)" }}>NON-FITS</span>
+                      {(screen.non_fit_points.length ? screen.non_fit_points : ["—"]).map((x, i) => (
+                        <div key={i} style={{ fontSize: "13.5px", lineHeight: 1.5,
+                                              padding: "4px 0" }}>{x}</div>
+                      ))}
+                    </div>
                   </div>
                 </>
               )}

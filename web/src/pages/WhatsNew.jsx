@@ -61,6 +61,36 @@ function useAutoJob(kind, startUrl) {
   return { result, running, error, refresh: start };
 }
 
+/* One key insight as a card: the bolded claim as a serif headline over the
+   supporting prose, with any further **bold** runs kept inline. */
+function InsightCard({ n, text }) {
+  const m = String(text || "").match(/^\*\*(.+?)\*\*\s*(.*)$/s);
+  const lead = m ? m[1] : null;
+  const rest = m ? m[2] : String(text || "");
+  const inlineBold = (s) =>
+    String(s).split(/\*\*(.+?)\*\*/g).map((p, i) => (i % 2 ? <b key={i}>{p}</b> : p));
+  return (
+    <div style={{ background: "var(--paper-000)", border: "1px solid var(--paper-200)",
+                  borderTop: "2px solid var(--teal-500)", borderRadius: "var(--radius)",
+                  padding: "16px 18px" }}>
+      <span className="mono" style={{ fontSize: 10.5, color: "var(--teal-600)",
+                                      letterSpacing: ".12em" }}>
+        {String(n).padStart(2, "0")}
+      </span>
+      {lead && (
+        <div style={{ font: "500 16.5px/1.35 var(--serif)", color: "var(--ink-800)",
+                      margin: "6px 0 6px" }}>
+          {lead}
+        </div>
+      )}
+      <p style={{ fontSize: "13.5px", lineHeight: 1.6, margin: 0,
+                  color: "var(--stone-600)" }}>
+        {inlineBold(rest)}
+      </p>
+    </div>
+  );
+}
+
 function weekEyebrow() {
   const d = new Date();
   return `BRIEFING · WEEK TO ${d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }).toUpperCase()}`;
@@ -159,16 +189,12 @@ export default function WhatsNew() {
         <>
           {t.key_insights?.length > 0 && (
             <section style={{ marginTop: 34 }}>
-              <SectionHead label="KEY INSIGHTS · THE WEEK ON THE INVESTMENTS SIDE" />
-              {t.key_insights.map((k, i) => (
-                <div key={i} className="rrow" style={{ display: "grid",
-                  gridTemplateColumns: "32px minmax(0,1fr)", gap: 12 }}>
-                  <span className="mono" style={{ fontSize: 11, color: "var(--teal-600)" }}>
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span style={{ fontSize: "14px", lineHeight: 1.6, maxWidth: "78ch" }}>{k}</span>
-                </div>
-              ))}
+              <SectionHead label="KEY INSIGHTS · THE WEEK ON THE INVESTMENTS SIDE"
+                right={String(t.key_insights.length).padStart(2, "0")} />
+              <div style={{ display: "grid",
+                gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 20 }}>
+                {t.key_insights.map((k, i) => <InsightCard key={i} n={i + 1} text={k} />)}
+              </div>
             </section>
           )}
           {t.meeting_highlights?.length > 0 && (

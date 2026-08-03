@@ -78,6 +78,14 @@ class TestConcatenatedNames:
         assert decision.best_match.matched_name == "Fife Capital"
         assert decision.recommended_action == "link_existing"
 
+    def test_legal_suffix_variants_match(self):
+        # 'REVA Corporation' IS the existing 'REVA' — legal-form suffixes carry
+        # no distinguishing signal.
+        companies = [CompanyRecord(id="r1", name="REVA", domain="")]
+        decision = match_company("REVA Corporation", "", companies)
+        assert decision.best_match.matched_name == "REVA"
+        assert decision.recommended_action == "link_existing"
+
     def test_similar_name_different_email_needs_review_not_auto_merge(self):
         # A merely SIMILAR name (not identical — that links directly) must
         # still be surfaced for review rather than silently merged.
