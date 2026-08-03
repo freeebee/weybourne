@@ -278,7 +278,8 @@ export default function Live() {
           {openItems.length === 0 && s.batches.length === 0 && (
             <p className="muted small">Questions appear here after the first read.</p>
           )}
-          {[...openItems].sort((a, b) => (b.starred ? 1 : 0) - (a.starred ? 1 : 0))
+          {[...openItems]
+            .sort((a, b) => ((b.starred ? 1 : 0) - (a.starred ? 1 : 0)) || (b.id - a.id))
             .map((it) => {
               const isNew = newest && it.batch === newest.id;
               return (
