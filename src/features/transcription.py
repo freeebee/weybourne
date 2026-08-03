@@ -369,8 +369,8 @@ NOTE_SCHEMA = {
         },
         "overall_impression": {
             "type": "string",
-            "description": "A concise assessment of the key merits, concerns, implications "
-                           "and points requiring further diligence",
+            "description": "A concise assessment of the key merits, concerns and "
+                           "implications",
         },
         "next_stage": {"type": "string", "description": "What happens next and by when"},
         "sections": {
@@ -464,7 +464,7 @@ NOTE_MARKDOWN_SHAPE = """# <title, e.g. Call with Axiom Asia>
 ### Meeting Overview
 ---
 - **Summary** - <a concise one-paragraph summary of the meeting>
-- **Overall Impression** - <a concise assessment of the key merits, concerns, implications and points requiring further diligence>
+- **Overall Impression** - <a concise assessment of the key merits, concerns and implications>
 - **Next Stage** - <what happens next and by when>
 
 ### <one heading per substantive topic, in the order discussed>

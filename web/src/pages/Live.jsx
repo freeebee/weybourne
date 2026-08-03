@@ -190,6 +190,7 @@ export default function Live() {
         .catch(() => setNameLists((p) => ({ ...p, [k]: [] }))));
   }, [!!s.note, !!s.noteSave]);
   const [refine, setRefine] = React.useState("");
+  const [copied, setCopied] = React.useState(false);
 
   const openItems = s.items.filter((it) => !it.answer);
   const answeredItems = s.items.filter((it) => it.answer);
@@ -503,10 +504,10 @@ export default function Live() {
           <Markdown text={s.note.markdown} />
           <div className="row" style={{ flexWrap: "wrap" }}>
             <Button onClick={() => {
-              const blob = new Blob([s.note.markdown], { type: "text/markdown" });
-              const a = document.createElement("a");
-              a.href = URL.createObjectURL(blob); a.download = "meeting-note.md"; a.click();
-            }}>Download note (markdown)</Button>
+              navigator.clipboard.writeText(s.note.markdown)
+                .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); })
+                .catch(() => {});
+            }}>{copied ? "Copied" : "Copy note to clipboard"}</Button>
             {s.noteSaveUrl ? (
               <span className="muted" style={{ fontSize: "12.5px" }}>
                 Saved to Notion —{" "}
