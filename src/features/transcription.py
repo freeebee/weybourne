@@ -428,6 +428,61 @@ def draft_meeting_note(
     return json.loads(raw)
 
 
+NOTE_MARKDOWN_SHAPE = """# <title, e.g. Call with Axiom Asia>
+*<exactly one of: GP Meeting | LP Meeting | Reference call | 3rd Party Marketer | Event | Internal | Service Provider | Email>*
+
+### Meeting Overview
+---
+- **Overall Impression** - <one paragraph of judgement on what they presented and how it held up>
+- **Next Stage** - <what happens next and by when>
+
+### <one heading per substantive topic, in the order discussed>
+---
+- <bullet>
+
+### Q&A
+---
+**Q**: <question>
+**A** - <what they actually said; where a question was dodged, say so plainly>"""
+
+
+def note_stream_args(
+    buffer: TranscriptBuffer,
+    context: str = "",
+    unanswered: list[str] | None = None,
+) -> tuple[str, str]:
+    """(system, prompt) for the live-streamed markdown note draft.
+
+    The streamed variant writes the note directly in the house markdown shape
+    (the same one ``note_to_markdown`` produces) so the user can watch it form;
+    the title, type and overall impression are parsed back out of the markdown
+    for the Notion save.
+    """
+    system = (NOTE_SYSTEM_PROMPT
+              + "\n\nWrite the note directly in markdown, in EXACTLY this shape "
+                "(replace the angle-bracket placeholders; keep the headings, rules "
+                "and bold labels verbatim):\n\n" + NOTE_MARKDOWN_SHAPE
+              + "\n\nOutput ONLY the markdown note — no preamble, no code fences.")
+    open_qs = "\n".join(f"- {q}" for q in (unanswered or [])) or "(none)"
+    prompt = (
+        f"MEETING CONTEXT\n{context or '(none supplied)'}\n\n"
+        f"QUESTIONS THAT NEVER GOT ANSWERED (note them under next steps)\n{open_qs}\n\n"
+        f"FULL TRANSCRIPT\n{buffer.full_text()[:24000]}"
+    )
+    return system, prompt
+
+
+def note_from_markdown(md: str) -> dict:
+    """Recover the fields the Notion save needs from a streamed markdown note."""
+    import re
+
+    title = (re.search(r"^#\s+(.+)$", md, re.M) or [None, "Meeting note"])[1].strip()
+    note_type = (re.search(r"^\*([^*\n]+)\*\s*$", md, re.M) or [None, "GP Meeting"])[1].strip()
+    imp = re.search(r"\*\*Overall Impression\*\*\s*-\s*(.+)", md)
+    return {"title": title, "note_type": note_type,
+            "overall_impression": imp.group(1).strip() if imp else ""}
+
+
 def note_to_markdown(note: dict) -> str:
     """The drafted note as markdown, ready to paste into Notion."""
     lines = [

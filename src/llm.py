@@ -318,6 +318,76 @@ class ClaudeCodeClient:
 
 
 # --------------------------------------------------------------------------- #
+# Streaming (plain text, no schema): yields text deltas as the model writes.
+# Used where the user watches output form in real time (the meeting-note
+# draft). Requires the CLI backend; schema-validated calls stay non-streaming.
+# --------------------------------------------------------------------------- #
+
+def stream_text(prompt: str, system: str = "", model: Optional[str] = None,
+                timeout: Optional[int] = None):
+    """Generator of text chunks from a `claude -p` call in stream-json mode."""
+    import threading
+
+    cli = resolve_cli_path(config.CLAUDE_CLI_PATH) or config.CLAUDE_CLI_PATH
+    argv = [cli, "-p", "--output-format", "stream-json", "--verbose",
+            "--include-partial-messages",
+            "--mcp-config", '{"mcpServers":{}}', "--strict-mcp-config"]
+    if system:
+        argv += ["--system-prompt", system]
+    cli_model = _cli_model(model)
+    if cli_model:
+        argv += ["--model", cli_model]
+
+    try:
+        proc = subprocess.Popen(
+            argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            # stderr must not share the stdout pipe (it would corrupt the JSON
+            # lines) and an unread PIPE could deadlock — discard it.
+            stderr=subprocess.DEVNULL,
+            text=True, encoding="utf-8", errors="replace",
+            cwd=str(_scratch_dir()),
+        )
+    except FileNotFoundError as e:
+        raise ClaudeCodeUnavailable(
+            f"Claude Code CLI not found at {config.CLAUDE_CLI_PATH!r}.") from e
+
+    # Watchdog instead of a blocking wait: readline has no timeout of its own.
+    killer = threading.Timer(timeout or config.CLAUDE_CLI_TIMEOUT, proc.kill)
+    killer.start()
+    emitted = False
+    final = ""
+    try:
+        proc.stdin.write(prompt)
+        proc.stdin.close()
+        for line in proc.stdout:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                ev = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if ev.get("type") == "stream_event":
+                delta = ((ev.get("event") or {}).get("delta")) or {}
+                if delta.get("type") == "text_delta" and delta.get("text"):
+                    emitted = True
+                    yield delta["text"]
+            elif ev.get("type") == "result":
+                final = ev.get("result") or ""
+        proc.wait(timeout=30)
+        if not emitted:
+            if final:
+                yield final          # partial events unavailable — emit whole
+            elif proc.returncode != 0:
+                raise ClaudeCodeError(
+                    f"Claude Code CLI stream failed (exit {proc.returncode}).")
+    finally:
+        killer.cancel()
+        if proc.poll() is None:
+            proc.kill()
+
+
+# --------------------------------------------------------------------------- #
 # Backend selection
 # --------------------------------------------------------------------------- #
 

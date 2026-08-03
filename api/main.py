@@ -29,7 +29,7 @@ import time
 import pandas as pd
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -47,6 +47,8 @@ from src.features.stt import transcribe_wav
 from src.features.transcription import (
     TranscriptBuffer,
     draft_meeting_note,
+    note_from_markdown,
+    note_stream_args,
     note_to_markdown,
     read_transcript_batch,
     sharpen_question,
@@ -531,13 +533,36 @@ def notion_options(kind: str):
     """Select/status/multi-select options per property for a DB kind — cached
     in memory for the process lifetime (schemas change rarely)."""
     db_id = {"fund": config.NOTION_FUNDS_DB, "company": config.NOTION_COMPANIES_DB,
-             "contact": config.NOTION_CONTACTS_DB}.get(kind)
+             "contact": config.NOTION_CONTACTS_DB,
+             "note": config.NOTION_NOTES_DB}.get(kind)
     if kind not in _OPTIONS_CACHE:
         try:
             _OPTIONS_CACHE[kind] = _notion.database_options(db_id or "")
         except Exception:  # noqa: BLE001 - dropdowns degrade to free text
             _OPTIONS_CACHE[kind] = {}
     return {"kind": kind, "options": _OPTIONS_CACHE[kind]}
+
+
+_NAMES_CACHE: dict = {}
+
+
+@app.get("/api/notion/names")
+def notion_names(kind: str):
+    """Names of every page in a relation-target DB, for searchable pickers
+    (attendees, companies, funds). Cached ten minutes."""
+    getter = {"contact": _notion.list_contacts, "company": _notion.list_companies,
+              "fund": _notion.list_funds}.get(kind)
+    if getter is None:
+        raise HTTPException(status_code=400, detail=f"Unknown kind {kind!r}")
+    entry = _NAMES_CACHE.get(kind)
+    if not entry or time.time() - entry[0] > 600:
+        try:
+            names = sorted({(getattr(r, "name", "") or "").strip()
+                            for r in getter()} - {""}, key=str.lower)
+        except Exception:  # noqa: BLE001 - picker degrades to free text
+            names = []
+        _NAMES_CACHE[kind] = (time.time(), names)
+    return {"kind": kind, "names": _NAMES_CACHE[kind][1]}
 
 
 @app.post("/api/preferences/refresh")
@@ -651,6 +676,35 @@ def _ids_for_names(csv_text: str, records) -> list[str]:
                 if r.id not in out:
                     out.append(r.id)
                 break
+    return out
+
+
+def _ids_for_names_or_create(csv_text: str, records, db_id: str,
+                             cache_kind: str = "") -> list[str]:
+    """Like _ids_for_names, but a name with no existing page gets a minimal
+    page created in the target DB (the picker's explicit "create new")."""
+    out: list[str] = []
+    for raw in (csv_text or "").split(","):
+        name = raw.strip()
+        if not name:
+            continue
+        match = next((r for r in records
+                      if (getattr(r, "name", "") or "").strip().lower() == name.lower()
+                      and r.id), None)
+        if match:
+            if match.id not in out:
+                out.append(match.id)
+            continue
+        if not db_id and _notion.live:
+            continue
+        try:
+            page = _notion.create_page(db_id or "mock-db", {
+                "Name": {"title": [{"text": {"content": name[:200]}}]}})
+            if page.get("id"):
+                out.append(page["id"])
+                _NAMES_CACHE.pop(cache_kind, None)   # the list just grew
+        except Exception:  # noqa: BLE001 - a failed create must not block the note
+            pass
     return out
 
 
@@ -867,19 +921,25 @@ def notion_save_meeting_note(body: SaveMeetingNoteIn):
     e = body.edits
     if "Attendees" in e:
         try:
-            attendee_ids = _ids_for_names(e["Attendees"], _notion.list_contacts())
+            attendee_ids = _ids_for_names_or_create(
+                e["Attendees"], _notion.list_contacts(),
+                config.NOTION_CONTACTS_DB, "contact")
         except Exception:  # noqa: BLE001
             pass
     company_ids: list[str] = []
     if e.get("Companies"):
         try:
-            company_ids = _ids_for_names(e["Companies"], _notion.list_companies())
+            company_ids = _ids_for_names_or_create(
+                e["Companies"], _notion.list_companies(),
+                config.NOTION_COMPANIES_DB, "company")
         except Exception:  # noqa: BLE001
             pass
     fund_ids: list[str] = []
     if e.get("Fund"):
         try:
-            fund_ids = _ids_for_names(e["Fund"], _notion.list_funds())
+            fund_ids = _ids_for_names_or_create(
+                e["Fund"], _notion.list_funds(),
+                config.NOTION_FUNDS_DB, "fund")
         except Exception:  # noqa: BLE001
             pass
 
@@ -1364,6 +1424,31 @@ def live_note(body: NoteIn):
     note = _run(draft_meeting_note, _client(), _buffer_from(body.transcript),
                 body.context, body.unanswered)
     return {"note": note, "markdown": note_to_markdown(note)}
+
+
+@app.post("/api/live/note-stream")
+def live_note_stream(body: NoteIn):
+    """The note draft as it is written — plain-text markdown chunks, so the
+    page can render the draft forming instead of a spinner. On any failure a
+    sentinel line is emitted and the client falls back to /api/live/note."""
+    system, prompt = note_stream_args(
+        _buffer_from(body.transcript), body.context, body.unanswered)
+
+    def gen():
+        try:
+            yield from llm.stream_text(prompt, system=system,
+                                       model=config.REASONING_MODEL)
+        except Exception as e:  # noqa: BLE001 - surfaced via the sentinel
+            yield f"\n[[STREAM-FAILED]] {str(e)[:200]}"
+
+    return StreamingResponse(gen(), media_type="text/plain; charset=utf-8",
+                             headers={"X-Accel-Buffering": "no"})
+
+
+@app.post("/api/live/note-parse")
+def live_note_parse(body: dict):
+    """Fields the Notion save needs, recovered from a streamed markdown note."""
+    return note_from_markdown(str(body.get("markdown") or ""))
 
 
 # --------------------------------------------------------------------------- #

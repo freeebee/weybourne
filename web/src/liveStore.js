@@ -1,7 +1,7 @@
 /* Live-meeting session store — lives at module scope, OUTSIDE React, so the
    audio pipeline, timers and transcript keep running when the user navigates
    to another page. The Live page (and the sidebar chip) subscribe to it. */
-import { get, post, postFile } from "./api.js";
+import { get, post, postFile, postStream } from "./api.js";
 
 const CHUNK_MS = 8000;          // recorder restart interval → self-contained blobs
 export const CADENCE_S = 30;    // read the new speech every 30 seconds
@@ -13,7 +13,7 @@ export const S = {
   manager: null,     // the loaded manager thread (entity, Notion links, history)
   transcript: "", entries: [], items: [], batches: [], reads: 0, unreadWords: 0,
   lastTail: "", lastReadAt: 0, startedAt: 0, reading: false, nextIn: CADENCE_S,
-  error: null, note: null, sharp: null, sharpPending: "", busy: "", seq: 1, version: 0,
+  error: null, note: null, noteDraftText: "", sharp: null, sharpPending: "", busy: "", seq: 1, version: 0,
   noteSave: null, noteSaveEdits: {}, noteSaveEditing: {}, noteSaveUrl: "",
   sessionId: "", librarySaved: false,
 };
@@ -330,14 +330,33 @@ export function toggleStar(id) {
 }
 
 export async function draftNote() {
-  S.busy = "note"; S.error = null; emit();
+  S.busy = "note"; S.error = null; S.note = null; S.noteDraftText = ""; emit();
+  const payload = {
+    transcript: S.transcript, context: context(),
+    unanswered: S.items.filter((it) => !it.answer).map((it) => it.q),
+  };
   try {
-    S.note = await post("/api/live/note", {
-      transcript: S.transcript, context: context(),
-      unanswered: S.items.filter((it) => !it.answer).map((it) => it.q),
+    // Streamed draft: the markdown renders as the model writes it. Repaints
+    // are throttled — the text arrives faster than re-parsing it is worth.
+    let lastPaint = 0;
+    const md = await postStream("/api/live/note-stream", payload, (_c, full) => {
+      S.noteDraftText = full;
+      const now = Date.now();
+      if (now - lastPaint > 120) { lastPaint = now; emit(); }
     });
-  } catch (e) { S.error = e.message; }
-  S.busy = ""; emit();
+    if (!md.trim() || md.includes("[[STREAM-FAILED]]")) {
+      S.noteDraftText = ""; emit();
+      S.note = await post("/api/live/note", payload);   // non-streamed fallback
+    } else {
+      const fields = await post("/api/live/note-parse", { markdown: md });
+      S.note = { note: fields, markdown: md };
+    }
+  } catch (e) {
+    // Streaming unavailable at the transport level — fall back quietly.
+    try { S.note = await post("/api/live/note", payload); }
+    catch (e2) { S.error = e2.message; }
+  }
+  S.noteDraftText = ""; S.busy = ""; emit();
 }
 
 export function newSession() {
@@ -345,7 +364,7 @@ export function newSession() {
   Object.assign(S, {
     transcript: "", entries: [], items: [], batches: [], reads: 0, unreadWords: 0,
     lastTail: "", lastReadAt: 0, startedAt: 0, nextIn: CADENCE_S, error: null,
-    note: null, sharp: null, sharpPending: "", busy: "", seq: 1, manager: null,
+    note: null, noteDraftText: "", sharp: null, sharpPending: "", busy: "", seq: 1, manager: null,
     noteSave: null, noteSaveEdits: {}, noteSaveEditing: {}, noteSaveUrl: "",
     sessionId: "", librarySaved: false,
   });

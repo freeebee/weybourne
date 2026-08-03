@@ -3,8 +3,8 @@ import React from "react";
 import { get } from "../api.js";
 import * as live from "../liveStore.js";
 import {
-  Banner, Button, Card, ErrorNote, Field, Mascot, PageHeader, SectionHead,
-  fmtDate, fmtTime, inputStyle,
+  Banner, Button, Card, ErrorNote, Field, Mascot, PageHeader, SearchSelect,
+  SectionHead, fmtDate, fmtTime, inputStyle,
 } from "../ui.jsx";
 import { Markdown } from "./Prep.jsx";
 
@@ -172,6 +172,20 @@ export default function Live() {
     navigator.mediaDevices?.enumerateDevices?.().then((ds) =>
       setDevices(ds.filter((d) => d.kind === "audioinput")));
   }, [s.running]);
+
+  // Options for the note-save pickers, loaded when the preview opens: the
+  // Notes DB's select options plus page names for each relation target.
+  const [noteOpts, setNoteOpts] = React.useState({});
+  const [nameLists, setNameLists] = React.useState({});
+  React.useEffect(() => {
+    if (!s.noteSave) return;
+    get("/api/notion/options?kind=note")
+      .then((d) => setNoteOpts(d.options || {})).catch(() => {});
+    ["contact", "company", "fund"].forEach((k) =>
+      get(`/api/notion/names?kind=${k}`)
+        .then((d) => setNameLists((p) => ({ ...p, [k]: d.names || [] })))
+        .catch(() => {}));
+  }, [!!s.noteSave]);
 
   const openItems = s.items.filter((it) => !it.answer);
   const answeredItems = s.items.filter((it) => it.answer);
@@ -464,6 +478,21 @@ export default function Live() {
         </div>
       </div>
 
+      {/* The draft forming in real time — replaced by the finished card below */}
+      {!s.note && s.busy === "note" && (
+        <Card accent="brass" style={{ marginTop: 24 }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <Mascot state="working" width={44} />
+            <span className="microlabel">NOTE DRAFT · BEING WRITTEN…</span>
+          </div>
+          {s.noteDraftText
+            ? <Markdown text={s.noteDraftText} />
+            : <p className="muted" style={{ fontSize: "13.5px", marginTop: 10 }}>
+                Reading the full transcript…
+              </p>}
+        </Card>
+      )}
+
       {s.note && (
         <Card accent="brass" style={{ marginTop: 24 }}>
           <span className="microlabel">NOTE DRAFT · {s.note.note.note_type.toUpperCase()}</span>
@@ -505,16 +534,32 @@ export default function Live() {
                                       border: "1px solid var(--paper-200)",
                                       borderRadius: 4, color: "var(--ink-700)",
                                       fontFamily: "inherit", lineHeight: 1.5, flex: 1 };
+                  // Selectable fields get the searchable pick-or-create
+                  // dropdown; relation fields search real Notion pages.
+                  const pickers = {
+                    "Note Type": { options: noteOpts["Note Type"]
+                      || ["GP Meeting", "LP Meeting", "Reference call", "3rd Party Marketer",
+                          "Event", "Internal", "Service Provider", "Email"], multi: false },
+                    "Done": { options: ["Yes", "No"], multi: false },
+                    "Attendees": { options: nameLists.contact || [], multi: true },
+                    "Companies": { options: nameLists.company || [], multi: true },
+                    "Fund": { options: nameLists.fund || [], multi: true },
+                  };
+                  const picker = pickers[k];
                   return (
                     <React.Fragment key={k}>
                       <span className="microlabel" style={{ paddingTop: 3 }}>{k}</span>
                       <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                         {editing ? (
-                          k === "Thoughts / Considerations"
-                            ? <textarea rows={3} value={value} style={editStyle}
-                                onChange={(e) => live.setNoteSaveEdit(k, e.target.value)} />
-                            : <input value={value} style={editStyle}
-                                onChange={(e) => live.setNoteSaveEdit(k, e.target.value)} />
+                          picker
+                            ? <SearchSelect value={value} options={picker.options}
+                                multi={picker.multi}
+                                onChange={(nv) => live.setNoteSaveEdit(k, nv)} />
+                            : k === "Thoughts / Considerations"
+                              ? <textarea rows={3} value={value} style={editStyle}
+                                  onChange={(e) => live.setNoteSaveEdit(k, e.target.value)} />
+                              : <input value={value} style={editStyle}
+                                  onChange={(e) => live.setNoteSaveEdit(k, e.target.value)} />
                         ) : (
                           <span style={{ fontSize: "12.5px", flex: 1,
                             color: k in (s.noteSaveEdits || {}) ? "var(--teal-700)" : "inherit" }}>
@@ -549,7 +594,8 @@ export default function Live() {
           )}
         </Card>
       )}
-      {s.busy === "note" && <Mascot state="notes" width={64} text="Drafting the note from the full transcript…" />}
+      {s.busy === "note" && !s.noteDraftText &&
+        <Mascot state="notes" width={64} text="Drafting the note from the full transcript…" />}
     </div>
   );
 }

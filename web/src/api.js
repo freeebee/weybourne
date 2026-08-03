@@ -26,3 +26,24 @@ export const postFile = (url, file, filename) => {
   fd.append("file", file, filename || file.name || "upload");
   return fetch(url, { method: "POST", body: fd }).then(handle);
 };
+
+/* Streaming POST: the response body arrives as plain-text chunks which are fed
+   to onChunk as they land. Resolves with the complete text. */
+export async function postStream(url, body, onChunk) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body ?? {}),
+  });
+  if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let full = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const text = decoder.decode(value, { stream: true });
+    if (text) { full += text; onChunk?.(text, full); }
+  }
+  return full;
+}

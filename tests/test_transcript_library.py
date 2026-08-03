@@ -46,3 +46,24 @@ def test_untitled_and_empty_transcript(tmp_path):
     out = tl.finish(_record(who="", transcript=""), live_dir=live, lib_dir=lib)
     assert out["title"] == "Untitled meeting"
     assert out["words"] == 0
+
+
+def test_note_from_markdown_recovers_save_fields():
+    from src.features.transcription import note_from_markdown
+
+    md = ("# Call with Axiom Asia\n*GP Meeting*\n\n### Meeting Overview\n---\n"
+          "- **Overall Impression** - Credible on capacity, weaker on fees.\n"
+          "- **Next Stage** - Data room by Friday.\n")
+    out = note_from_markdown(md)
+    assert out["title"] == "Call with Axiom Asia"
+    assert out["note_type"] == "GP Meeting"
+    assert out["overall_impression"].startswith("Credible on capacity")
+
+
+def test_note_from_markdown_defaults_on_junk():
+    from src.features.transcription import note_from_markdown
+
+    out = note_from_markdown("no structure here at all")
+    assert out["title"] == "Meeting note"
+    assert out["note_type"] == "GP Meeting"
+    assert out["overall_impression"] == ""

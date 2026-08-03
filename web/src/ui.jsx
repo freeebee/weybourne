@@ -57,6 +57,104 @@ export function Card({ accent, children, style, ...rest }) {
   );
 }
 
+/* Searchable dropdown in the style of Notion's link-or-create picker: type to
+   filter the known options; if nothing matches, a Create row uses the typed
+   text as a new value. `multi` keeps a comma-separated list with removable
+   chips; single-select replaces the value. */
+export function SearchSelect({ value = "", onChange, options = [], multi = false, placeholder }) {
+  const [q, setQ] = React.useState("");
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+
+  React.useEffect(() => {
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+
+  const chosen = multi ? value.split(",").map((s) => s.trim()).filter(Boolean) : [];
+  const pick = (name) => {
+    if (multi) {
+      if (!chosen.includes(name)) onChange([...chosen, name].join(", "));
+      setQ("");
+    } else {
+      onChange(name); setQ(""); setOpen(false);
+    }
+  };
+  const remove = (name) => onChange(chosen.filter((c) => c !== name).join(", "));
+
+  const ql = q.trim().toLowerCase();
+  const matches = options
+    .filter((o) => !ql || o.toLowerCase().includes(ql))
+    .filter((o) => !chosen.includes(o))
+    .slice(0, 8);
+  const exact = options.some((o) => o.toLowerCase() === ql);
+  const rowStyle = { padding: "6px 9px", fontSize: "13px", cursor: "pointer", borderRadius: 4 };
+  const hover = (e, on) => { e.currentTarget.style.background = on ? "var(--paper-100)" : "transparent"; };
+
+  return (
+    <div ref={ref} style={{ position: "relative", flex: 1, minWidth: 0 }}>
+      <div onClick={() => setOpen(true)}
+        style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center",
+                 background: "var(--paper-000)", border: "1px solid var(--paper-200)",
+                 borderRadius: 4, padding: "4px 8px", cursor: "text" }}>
+        {multi && chosen.map((c) => (
+          <span key={c} className="chip teal" style={{ display: "inline-flex", gap: 5, alignItems: "center" }}>
+            {c}
+            <button onClick={(e) => { e.stopPropagation(); remove(c); }}
+              style={{ all: "unset", cursor: "pointer", lineHeight: 1 }} title="Remove">×</button>
+          </span>
+        ))}
+        <input
+          value={multi || open ? q : value}
+          onFocus={() => setOpen(true)}
+          onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              if (matches.length) pick(matches[0]);
+              else if (ql) pick(q.trim());
+            } else if (e.key === "Escape") setOpen(false);
+          }}
+          placeholder={multi ? (chosen.length ? "" : placeholder || "search or create…")
+            : value && open ? value : placeholder || "search or create…"}
+          style={{ border: "none", outline: "none", background: "transparent", flex: 1,
+                   minWidth: 90, fontSize: "12.5px", fontFamily: "inherit",
+                   color: "var(--ink-700)", padding: "2px 0" }} />
+      </div>
+      {open && (
+        <div style={{ position: "absolute", zIndex: 40, top: "calc(100% + 4px)", left: 0,
+                      minWidth: "100%", background: "var(--paper-000)",
+                      border: "1px solid var(--paper-200)", borderRadius: "var(--radius)",
+                      boxShadow: "0 10px 28px rgba(15,46,66,.14)", maxHeight: 250,
+                      overflowY: "auto", padding: 4 }}>
+          <div className="microlabel" style={{ padding: "4px 9px" }}>
+            {ql ? "MATCHES" : "SELECT AN OPTION"}
+          </div>
+          {matches.map((o) => (
+            <div key={o} onClick={() => pick(o)} style={rowStyle}
+              onMouseEnter={(e) => hover(e, true)} onMouseLeave={(e) => hover(e, false)}>
+              {o}
+            </div>
+          ))}
+          {ql && !exact && (
+            <div onClick={() => pick(q.trim())}
+              style={{ ...rowStyle, color: "var(--teal-700)" }}
+              onMouseEnter={(e) => hover(e, true)} onMouseLeave={(e) => hover(e, false)}>
+              Create “{q.trim()}”
+            </div>
+          )}
+          {!matches.length && !ql && (
+            <div className="muted" style={{ padding: "6px 9px", fontSize: "12.5px" }}>
+              Type to search{options.length ? ` ${options.length} options` : ""}…
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Chip({ tone = "neutral", dot, children }) {
   return (
     <span className={`chip ${tone}`}>
