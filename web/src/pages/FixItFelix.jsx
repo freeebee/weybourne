@@ -10,7 +10,7 @@ import {
 
 const STATION_X = { contacts: 10, companies: 36, funds: 62, notes: 87 };
 
-function Station({ kind, x }) {
+function Station({ kind, x, active }) {
   const art = {
     contacts: (
       <svg viewBox="0 0 90 110" width="72">
@@ -59,8 +59,10 @@ function Station({ kind, x }) {
       </svg>),
   }[kind];
   return (
-    <div style={{ position: "absolute", left: `${x}%`, top: 26,
-                  transform: "translateX(-50%)", textAlign: "center" }}>
+    <div style={{ position: "absolute", left: `${x}%`, top: 132,
+                  transform: "translateX(-50%)", textAlign: "center",
+                  transformOrigin: "50% 100%",
+                  animation: active ? "fx-wobble .55s ease-in-out infinite" : "none" }}>
       {art}
       <div className="mono" style={{ fontSize: 9.5, letterSpacing: ".14em",
                                      color: "var(--stone-500)", marginTop: 2 }}>
@@ -103,12 +105,14 @@ function PixelFire({ width = 150 }) {
 function Scene({ scene }) {
   const state = scene.activity === "walk" ? "felix-walk" : "felix-fix";
   const x = STATION_X[scene.zone] ?? 50;
+  const fixing = scene.activity === "fix";
   return (
     <Card style={{ padding: 0, overflow: "hidden" }}>
       <div style={{ position: "relative", height: 330,
                     background: "linear-gradient(var(--paper-050) 72%, var(--paper-200) 72.5%, var(--paper-100) 73%)" }}>
         {Object.entries(STATION_X).map(([kind, sx]) => (
-          <Station key={kind} kind={kind} x={sx} />
+          <Station key={kind} kind={kind} x={sx}
+            active={fixing && scene.zone === kind} />
         ))}
 
         {/* POWER UP splash on run start */}
@@ -125,10 +129,12 @@ function Scene({ scene }) {
           </div>
         )}
 
-        {/* Felix */}
+        {/* Felix — standing at the station's left shoulder, wrench landing
+            on it; mid-walk he moves between stations at floor level. */}
         <div className={"fx-sprite" + (scene.power ? " powered" : "")}
-          style={{ position: "absolute", left: `calc(${x}% - 62px)`,
-                   top: 158, width: 124 }}>
+          style={{ position: "absolute",
+                   left: `calc(${x}% - ${scene.activity === "walk" ? 60 : 104}px)`,
+                   top: 122, width: 120 }}>
           {scene.power && <PixelFire />}
           <div style={{ position: "relative" }}>
             <Mascot state={state} width={124} />

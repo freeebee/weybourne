@@ -1,78 +1,108 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="240" height="240" role="img" aria-label="Felix — tinkering" shape-rendering="crispEdges">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="240" height="240" role="img" aria-label="Felix — hard at work" shape-rendering="crispEdges">
 <title>mascot-felix-fix</title>
-<!-- 8-bit Felix: two frames swapped by the px-swap keyframes (steps feel). -->
+<!-- Chibi 8-bit Felix, facing the thing he is fixing (to his right).
+     Three frames: wrench up, mid-swing, impact (with squinted effort eyes
+     and sparks). Frames swap via px-f1/f2/f3. -->
 <defs>
-  <g id="felixCore">
-    <!-- hair spikes + mop -->
-    <rect x="3" y="0" width="1" height="1" fill="#5C3A21"/>
-    <rect x="6" y="0" width="1" height="1" fill="#5C3A21"/>
-    <rect x="9" y="0" width="1" height="1" fill="#5C3A21"/>
-    <rect x="2" y="1" width="9" height="1" fill="#5C3A21"/>
-    <rect x="2" y="2" width="10" height="1" fill="#6B4526"/>
+  <g id="fxHead">
+    <!-- spikes -->
+    <rect x="6" y="0" width="1" height="1" fill="#6B4526"/>
+    <rect x="9" y="0" width="1" height="1" fill="#8A5A32"/>
+    <rect x="12" y="0" width="1" height="1" fill="#6B4526"/>
+    <!-- hair -->
+    <rect x="4" y="1" width="11" height="1" fill="#6B4526"/>
+    <rect x="3" y="2" width="13" height="1" fill="#6B4526"/>
+    <rect x="3" y="3" width="13" height="1" fill="#8A5A32"/>
     <!-- face -->
-    <rect x="3" y="3" width="8" height="1" fill="#F3CBA8"/>
-    <!-- glasses band + arms -->
-    <rect x="2" y="4" width="1" height="1" fill="#1C2430"/>
-    <rect x="3" y="4" width="3" height="1" fill="#1C2430"/>
-    <rect x="6" y="4" width="2" height="1" fill="#3A4454"/>
-    <rect x="8" y="4" width="3" height="1" fill="#1C2430"/>
-    <rect x="11" y="4" width="1" height="1" fill="#1C2430"/>
-    <!-- eyes -->
-    <rect x="3" y="5" width="8" height="1" fill="#F3CBA8"/>
-    <rect x="4" y="5" width="1" height="1" fill="#FFFFFF"/>
-    <rect x="9" y="5" width="1" height="1" fill="#FFFFFF"/>
-    <!-- mouth -->
-    <rect x="3" y="6" width="8" height="1" fill="#F3CBA8"/>
-    <rect x="6" y="6" width="2" height="1" fill="#8C4038"/>
+    <rect x="3" y="4" width="1" height="4" fill="#6B4526"/>
+    <rect x="15" y="4" width="1" height="4" fill="#6B4526"/>
+    <rect x="4" y="4" width="11" height="7" fill="#FBD6AC"/>
+    <!-- round glasses -->
+    <rect x="5" y="5" width="2" height="1" fill="#2B3648"/>
+    <rect x="11" y="5" width="2" height="1" fill="#2B3648"/>
+    <rect x="4" y="6" width="1" height="1" fill="#2B3648"/>
+    <rect x="7" y="6" width="1" height="1" fill="#2B3648"/>
+    <rect x="10" y="6" width="1" height="1" fill="#2B3648"/>
+    <rect x="13" y="6" width="1" height="1" fill="#2B3648"/>
+    <rect x="8" y="6" width="2" height="1" fill="#2B3648"/>
+    <rect x="5" y="7" width="2" height="1" fill="#2B3648"/>
+    <rect x="11" y="7" width="2" height="1" fill="#2B3648"/>
+    <!-- big eyes (inside the rings) -->
+    <rect x="5" y="6" width="2" height="1" fill="#FFFFFF"/>
+    <rect x="11" y="6" width="2" height="1" fill="#FFFFFF"/>
+    <rect x="6" y="6" width="1" height="1" fill="#2B3648"/>
+    <rect x="12" y="6" width="1" height="1" fill="#2B3648"/>
+    <!-- rosy cheeks -->
+    <rect x="4" y="8" width="1" height="1" fill="#F2A9A0"/>
+    <rect x="14" y="8" width="1" height="1" fill="#F2A9A0"/>
+    <!-- happy open smile -->
+    <rect x="8" y="8" width="3" height="1" fill="#8C4038"/>
+    <rect x="8" y="9" width="3" height="1" fill="#C96A5A"/>
+  </g>
+  <g id="fxBody">
     <!-- neck -->
-    <rect x="5" y="7" width="4" height="1" fill="#F3CBA8"/>
+    <rect x="8" y="11" width="3" height="1" fill="#FBD6AC"/>
     <!-- shoulders / shirt -->
-    <rect x="3" y="8" width="8" height="1" fill="#7FA6C0"/>
-    <rect x="4" y="8" width="1" height="1" fill="#41688A"/>
-    <rect x="9" y="8" width="1" height="1" fill="#41688A"/>
-    <!-- overalls bib + shirt sides -->
-    <rect x="3" y="9" width="1" height="2" fill="#7FA6C0"/>
-    <rect x="10" y="9" width="1" height="2" fill="#7FA6C0"/>
-    <rect x="4" y="9" width="6" height="4" fill="#2F6688"/>
-    <rect x="6" y="10" width="2" height="1" fill="#41688A"/>
-    <!-- left arm on hip -->
-    <rect x="2" y="9" width="1" height="3" fill="#7FA6C0"/>
-    <rect x="2" y="12" width="1" height="1" fill="#E5B84C"/>
+    <rect x="5" y="12" width="9" height="1" fill="#A8C8DC"/>
+    <rect x="6" y="12" width="1" height="1" fill="#2F6688"/>
+    <rect x="12" y="12" width="1" height="1" fill="#2F6688"/>
+    <!-- overalls bib -->
+    <rect x="5" y="13" width="1" height="3" fill="#A8C8DC"/>
+    <rect x="13" y="13" width="1" height="3" fill="#A8C8DC"/>
+    <rect x="6" y="13" width="7" height="3" fill="#3D7BA8"/>
+    <rect x="8" y="14" width="3" height="1" fill="#2F6688"/>
     <!-- toolbelt -->
-    <rect x="3" y="13" width="8" height="1" fill="#8A6642"/>
-    <rect x="7" y="13" width="1" height="1" fill="#E5B84C"/>
-    <!-- legs -->
-    <rect x="4" y="14" width="2" height="3" fill="#2F6688"/>
-    <rect x="8" y="14" width="2" height="3" fill="#2F6688"/>
+    <rect x="5" y="16" width="9" height="1" fill="#8A6642"/>
+    <rect x="9" y="16" width="1" height="1" fill="#F2C14E"/>
+    <!-- little legs -->
+    <rect x="6" y="17" width="2" height="2" fill="#3D7BA8"/>
+    <rect x="11" y="17" width="2" height="2" fill="#3D7BA8"/>
     <!-- boots -->
-    <rect x="3" y="17" width="3" height="1" fill="#6B4A2F"/>
-    <rect x="8" y="17" width="3" height="1" fill="#6B4A2F"/>
+    <rect x="5" y="19" width="3" height="1" fill="#7A5230"/>
+    <rect x="11" y="19" width="3" height="1" fill="#7A5230"/>
+    <!-- far arm resting on hip -->
+    <rect x="4" y="13" width="1" height="2" fill="#A8C8DC"/>
+    <rect x="4" y="15" width="1" height="1" fill="#F2C14E"/>
+  </g>
+  <g id="fxWrench">
+    <rect x="0" y="0" width="1" height="1" fill="#AAB8C2"/>
+    <rect x="2" y="0" width="1" height="1" fill="#AAB8C2"/>
+    <rect x="0" y="1" width="3" height="1" fill="#AAB8C2"/>
+    <rect x="1" y="2" width="1" height="3" fill="#8FA0AC"/>
   </g>
 </defs>
 
-<!-- frame A: wrench raised -->
-<g style="animation:px-swapA .42s steps(1) infinite">
-  <use href="#felixCore"/>
-  <rect x="11" y="8" width="1" height="1" fill="#7FA6C0"/>
-  <rect x="12" y="7" width="1" height="1" fill="#7FA6C0"/>
-  <rect x="12" y="6" width="1" height="1" fill="#E5B84C"/>
-  <rect x="13" y="3" width="1" height="3" fill="#9FB2BD"/>
-  <rect x="12" y="2" width="1" height="1" fill="#9FB2BD"/>
-  <rect x="14" y="2" width="1" height="1" fill="#9FB2BD"/>
-  <rect x="12" y="1" width="1" height="1" fill="#9FB2BD"/>
-  <rect x="14" y="1" width="1" height="1" fill="#9FB2BD"/>
+<!-- frame 1: wrench raised, ready -->
+<g style="animation:px-f1 .55s steps(1) infinite">
+  <use href="#fxHead"/><use href="#fxBody"/>
+  <rect x="14" y="12" width="1" height="1" fill="#A8C8DC"/>
+  <rect x="15" y="11" width="1" height="1" fill="#A8C8DC"/>
+  <rect x="16" y="10" width="1" height="1" fill="#F2C14E"/>
+  <g transform="translate(16 5)"><use href="#fxWrench"/></g>
 </g>
 
-<!-- frame B: wrench slammed down, spark -->
-<g style="animation:px-swapB .42s steps(1) infinite">
-  <use href="#felixCore"/>
-  <rect x="11" y="9" width="1" height="1" fill="#7FA6C0"/>
-  <rect x="12" y="10" width="1" height="1" fill="#7FA6C0"/>
-  <rect x="13" y="10" width="1" height="1" fill="#E5B84C"/>
-  <rect x="14" y="10" width="3" height="1" fill="#9FB2BD"/>
-  <rect x="17" y="9" width="1" height="1" fill="#9FB2BD"/>
-  <rect x="17" y="11" width="1" height="1" fill="#9FB2BD"/>
-  <rect x="18" y="8" width="1" height="1" fill="#E5B84C"/>
-  <rect x="19" y="10" width="1" height="1" fill="#E5B84C"/>
+<!-- frame 2: mid swing -->
+<g style="animation:px-f2 .55s steps(1) infinite">
+  <use href="#fxHead"/><use href="#fxBody"/>
+  <rect x="14" y="13" width="2" height="1" fill="#A8C8DC"/>
+  <rect x="16" y="13" width="1" height="1" fill="#F2C14E"/>
+  <g transform="translate(19 10) rotate(90)"><use href="#fxWrench"/></g>
+</g>
+
+<!-- frame 3: impact low — squint + sparks where it lands -->
+<g style="animation:px-f3 .55s steps(1) infinite">
+  <use href="#fxHead"/><use href="#fxBody"/>
+  <!-- effort eyes over the whites -->
+  <rect x="5" y="6" width="2" height="1" fill="#2B3648"/>
+  <rect x="11" y="6" width="2" height="1" fill="#2B3648"/>
+  <rect x="14" y="14" width="1" height="1" fill="#A8C8DC"/>
+  <rect x="15" y="15" width="1" height="1" fill="#A8C8DC"/>
+  <rect x="16" y="16" width="1" height="1" fill="#F2C14E"/>
+  <g transform="translate(20 19) rotate(135)"><use href="#fxWrench"/></g>
+  <!-- impact sparks -->
+  <rect x="20" y="15" width="1" height="1" fill="#F2C14E"/>
+  <rect x="22" y="17" width="1" height="1" fill="#F2C14E"/>
+  <rect x="21" y="19" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="19" y="14" width="1" height="1" fill="#FFFFFF"/>
 </g>
 </svg>

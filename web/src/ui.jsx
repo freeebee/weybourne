@@ -309,9 +309,9 @@ const MASCOT_MOTION = {
   coffee: "wb-float 3.4s ease-in-out infinite",
   sleeping: "wb-float 4.2s ease-in-out infinite",
   avatar: "none",
-  // Felix is 8-bit: his SVGs frame-flip internally; the walk adds a hop.
+  // Felix is 8-bit: his SVGs frame-flip internally; the walk adds a soft hop.
   "felix-fix": "none",
-  "felix-walk": "fx-hop .3s steps(2) infinite",
+  "felix-walk": "fx-hop .4s ease-in-out infinite",
 };
 
 const mascotCache = {};
