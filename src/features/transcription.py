@@ -363,9 +363,14 @@ NOTE_SCHEMA = {
             "enum": ["GP Meeting", "LP Meeting", "Reference call", "3rd Party Marketer",
                      "Event", "Internal", "Service Provider", "Email"],
         },
+        "summary": {
+            "type": "string",
+            "description": "A concise one-paragraph summary of the meeting",
+        },
         "overall_impression": {
             "type": "string",
-            "description": "One paragraph of judgement on what they presented and how it held up",
+            "description": "A concise assessment of the key merits, concerns, implications "
+                           "and points requiring further diligence",
         },
         "next_stage": {"type": "string", "description": "What happens next and by when"},
         "sections": {
@@ -374,7 +379,12 @@ NOTE_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "heading": {"type": "string"},
-                    "bullets": {"type": "array", "items": {"type": "string"}},
+                    "bullets": {
+                        "type": "array", "items": {"type": "string"},
+                        "description": "Every bullet in the form '**Keyword** - detailed "
+                                       "description': a short bold keyword, a hyphen, then "
+                                       "a comprehensive, well-elaborated point",
+                    },
                 },
                 "required": ["heading", "bullets"],
                 "additionalProperties": False,
@@ -388,20 +398,34 @@ NOTE_SCHEMA = {
                 "required": ["q", "a"],
                 "additionalProperties": False,
             },
-            "description": "The most consequential exchanges, at most 10. Where a question "
-                           "was dodged, say so plainly in the answer.",
+            "description": "ALL questions and answers discussed. Where a question was "
+                           "raised but not answered, the answer is exactly: 'The answer "
+                           "remains outstanding.' Where it was dodged, say so plainly.",
         },
     },
-    "required": ["title", "note_type", "overall_impression", "next_stage", "sections", "qa"],
+    "required": ["title", "note_type", "summary", "overall_impression", "next_stage",
+                 "sections", "qa"],
     "additionalProperties": False,
 }
 
-NOTE_SYSTEM_PROMPT = """You draft a Weybourne meeting note from a live transcript.
+NOTE_SYSTEM_PROMPT = """You draft a Weybourne meeting note from a live transcript, following \
+the workspace's note template.
 
 House style: third person, past tense, plain institutional English. State what the manager \
-said as their claim, not as fact. Keep every figure, name and date they gave. Never invent \
-anything not in the transcript. Never use em dashes. One heading per substantive topic in the \
-order discussed. Never include an Action Items section.
+said as their claim, not as fact. Never invent facts, conclusions or answers that are not \
+supported by the transcript. Never use em dashes. Never include an Action Items section.
+
+Template rules:
+- Organise the content into clear, topic-based sections, one heading per substantive topic \
+in the order discussed.
+- Present EVERY point as '**Keyword** - detailed description': a short bold keyword, a \
+hyphen, then a comprehensive, well-elaborated description that preserves the meaning and \
+substance of what was said.
+- Consolidate repeated information and improve unclear wording. Retain all material \
+details: names, figures, dates, performance data, concerns, decisions and follow-up items.
+- Q&A is the final section and includes ALL questions and answers discussed. If a question \
+was raised but not answered, state 'The answer remains outstanding.' rather than inferring \
+one.
 
 The transcript is machine generated and imperfect. NEVER comment on its quality anywhere in \
 the note: no remarks about audio, garbled or unclear speech, answers that were cut off, or \
@@ -419,7 +443,8 @@ def draft_meeting_note(
     open_qs = "\n".join(f"- {q}" for q in (unanswered or [])) or "(none)"
     user = (
         f"MEETING CONTEXT\n{context or '(none supplied)'}\n\n"
-        f"QUESTIONS THAT NEVER GOT ANSWERED (note them under next steps)\n{open_qs}\n\n"
+        "QUESTIONS RAISED BUT NEVER ANSWERED (include each in the Q&A with the "
+        f"answer: The answer remains outstanding.)\n{open_qs}\n\n"
         f"FULL TRANSCRIPT\n{buffer.full_text()[:24000]}"
     )
     response = client.messages.create(
@@ -438,17 +463,18 @@ NOTE_MARKDOWN_SHAPE = """# <title, e.g. Call with Axiom Asia>
 
 ### Meeting Overview
 ---
-- **Overall Impression** - <one paragraph of judgement on what they presented and how it held up>
+- **Summary** - <a concise one-paragraph summary of the meeting>
+- **Overall Impression** - <a concise assessment of the key merits, concerns, implications and points requiring further diligence>
 - **Next Stage** - <what happens next and by when>
 
 ### <one heading per substantive topic, in the order discussed>
 ---
-- <bullet>
+- **<Keyword>** - <comprehensive, well-elaborated description of the point>
 
 ### Q&A
 ---
 **Q**: <question>
-**A** - <what they actually said; where a question was dodged, say so plainly>"""
+**A** - <what they actually said; if it was never answered, exactly: The answer remains outstanding.; if dodged, say so plainly>"""
 
 
 def note_stream_args(
@@ -471,7 +497,8 @@ def note_stream_args(
     open_qs = "\n".join(f"- {q}" for q in (unanswered or [])) or "(none)"
     prompt = (
         f"MEETING CONTEXT\n{context or '(none supplied)'}\n\n"
-        f"QUESTIONS THAT NEVER GOT ANSWERED (note them under next steps)\n{open_qs}\n\n"
+        "QUESTIONS RAISED BUT NEVER ANSWERED (include each in the Q&A with the "
+        f"answer: The answer remains outstanding.)\n{open_qs}\n\n"
         f"FULL TRANSCRIPT\n{buffer.full_text()[:24000]}"
     )
     return system, prompt
@@ -537,6 +564,10 @@ def note_to_markdown(note: dict) -> str:
         "",
         "### Meeting Overview",
         "---",
+    ]
+    if note.get("summary"):
+        lines.append(f"- **Summary** - {note['summary']}")
+    lines += [
         f"- **Overall Impression** - {note['overall_impression']}",
         f"- **Next Stage** - {note['next_stage']}",
         "",

@@ -19,6 +19,7 @@ Two safety properties of this module:
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Literal, Optional
 
@@ -200,29 +201,44 @@ def email_note_children(body_text: str, max_blocks: int = 95) -> list[dict]:
     return blocks
 
 
-def markdown_children(md_text: str, max_blocks: int = 95) -> list[dict]:
-    """A drafted meeting note (our own markdown) as Notion blocks: headings,
-    bullets and paragraphs. Divider lines are dropped (Notion has its own)."""
-    def _rt(text):
-        return [{"text": {"content": text[:1800]}}]
+def _inline_rich(text: str) -> list[dict]:
+    """Markdown ``**bold**`` spans as genuinely bold Notion rich text; long
+    runs are chunked under Notion's per-segment character cap."""
+    out: list[dict] = []
+    for i, part in enumerate(re.split(r"\*\*(.+?)\*\*", text)):
+        while part:
+            chunk, part = part[:1800], part[1800:]
+            seg: dict = {"text": {"content": chunk}}
+            if i % 2:                      # odd indices were inside ** **
+                seg["annotations"] = {"bold": True}
+            out.append(seg)
+    return out or [{"text": {"content": ""}}]
 
+
+def markdown_children(md_text: str, max_blocks: int = 95) -> list[dict]:
+    """A drafted meeting note (our own markdown) as Notion blocks, following
+    the workspace's note template: Heading 3 sections each with a divider
+    beneath, ``**Keyword** - description`` bullets with real bold, paragraphs.
+    The leading title line and italic note-type line are dropped — those live
+    in the page's properties, not its body."""
     blocks: list[dict] = []
     for raw in (md_text or "").replace("\r\n", "\n").split("\n"):
         line = raw.strip()
-        if not line or line == "---" or len(blocks) >= max_blocks:
+        if not line or len(blocks) >= max_blocks:
             continue
-        if line.startswith("### "):
+        if line.startswith("# ") or re.fullmatch(r"\*[^*]+\*", line):
+            continue
+        if line == "---":
+            blocks.append({"object": "block", "type": "divider", "divider": {}})
+        elif line.startswith("### "):
             blocks.append({"object": "block", "type": "heading_3",
-                           "heading_3": {"rich_text": _rt(line[4:])}})
-        elif line.startswith("# "):
-            blocks.append({"object": "block", "type": "heading_2",
-                           "heading_2": {"rich_text": _rt(line[2:])}})
+                           "heading_3": {"rich_text": _inline_rich(line[4:])}})
         elif line.startswith("- "):
             blocks.append({"object": "block", "type": "bulleted_list_item",
-                           "bulleted_list_item": {"rich_text": _rt(line[2:])}})
+                           "bulleted_list_item": {"rich_text": _inline_rich(line[2:])}})
         else:
             blocks.append({"object": "block", "type": "paragraph",
-                           "paragraph": {"rich_text": _rt(line)}})
+                           "paragraph": {"rich_text": _inline_rich(line)}})
     return blocks
 
 
