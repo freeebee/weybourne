@@ -11,30 +11,21 @@ import { Markdown } from "./Prep.jsx";
 function CalendarPick() {
   const [events, setEvents] = React.useState([]);
   const [idx, setIdx] = React.useState("");
-  const [loaded, setLoaded] = React.useState(0);
 
   React.useEffect(() => {
     get("/api/calendar?days=2").then((d) => setEvents(d.events)).catch(() => {});
   }, []);
 
   return (
-    <>
-    {loaded > 0 && (
-      <span className="mono" style={{ fontSize: 10, color: "var(--brass-700)",
-                                      display: "block", marginBottom: 4 }}>
-        {loaded} KEY QUESTION{loaded === 1 ? "" : "S"} LOADED FROM YOUR PREP
-      </span>
-    )}
     <select value={idx} style={inputStyle} onChange={async (e) => {
       setIdx(e.target.value);
       const ev = events[+e.target.value];
       if (ev) {
         // Only "who" is filled from the calendar — the goal box is yours.
         live.set({ who: ev.counterparty_name || ev.subject });
-        // Pull in the key questions saved for this meeting's counterparty.
-        let n = await live.loadKeyQuestions(ev.counterparty_name);
-        if (!n && ev.subject) n = await live.loadKeyQuestions(ev.subject);
-        setLoaded(n);
+        // Fuzzy-resolve to the manager thread (prep questions, Notion links).
+        const hit = await live.resolveManager(ev.counterparty_name);
+        if (!hit && ev.subject) await live.resolveManager(ev.subject);
       }
     }}>
       <option value="">— pick a meeting —</option>
@@ -44,7 +35,61 @@ function CalendarPick() {
         </option>
       ))}
     </select>
-    </>
+  );
+}
+
+function ManagerPick() {
+  const [list, setList] = React.useState([]);
+  const [val, setVal] = React.useState("");
+
+  React.useEffect(() => {
+    get("/api/managers").then((d) => setList(d.managers || [])).catch(() => {});
+  }, []);
+
+  if (!list.length) return null;
+  return (
+    <select value={val} style={inputStyle} onChange={(e) => {
+      setVal(e.target.value);
+      if (e.target.value) live.resolveManager(e.target.value);
+    }}>
+      <option value="">— pick a manager —</option>
+      {list.map((m) => (
+        <option key={m.entity} value={m.entity}>
+          {m.entity}
+          {m.questions ? ` · ${m.questions} question${m.questions === 1 ? "" : "s"}` : ""}
+          {m.last_prep ? ` · prep ${m.last_prep}` : ""}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/* The loaded manager thread, made visible — always know what the session is
+   anchored to. */
+function ContextChip() {
+  const m = live.S.manager;
+  if (!m) return null;
+  const history = m.history || [];
+  const notes = history.filter((h) => h.kind === "note").length;
+  const preps = history.filter((h) => h.kind === "prep");
+  const bits = [
+    `${(m.questions || []).length} key question${(m.questions || []).length === 1 ? "" : "s"}`,
+    preps.length ? `prep ${preps[preps.length - 1].at}` : null,
+    notes ? `${notes} note${notes === 1 ? "" : "s"}` : null,
+    m.company_id ? "Notion: company linked" : m.contact_id ? "Notion: contact linked" : null,
+  ].filter(Boolean);
+  return (
+    <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap",
+                  padding: "8px 12px", background: "var(--paper-000)",
+                  border: "1px solid var(--paper-200)",
+                  borderLeft: "2px solid var(--brass-500)",
+                  borderRadius: "var(--radius)", marginBottom: 12 }}>
+      <b style={{ fontSize: "13.5px" }}>{m.entity}</b>
+      <span className="mono" style={{ fontSize: 10.5, letterSpacing: ".08em",
+                                      color: "var(--stone-500)" }}>
+        {bits.join(" · ").toUpperCase()}
+      </span>
+    </div>
   );
 }
 
@@ -115,13 +160,20 @@ export default function Live() {
 
       {!s.running && (
         <Card style={{ marginBottom: 20 }}>
+          <ContextChip />
           <div className="panes" style={{ gap: 18 }}>
             <Field label="FROM MY CALENDAR (OPTIONAL)" style={{ flex: "1 1 260px" }}
-              hint="Picking a meeting fills in who and what for.">
+              hint="Picking a meeting loads who, key questions and Notion links.">
               <CalendarPick />
             </Field>
-            <Field label="WHO YOU ARE MEETING" style={{ flex: "1 1 220px" }}>
+            <Field label="RECENT MANAGERS (OPTIONAL)" style={{ flex: "1 1 240px" }}
+              hint="Managers you've prepped, triaged or met — no calendar entry needed.">
+              <ManagerPick />
+            </Field>
+            <Field label="WHO YOU ARE MEETING" style={{ flex: "1 1 220px" }}
+              hint="Typing a known manager's name loads their thread too.">
               <input value={s.who} onChange={(e) => live.set({ who: e.target.value })}
+                onBlur={() => { if (s.who && !s.manager) live.resolveManager(s.who); }}
                 placeholder="Axiom Asia, Fund VII" style={inputStyle} />
             </Field>
             <Field label="WHAT YOU WANT OUT OF IT" style={{ flex: "2 1 300px" }}
@@ -287,6 +339,7 @@ export default function Live() {
         {/* Right pane — audio check + what was said */}
         <div style={{ flex: "1 1 300px", maxWidth: s.questions ? 420 : "none",
                       minWidth: "min(100%,280px)" }}>
+          {s.running && <ContextChip />}
           {s.running && (
             <Field label="WHAT YOU WANT OUT OF IT" style={{ marginBottom: 12 }}
               hint="Editable mid-meeting — steers the reads and the final note.">

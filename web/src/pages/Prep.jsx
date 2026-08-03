@@ -1,5 +1,7 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { get } from "../api.js";
+import * as live from "../liveStore.js";
 import {
   Banner, Button, Card, ErrorNote, Field, Mascot, PageHeader, SectionHead,
   fmtDate, fmtTime, inputStyle,
@@ -140,6 +142,33 @@ export default function Prep() {
     const t = text.trim();
     if (t && !keyQs.some((k) => k.q === t)) persistKeyQs([...keyQs, { q: t, src: "added by you" }]);
   };
+
+  // The manager thread for this entity — history line + note-taker handoff.
+  const nav = useNavigate();
+  const [thread, setThread] = React.useState(null);
+  React.useEffect(() => {
+    if (!entityName) { setThread(null); return; }
+    get(`/api/managers/resolve?q=${encodeURIComponent(entityName)}`)
+      .then((d) => setThread(d?.entity ? d : null)).catch(() => setThread(null));
+  }, [entityName]);
+  const threadLine = React.useMemo(() => {
+    if (!thread) return "";
+    const notes = (thread.history || []).filter((h) => h.kind === "note").length;
+    const preps = (thread.history || []).filter((h) => h.kind === "prep");
+    return [
+      preps.length > 1 ? `prep ${preps[preps.length - 1].at}` : null,
+      notes ? `${notes} note${notes === 1 ? "" : "s"}` : null,
+      thread.company_id ? "Notion linked" : null,
+    ].filter(Boolean).join(" · ");
+  }, [thread]);
+  async function openInNoteTaker() {
+    const name = entityName || viewing?.name;
+    if (name) {
+      live.set({ who: viewing?.result?.entity || name });
+      await live.resolveManager(name);
+    }
+    nav("/live");
+  }
 
   return (
     <div className="fade-in">
@@ -308,6 +337,7 @@ export default function Prep() {
                     </span>
                   )}
                 </div>
+                <Button variant="dark" onClick={openInNoteTaker}>Open in note taker</Button>
                 <button onClick={() => setJustDone(null)} title="Dismiss" style={{
                   background: "none", border: "none", cursor: "pointer",
                   color: "var(--stone-400)", fontFamily: "var(--mono)", fontSize: 14 }}>×</button>
@@ -331,6 +361,16 @@ export default function Prep() {
                   {viewing.result.email}
                 </span>
               )}
+              {threadLine && (
+                <span className="mono" style={{ fontSize: 10.5, letterSpacing: ".08em",
+                                                color: "var(--brass-700)" }}>
+                  {threadLine.toUpperCase()}
+                </span>
+              )}
+              <Button variant="ghost" onClick={openInNoteTaker}
+                style={{ marginLeft: "auto" }}>
+                Open in note taker
+              </Button>
             </div>
           )}
 

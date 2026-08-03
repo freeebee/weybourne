@@ -37,7 +37,7 @@ from src import config, llm
 from src.connectors.graph import CALENDAR_SNAPSHOT, INBOX_SNAPSHOT, GraphConnector
 from src.connectors.notion_client import NotionConnector
 from src.db import init_db
-from src.features import notion_sync
+from src.features import managers, notion_sync
 from src.features.dedupe import dedupe_entity
 from src.features.draft_reply import generate_draft_options
 from src.features.inbox_triage import triage_email
@@ -206,6 +206,19 @@ def _adjudicate_duplicate(client, kind: str, proposed: dict, existing: dict) -> 
         return {"verdict": "unsure", "reason": "adjudication unavailable"}
 
 
+def _linked_fields(decisions: dict) -> dict:
+    """Manager-thread fields from dedupe's link_existing matches."""
+    fields = {}
+    for kind, id_key, name_key in (("contact", "contact_id", "contact_name"),
+                                   ("company", "company_id", "company_name"),
+                                   ("fund", "fund_id", "fund_name")):
+        d = decisions.get(kind)
+        if d and d.best_match and d.recommended_action == "link_existing":
+            fields[id_key] = d.best_match.matched_id or ""
+            fields[name_key] = d.best_match.matched_name
+    return fields
+
+
 def _triage_one(client, msg: EmailMessage, progress=None) -> dict:
     def say(what: str):
         if progress:
@@ -267,6 +280,25 @@ def _triage_one(client, msg: EmailMessage, progress=None) -> dict:
             }
 
         out["dedupe"] = {k: _dedupe_row(k, d) for k, d in decisions.items()}
+
+        # Feed the manager thread: a linked company/fund (or an investment
+        # email) means we now know who this manager is in Notion, so a later
+        # prep or meeting note starts warm.
+        linked = {k: d for k, d in decisions.items()
+                  if d.recommended_action == "link_existing" and d.best_match}
+        if linked and (result.is_investment or "company" in linked or "fund" in linked):
+            try:
+                thread_name = (result.entity.company_name or result.entity.fund_name
+                               or result.entity.contact_name or msg.sender_name)
+                managers.upsert(
+                    thread_name,
+                    aliases=[result.entity.contact_name, result.entity.fund_name,
+                             msg.sender_name],
+                    email=result.entity.contact_email,
+                    add_history={"kind": "triage", "subject": msg.subject[:80]},
+                    **_linked_fields(decisions))
+            except Exception:  # noqa: BLE001 - the thread is an enhancement, never a blocker
+                pass
         out["proposals"] = [
             {"kind": p.kind, "title": p.title, "needs_review": p.needs_review,
              "review_reason": p.review_reason,
@@ -734,41 +766,17 @@ def _questions_path(entity: str):
     return QUESTIONS_DIR / f"{slug}.json"
 
 
+# Questions now live on the manager THREAD — the per-manager context file
+# that triage, prep, the note taker and Notion saves all share. Legacy
+# per-entity question files are absorbed once at startup.
+managers.migrate_legacy_questions(QUESTIONS_DIR)
+
+
 @app.get("/api/questions")
 def get_questions(entity: str = ""):
-    """Questions for an entity — exact slug first, then a FUZZY match.
-
-    The calendar's counterparty ("Sylvia Kong", "Lazard catch-up") rarely
-    equals the prep's entity name verbatim, so an exact-slug lookup made the
-    note taker come up empty. Saved files carry aliases (counterparty,
-    company, email) and matching uses the dedupe name scorer plus containment
-    ("Meeting with Lazard" ⊃ "Lazard").
-    """
-    p = _questions_path(entity)
-    if p.exists():
-        return json.loads(p.read_text(encoding="utf-8"))
-    if not entity or not QUESTIONS_DIR.exists():
-        return {"entity": entity, "questions": []}
-    from src.features.dedupe import _name_score, normalize_name
-
-    q_norm = normalize_name(entity)
-    best, best_score = None, 0.0
-    for f in QUESTIONS_DIR.glob("*.json"):
-        try:
-            data = json.loads(f.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001
-            continue
-        for name in [data.get("entity", ""), *(data.get("aliases") or [])]:
-            if not name:
-                continue
-            score = _name_score(entity, name)
-            n_norm = normalize_name(name)
-            if n_norm and q_norm and (n_norm in q_norm or q_norm in n_norm):
-                score = max(score, 0.95)
-            if score > best_score:
-                best, best_score = data, score
-    if best and best_score >= 0.72:
-        return best
+    thread = managers.find(entity)
+    if thread:
+        return {"entity": thread["entity"], "questions": thread.get("questions", [])}
     return {"entity": entity, "questions": []}
 
 
@@ -780,24 +788,21 @@ class QuestionsIn(BaseModel):
 
 @app.post("/api/questions")
 def save_questions(body: QuestionsIn):
-    QUESTIONS_DIR.mkdir(parents=True, exist_ok=True)
-    p = _questions_path(body.entity)
-    prior_aliases = []
-    if p.exists():
-        try:
-            prior_aliases = json.loads(p.read_text(encoding="utf-8")).get("aliases", [])
-        except Exception:  # noqa: BLE001
-            pass
-    aliases = []
-    for a in [*prior_aliases, *body.aliases]:
-        a = (a or "").strip()
-        if a and a.lower() != body.entity.strip().lower() and a not in aliases:
-            aliases.append(a)
-    p.write_text(
-        json.dumps({"entity": body.entity, "aliases": aliases,
-                    "questions": body.questions}, indent=1),
-        encoding="utf-8")
+    managers.upsert(body.entity, aliases=body.aliases, questions=body.questions)
     return {"saved": len(body.questions)}
+
+
+@app.get("/api/managers")
+def list_managers():
+    """Recent manager threads — feeds the note taker's context picker."""
+    return {"managers": managers.list_all()[:30]}
+
+
+@app.get("/api/managers/resolve")
+def resolve_manager(q: str = ""):
+    """Fuzzy-resolve a name (calendar counterparty, subject, typed) to a thread."""
+    thread = managers.find(q)
+    return thread or {}
 
 
 class SaveMeetingNoteIn(BaseModel):
@@ -806,6 +811,7 @@ class SaveMeetingNoteIn(BaseModel):
     markdown: str = ""
     overall_impression: str = ""
     who: str = ""
+    entity: str = ""   # manager-thread name, when the session had one loaded
     preview: bool = False
     edits: dict[str, str] = {}
 
@@ -820,6 +826,10 @@ def notion_save_meeting_note(body: SaveMeetingNoteIn):
     if _notion.live and not config.NOTION_NOTES_DB:
         raise HTTPException(status_code=503, detail="NOTION_NOTES_DB is not configured")
 
+    # The manager thread pre-fills what the prep already worked out: the
+    # Notion contact, company and fund this meeting belongs to.
+    thread = managers.find(body.entity or body.who) or {}
+
     attendee_ids: list[str] = []
     attendee_names: list[str] = []
     try:
@@ -827,6 +837,8 @@ def notion_save_meeting_note(body: SaveMeetingNoteIn):
         owner_email = (config.MS_USER or "").strip().lower()
         owner_name = owner_email.split("@", 1)[0].replace(".", " ")
         for c in (_find_contact(contacts, "", body.who),
+                  _find_contact(contacts, thread.get("email", ""),
+                                thread.get("contact_name", "")),
                   _find_contact(contacts, owner_email, owner_name)):
             if c and c.id and c.id not in attendee_ids:
                 attendee_ids.append(c.id)
@@ -842,8 +854,8 @@ def notion_save_meeting_note(body: SaveMeetingNoteIn):
                 "Date": dt.date.today().isoformat(),
                 "Done": "Yes",
                 "Attendees": ", ".join(n for n in attendee_names if n),
-                "Companies": "",
-                "Fund": "",
+                "Companies": thread.get("company_name", ""),
+                "Fund": thread.get("fund_name", ""),
                 "Thoughts / Considerations": body.overall_impression,
             },
             "fixed": [
@@ -885,6 +897,14 @@ def notion_save_meeting_note(body: SaveMeetingNoteIn):
     children = notion_sync.markdown_children(body.markdown)
     page = _notion.create_page(config.NOTION_NOTES_DB or "mock-db", props,
                                children=children)
+    # The saved note joins the manager's history.
+    try:
+        managers.upsert(
+            thread.get("entity") or body.entity or body.who or body.title,
+            add_history={"kind": "note", "url": page.get("url", ""),
+                         "title": (e.get("Name") or body.title)[:80]})
+    except Exception:  # noqa: BLE001
+        pass
     return {"url": page.get("url", ""), "id": page.get("id", ""),
             "live": _notion.live}
 
@@ -1242,6 +1262,22 @@ async def start_prep_job(
 
         job["stages"].append({"label": "Done", "detail": ""})
         _save_prep(job, result)
+        # Stamp the manager thread: resolve the counterparty against Notion
+        # and record this prep, so the note taker (and the next prep) starts
+        # with the linkage already made.
+        try:
+            entity_name = (result.get("briefing") or {}).get("entity") or name
+            ent = ExtractedEntity(
+                contact_name="" if "@" in name else name,
+                contact_email=email, company_name=company or name, fund_name=name)
+            dec = dedupe_entity(ent, _notion.list_contacts(),
+                                _notion.list_companies(), _notion.list_funds())
+            managers.upsert(
+                entity_name, aliases=[name, company, email], email=email,
+                add_history={"kind": "prep", "id": job["id"], "label": job["label"]},
+                **_linked_fields(dec))
+        except Exception:  # noqa: BLE001 - the thread is an enhancement
+            pass
         return result
 
     parts = [p for p, on in (("briefing", want_brief), ("preferences", want_screen)) if on]

@@ -10,6 +10,7 @@ const MIN_NEW_WORDS = 5;
 export const S = {
   running: false, who: "", goal: "", source: "system", deviceId: "",
   questions: true,   // live question suggestions — toggleable; recaps always run
+  manager: null,     // the loaded manager thread (entity, Notion links, history)
   transcript: "", entries: [], items: [], batches: [], reads: 0, unreadWords: 0,
   lastTail: "", lastReadAt: 0, startedAt: 0, reading: false, nextIn: CADENCE_S,
   error: null, note: null, sharp: null, busy: "", seq: 1, version: 0,
@@ -243,15 +244,25 @@ export function addOwnQuestion(q, starred = true) {
   emit();
 }
 
-/* Preload the key questions saved for this entity (starred in a briefing or
-   written in the prep page) — called when a calendar meeting is picked. */
-export async function loadKeyQuestions(entity) {
-  if (!entity) return 0;
+/* ---- manager thread: the context that follows a manager through the app -- */
+
+export function setManagerContext(thread) {
+  if (!thread || !thread.entity) return;
+  S.manager = thread;
+  S.who = S.who || thread.entity;
+  (thread.questions || []).forEach((k) => addOwnQuestion(k.q, true));
+  emit();
+}
+
+/* Fuzzy-resolve any name (calendar counterparty, subject, typed) to a
+   manager thread and load it. Returns the thread or null. */
+export async function resolveManager(q) {
+  if (!q) return null;
   try {
-    const d = await get(`/api/questions?entity=${encodeURIComponent(entity)}`);
-    (d.questions || []).forEach((k) => addOwnQuestion(k.q, true));
-    return (d.questions || []).length;
-  } catch { return 0; }
+    const d = await get(`/api/managers/resolve?q=${encodeURIComponent(q)}`);
+    if (d && d.entity) { setManagerContext(d); return d; }
+  } catch { /* no thread — plain session */ }
+  return null;
 }
 
 export function dropSharp() { S.sharp = null; emit(); }
@@ -283,7 +294,7 @@ export function newSession() {
   Object.assign(S, {
     transcript: "", entries: [], items: [], batches: [], reads: 0, unreadWords: 0,
     lastTail: "", lastReadAt: 0, startedAt: 0, nextIn: CADENCE_S, error: null,
-    note: null, sharp: null, busy: "", seq: 1,
+    note: null, sharp: null, busy: "", seq: 1, manager: null,
     noteSave: null, noteSaveEdits: {}, noteSaveEditing: {}, noteSaveUrl: "",
   });
   emit();
@@ -299,7 +310,7 @@ export async function previewNoteSave() {
       title: S.note.note.title, note_type: S.note.note.note_type,
       markdown: S.note.markdown,
       overall_impression: S.note.note.overall_impression || "",
-      who: S.who, preview: true,
+      who: S.who, entity: S.manager?.entity || "", preview: true,
     });
     S.noteSaveEdits = {}; S.noteSaveEditing = {};
   } catch (e) { S.error = e.message; }
@@ -327,7 +338,7 @@ export async function saveNoteToNotion() {
       title: S.note.note.title, note_type: S.note.note.note_type,
       markdown: S.note.markdown,
       overall_impression: S.note.note.overall_impression || "",
-      who: S.who,
+      who: S.who, entity: S.manager?.entity || "",
       edits: { ...(S.noteSave?.editable || {}), ...S.noteSaveEdits },
     });
     S.noteSaveUrl = res.url; S.noteSave = null;
