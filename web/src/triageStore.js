@@ -11,6 +11,7 @@ export const S = {
   results: {},          // id -> triage result
   selected: new Set(),
   inFlight: new Set(),  // message ids submitted to a running triage job
+  moving: new Set(),    // message ids mid delete / forward-to-shared
   activeId: null,
   scanBusy: false,
   jobs: {},             // jobId -> {done, total, current, elapsed, eta}
@@ -345,15 +346,32 @@ export function saveDraft(msg) {
   });
 }
 
+function removeRow(id) {
+  S.messages = S.messages.filter((x) => x.id !== id);
+  const next = new Set(S.selected); next.delete(id); S.selected = next;
+  if (S.activeId === id) S.activeId = S.messages[0]?.id ?? null;
+}
+
 export async function deleteMessage(m) {
-  S.error = null; emit();
+  S.error = null;
+  S.moving = new Set([...(S.moving || []), m.id]); emit();
   try {
     const r = await post("/api/messages/delete", { message_id: m.id });
-    S.messages = S.messages.filter((x) => x.id !== m.id);
-    const next = new Set(S.selected); next.delete(m.id); S.selected = next;
-    if (S.activeId === m.id) S.activeId = S.messages[0]?.id ?? null;
+    removeRow(m.id);
     S.notice = "Moved to Deleted Items — recoverable in Outlook."
       + (r.live ? "" : " (Demo mode — nothing was actually moved.)");
   } catch (e) { S.error = e.message; }
-  emit();
+  S.moving.delete(m.id); emit();
+}
+
+/* Forward a message to the Investments shared mailbox (via the M365 connector). */
+export async function toShared(m) {
+  S.error = null;
+  S.moving = new Set([...(S.moving || []), m.id]); emit();
+  try {
+    await post("/api/messages/to-shared", { message_id: m.id, subject: m.subject });
+    removeRow(m.id);
+    S.notice = "Forwarded to the Investments shared mailbox.";
+  } catch (e) { S.error = e.message; }
+  S.moving.delete(m.id); emit();
 }

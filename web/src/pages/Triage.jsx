@@ -158,8 +158,15 @@ export default function Triage() {
                         color: r && !relevantRow ? "var(--stone-600)" : "var(--ink-800)" }}>
                         {m.subject}
                       </span>
-                      {inFlight && <Spinner size={12} />}
+                      {(inFlight || s.moving?.has(m.id)) && <Spinner size={12} />}
+                      <button onClick={(e) => { e.stopPropagation(); ts.toShared(m); }}
+                        disabled={s.moving?.has(m.id)}
+                        title="Forward to the Investments shared mailbox" style={{
+                          background: "none", border: "none", cursor: "pointer",
+                          color: "var(--teal-700)", fontFamily: "var(--mono)", fontSize: 12,
+                        }}>»</button>
                       <button onClick={(e) => { e.stopPropagation(); ts.deleteMessage(m); }}
+                        disabled={s.moving?.has(m.id)}
                         title="Move to Deleted Items" style={{
                           background: "none", border: "none", cursor: "pointer",
                           color: "var(--critical-600)", fontFamily: "var(--mono)", fontSize: 11,

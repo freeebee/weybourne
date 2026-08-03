@@ -122,9 +122,13 @@ export default function Prep() {
   }, [entityName]);
   const persistKeyQs = (next) => {
     setKeyQs(next);
+    // Aliases let the note taker find these questions from the calendar's
+    // counterparty name or email, which rarely match the entity verbatim.
+    const aliases = [viewing?.result?.entity, viewing?.result?.company,
+                     viewing?.result?.email, viewing?.name].filter(Boolean);
     fetch("/api/questions", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entity: entityName, questions: next }),
+      body: JSON.stringify({ entity: entityName, questions: next, aliases }),
     }).catch(() => {});
   };
   const toggleKey = (q) => {

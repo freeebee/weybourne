@@ -736,22 +736,66 @@ def _questions_path(entity: str):
 
 @app.get("/api/questions")
 def get_questions(entity: str = ""):
+    """Questions for an entity — exact slug first, then a FUZZY match.
+
+    The calendar's counterparty ("Sylvia Kong", "Lazard catch-up") rarely
+    equals the prep's entity name verbatim, so an exact-slug lookup made the
+    note taker come up empty. Saved files carry aliases (counterparty,
+    company, email) and matching uses the dedupe name scorer plus containment
+    ("Meeting with Lazard" ⊃ "Lazard").
+    """
     p = _questions_path(entity)
-    if not p.exists():
+    if p.exists():
+        return json.loads(p.read_text(encoding="utf-8"))
+    if not entity or not QUESTIONS_DIR.exists():
         return {"entity": entity, "questions": []}
-    return json.loads(p.read_text(encoding="utf-8"))
+    from src.features.dedupe import _name_score, normalize_name
+
+    q_norm = normalize_name(entity)
+    best, best_score = None, 0.0
+    for f in QUESTIONS_DIR.glob("*.json"):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            continue
+        for name in [data.get("entity", ""), *(data.get("aliases") or [])]:
+            if not name:
+                continue
+            score = _name_score(entity, name)
+            n_norm = normalize_name(name)
+            if n_norm and q_norm and (n_norm in q_norm or q_norm in n_norm):
+                score = max(score, 0.95)
+            if score > best_score:
+                best, best_score = data, score
+    if best and best_score >= 0.72:
+        return best
+    return {"entity": entity, "questions": []}
 
 
 class QuestionsIn(BaseModel):
     entity: str
     questions: list[dict]   # [{q, src}]
+    aliases: list[str] = [] # other names this meeting goes by (counterparty, company, email)
 
 
 @app.post("/api/questions")
 def save_questions(body: QuestionsIn):
     QUESTIONS_DIR.mkdir(parents=True, exist_ok=True)
-    _questions_path(body.entity).write_text(
-        json.dumps({"entity": body.entity, "questions": body.questions}, indent=1),
+    p = _questions_path(body.entity)
+    prior_aliases = []
+    if p.exists():
+        try:
+            prior_aliases = json.loads(p.read_text(encoding="utf-8")).get("aliases", [])
+        except Exception:  # noqa: BLE001
+            pass
+    aliases = []
+    for a in [*prior_aliases, *body.aliases]:
+        a = (a or "").strip()
+        if a and a.lower() != body.entity.strip().lower() and a not in aliases:
+            aliases.append(a)
+    p.write_text(
+        json.dumps({"entity": body.entity, "aliases": aliases,
+                    "questions": body.questions}, indent=1),
         encoding="utf-8")
     return {"saved": len(body.questions)}
 
@@ -922,9 +966,22 @@ class DeleteIn(BaseModel):
 
 @app.post("/api/messages/delete")
 def delete_message(body: DeleteIn):
-    """Soft delete: moves to Deleted Items, recoverable from Outlook."""
-    result = _graph.delete_message(body.message_id)
-    return {"result": result, "live": _graph.live}
+    """Soft delete: moves to Deleted Items, recoverable from Outlook.
+
+    With Graph credentials this calls the Graph API; without them (the MCP
+    bridge setup) it performs the trash through the M365 connector — a real
+    delete either way, never a silent no-op.
+    """
+    if _graph.live:
+        return {"result": _graph.delete_message(body.message_id), "live": True}
+    _mcp_mail_action(
+        f'Move the Outlook message with id "{body.message_id}" to Deleted Items '
+        "(trash — soft delete, never permanent) using outlook_batch_delete_messages "
+        "or outlook_trash_thread.",
+        ["mcp__claude_ai_Microsoft_365__outlook_batch_delete_messages",
+         "mcp__claude_ai_Microsoft_365__outlook_trash_thread"],
+    )
+    return {"result": {"status": "deleted"}, "live": True}
 
 
 # --------------------------------------------------------------------------- #
@@ -1466,6 +1523,75 @@ def start_outlook_refresh():
         return counts
 
     return _job_summary(_start_job("outlook-refresh", "Outlook refresh", work))
+
+
+# Keep the Outlook snapshots fresh automatically: one refresh shortly after
+# the server starts, then every OUTLOOK_AUTO_REFRESH_MIN minutes (0 disables).
+def _auto_outlook_refresh():
+    import os
+
+    every_min = int(os.environ.get("OUTLOOK_AUTO_REFRESH_MIN", "30"))
+    if every_min <= 0:
+        return
+    time.sleep(15)   # let the server finish booting first
+    while True:
+        try:
+            already = any(j.get("kind") == "outlook-refresh" and j.get("status") == "running"
+                          for j in _JOBS.values())
+            if not already:
+                start_outlook_refresh()
+        except Exception:  # noqa: BLE001 - a failed cycle just waits for the next
+            pass
+        time.sleep(every_min * 60)
+
+
+threading.Thread(target=_auto_outlook_refresh, daemon=True).start()
+
+
+# --------------------------------------------------------------------------- #
+# Mail actions via the MCP bridge — real forwards/deletes without Entra.
+# --------------------------------------------------------------------------- #
+
+_MCP_ACTION_PREAMBLE = """The claude.ai Microsoft 365 connector may still be connecting when
+you start — if the outlook tools are not yet visible, use ToolSearch with the query
+"outlook mail" to load them, and retry a few times over ~20 seconds. When the action has
+been performed, reply with exactly DONE. If it cannot be performed, reply FAILED: <reason>.
+"""
+
+
+def _mcp_mail_action(instruction: str, tools: list[str]) -> None:
+    """Run one write action through the user's M365 connector; raise on failure."""
+    import subprocess
+
+    cli = llm.resolve_cli_path(config.CLAUDE_CLI_PATH) or config.CLAUDE_CLI_PATH
+    proc = subprocess.run(
+        [cli, "-p", _MCP_ACTION_PREAMBLE + instruction,
+         "--allowedTools", ",".join([*tools, "ToolSearch"])],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=240, stdin=subprocess.DEVNULL,
+    )
+    out = (proc.stdout or "").strip()
+    if "FAILED" in out.upper() or "DONE" not in out.upper():
+        raise HTTPException(status_code=502,
+                            detail=f"Mail action failed: {(out or proc.stderr)[:200]}")
+
+
+class ToSharedIn(BaseModel):
+    message_id: str
+    subject: str = ""
+
+
+@app.post("/api/messages/to-shared")
+def message_to_shared(body: ToSharedIn):
+    """Forward a message to the Investments shared mailbox."""
+    _mcp_mail_action(
+        f'Forward the Outlook message with id "{body.message_id}"'
+        + (f' (subject: "{body.subject}")' if body.subject else "")
+        + f" to {config.SHARED_MAILBOX} using the outlook_forward_mail tool, "
+          "with no added comment.",
+        ["mcp__claude_ai_Microsoft_365__outlook_forward_mail"],
+    )
+    return {"forwarded": True, "to": config.SHARED_MAILBOX}
 
 
 # --------------------------------------------------------------------------- #
