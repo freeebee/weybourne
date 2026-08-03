@@ -401,7 +401,12 @@ NOTE_SYSTEM_PROMPT = """You draft a Weybourne meeting note from a live transcrip
 House style: third person, past tense, plain institutional English. State what the manager \
 said as their claim, not as fact. Keep every figure, name and date they gave. Never invent \
 anything not in the transcript. Never use em dashes. One heading per substantive topic in the \
-order discussed. Never include an Action Items section."""
+order discussed. Never include an Action Items section.
+
+The transcript is machine generated and imperfect. NEVER comment on its quality anywhere in \
+the note: no remarks about audio, garbled or unclear speech, answers that were cut off, or \
+gaps in the recording. Work with what is legible and judge the substance only — the Overall \
+Impression is a view on what the counterparty presented, never on the recording of it."""
 
 
 def draft_meeting_note(
@@ -481,6 +486,47 @@ def note_from_markdown(md: str) -> dict:
     imp = re.search(r"\*\*Overall Impression\*\*\s*-\s*(.+)", md)
     return {"title": title, "note_type": note_type,
             "overall_impression": imp.group(1).strip() if imp else ""}
+
+
+REFINE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "text": {"type": "string",
+                 "description": "The rewritten Thoughts / Considerations paragraph"},
+    },
+    "required": ["text"],
+    "additionalProperties": False,
+}
+
+REFINE_SYSTEM_PROMPT = """You refine the Thoughts / Considerations paragraph of a Weybourne \
+meeting note. The investor has read the drafted judgement and added thoughts of their own; \
+rewrite the paragraph so it gives full effect to what they said.
+
+Rules:
+- The investor's own thoughts take precedence wherever they qualify, contradict or extend \
+the draft. Weave them in as considered judgement, not as an appended list.
+- Keep it one tight paragraph in the house voice: plain institutional English, measured, \
+specific. Keep any figures and names from the draft that remain relevant.
+- Never comment on transcript or audio quality. Never use em dashes. Output only the \
+rewritten paragraph."""
+
+
+def refine_thoughts(client, current: str, additions: str, context: str = "") -> str:
+    """Rewrite the note's Thoughts / Considerations to absorb the investor's own view."""
+    user = (
+        f"MEETING CONTEXT\n{context or '(none supplied)'}\n\n"
+        f"DRAFTED THOUGHTS / CONSIDERATIONS\n{current or '(empty)'}\n\n"
+        f"THE INVESTOR'S OWN THOUGHTS\n{additions}"
+    )
+    response = client.messages.create(
+        model=REASONING_MODEL,
+        max_tokens=600,
+        system=REFINE_SYSTEM_PROMPT,
+        output_config={"format": {"type": "json_schema", "schema": REFINE_SCHEMA}},
+        messages=[{"role": "user", "content": user}],
+    )
+    raw = next((b.text for b in response.content if getattr(b, "type", None) == "text"), "")
+    return json.loads(raw).get("text", "").strip()
 
 
 def note_to_markdown(note: dict) -> str:

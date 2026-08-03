@@ -51,6 +51,7 @@ from src.features.transcription import (
     note_stream_args,
     note_to_markdown,
     read_transcript_batch,
+    refine_thoughts,
     sharpen_question,
 )
 from src.features.track_record import (
@@ -1449,6 +1450,20 @@ def live_note_stream(body: NoteIn):
 def live_note_parse(body: dict):
     """Fields the Notion save needs, recovered from a streamed markdown note."""
     return note_from_markdown(str(body.get("markdown") or ""))
+
+
+class RefineThoughtsIn(BaseModel):
+    current: str = ""
+    additions: str
+    context: str = ""
+
+
+@app.post("/api/live/refine-thoughts")
+def live_refine_thoughts(body: RefineThoughtsIn):
+    """Rewrite the note's Thoughts / Considerations giving effect to the
+    investor's own added thoughts."""
+    text = _run(refine_thoughts, _client(), body.current, body.additions, body.context)
+    return {"text": text}
 
 
 # --------------------------------------------------------------------------- #

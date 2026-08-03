@@ -420,6 +420,24 @@ export function cancelNoteSave() {
   S.noteSave = null; S.noteSaveEdits = {}; S.noteSaveEditing = {}; emit();
 }
 
+/* Rewrite Thoughts / Considerations so it absorbs the investor's own added
+   thoughts. Returns true on success so the input can clear. */
+export async function refineThoughts(additions) {
+  if (!(additions || "").trim() || !S.noteSave) return false;
+  S.busy = "refine"; S.error = null; emit();
+  let ok = false;
+  try {
+    const current = S.noteSaveEdits["Thoughts / Considerations"]
+      ?? S.noteSave.editable?.["Thoughts / Considerations"] ?? "";
+    const res = await post("/api/live/refine-thoughts", {
+      current, additions, context: context(),
+    });
+    if (res.text) { setNoteSaveEdit("Thoughts / Considerations", res.text); ok = true; }
+  } catch (e) { S.error = e.message; }
+  S.busy = ""; emit();
+  return ok;
+}
+
 export async function saveNoteToNotion() {
   if (!S.note) return;
   S.busy = "notesave"; S.error = null; emit();

@@ -61,7 +61,8 @@ export function Card({ accent, children, style, ...rest }) {
    filter the known options; if nothing matches, a Create row uses the typed
    text as a new value. `multi` keeps a comma-separated list with removable
    chips; single-select replaces the value. */
-export function SearchSelect({ value = "", onChange, options = [], multi = false, placeholder }) {
+export function SearchSelect({ value = "", onChange, options = [], multi = false,
+                               placeholder, loading = false }) {
   const [q, setQ] = React.useState("");
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef(null);
@@ -83,12 +84,26 @@ export function SearchSelect({ value = "", onChange, options = [], multi = false
   };
   const remove = (name) => onChange(chosen.filter((c) => c !== name).join(", "));
 
-  const ql = q.trim().toLowerCase();
-  const matches = options
-    .filter((o) => !ql || o.toLowerCase().includes(ql))
+  // Relevance-ranked matching: exact, then prefix, then any-word prefix, then
+  // all typed tokens appearing anywhere ("sim ric" finds Simon Richards).
+  const norm = (s) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const ql = norm(q);
+  const rank = (o) => {
+    const on = norm(o);
+    if (on === ql) return 0;
+    if (on.startsWith(ql)) return 1;
+    if (on.split(" ").some((w) => w.startsWith(ql))) return 2;
+    const tokens = ql.split(" ");
+    if (tokens.every((t) => on.includes(t))) return 3;
+    return -1;
+  };
+  const matches = (ql
+    ? options.map((o) => [rank(o), o]).filter(([r]) => r >= 0)
+        .sort((a, b) => a[0] - b[0] || a[1].localeCompare(b[1])).map(([, o]) => o)
+    : options)
     .filter((o) => !chosen.includes(o))
-    .slice(0, 8);
-  const exact = options.some((o) => o.toLowerCase() === ql);
+    .slice(0, 50);
+  const exact = options.some((o) => norm(o) === ql);
   const rowStyle = { padding: "6px 9px", fontSize: "13px", cursor: "pointer", borderRadius: 4 };
   const hover = (e, on) => { e.currentTarget.style.background = on ? "var(--paper-100)" : "transparent"; };
 
@@ -137,14 +152,19 @@ export function SearchSelect({ value = "", onChange, options = [], multi = false
               {o}
             </div>
           ))}
-          {ql && !exact && (
+          {ql && !exact && !loading && (
             <div onClick={() => pick(q.trim())}
               style={{ ...rowStyle, color: "var(--teal-700)" }}
               onMouseEnter={(e) => hover(e, true)} onMouseLeave={(e) => hover(e, false)}>
               Create “{q.trim()}”
             </div>
           )}
-          {!matches.length && !ql && (
+          {loading && !options.length && (
+            <div className="muted" style={{ padding: "6px 9px", fontSize: "12.5px" }}>
+              Loading the directory…
+            </div>
+          )}
+          {!matches.length && !ql && !loading && (
             <div className="muted" style={{ padding: "6px 9px", fontSize: "12.5px" }}>
               Type to search{options.length ? ` ${options.length} options` : ""}…
             </div>

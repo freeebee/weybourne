@@ -173,19 +173,23 @@ export default function Live() {
       setDevices(ds.filter((d) => d.kind === "audioinput")));
   }, [s.running]);
 
-  // Options for the note-save pickers, loaded when the preview opens: the
-  // Notes DB's select options plus page names for each relation target.
+  // Options for the note-save pickers: the Notes DB's select options plus page
+  // names for each relation target. Fetched as soon as a note exists — well
+  // before the preview opens — so the pickers are never racing their data.
   const [noteOpts, setNoteOpts] = React.useState({});
   const [nameLists, setNameLists] = React.useState({});
+  const pickerDataLoaded = React.useRef(false);
   React.useEffect(() => {
-    if (!s.noteSave) return;
+    if ((!s.note && !s.noteSave) || pickerDataLoaded.current) return;
+    pickerDataLoaded.current = true;
     get("/api/notion/options?kind=note")
       .then((d) => setNoteOpts(d.options || {})).catch(() => {});
     ["contact", "company", "fund"].forEach((k) =>
       get(`/api/notion/names?kind=${k}`)
         .then((d) => setNameLists((p) => ({ ...p, [k]: d.names || [] })))
-        .catch(() => {}));
-  }, [!!s.noteSave]);
+        .catch(() => setNameLists((p) => ({ ...p, [k]: [] }))));
+  }, [!!s.note, !!s.noteSave]);
+  const [refine, setRefine] = React.useState("");
 
   const openItems = s.items.filter((it) => !it.answer);
   const answeredItems = s.items.filter((it) => it.answer);
@@ -541,9 +545,12 @@ export default function Live() {
                       || ["GP Meeting", "LP Meeting", "Reference call", "3rd Party Marketer",
                           "Event", "Internal", "Service Provider", "Email"], multi: false },
                     "Done": { options: ["Yes", "No"], multi: false },
-                    "Attendees": { options: nameLists.contact || [], multi: true },
-                    "Companies": { options: nameLists.company || [], multi: true },
-                    "Fund": { options: nameLists.fund || [], multi: true },
+                    "Attendees": { options: nameLists.contact || [], multi: true,
+                                   loading: nameLists.contact === undefined },
+                    "Companies": { options: nameLists.company || [], multi: true,
+                                   loading: nameLists.company === undefined },
+                    "Fund": { options: nameLists.fund || [], multi: true,
+                              loading: nameLists.fund === undefined },
                   };
                   const picker = pickers[k];
                   return (
@@ -553,7 +560,7 @@ export default function Live() {
                         {editing ? (
                           picker
                             ? <SearchSelect value={value} options={picker.options}
-                                multi={picker.multi}
+                                multi={picker.multi} loading={picker.loading}
                                 onChange={(nv) => live.setNoteSaveEdit(k, nv)} />
                             : k === "Thoughts / Considerations"
                               ? <textarea rows={3} value={value} style={editStyle}
@@ -573,6 +580,27 @@ export default function Live() {
                           {editing ? "DONE" : "EDIT"}
                         </button>
                       </div>
+                      {/* Refine: your own thoughts, woven into the paragraph
+                          above by the model. */}
+                      {k === "Thoughts / Considerations" && (
+                        <>
+                          <span />
+                          <div>
+                            <textarea rows={2} value={refine}
+                              placeholder="add your own thoughts — the paragraph above is rewritten to give effect to them"
+                              onChange={(e) => setRefine(e.target.value)}
+                              style={{ ...editStyle, width: "100%", marginTop: 2 }} />
+                            <Button variant="ghost" busy={s.busy === "refine"}
+                              disabled={!refine.trim()}
+                              onClick={async () => {
+                                const ok = await live.refineThoughts(refine);
+                                if (ok) setRefine("");
+                              }}>
+                              Refine thoughts / considerations
+                            </Button>
+                          </div>
+                        </>
+                      )}
                     </React.Fragment>
                   );
                 })}
