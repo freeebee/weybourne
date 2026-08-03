@@ -1055,7 +1055,7 @@ _JOBS_LOCK = threading.Lock()
 # rough first-run figures so the very first job still shows an estimate.
 _DURATIONS: dict[str, list[float]] = {}
 _ETA_SEED = {"prep": 150, "whats-new-team": 60, "whats-new-inbox": 50,
-             "outlook-refresh": 480}
+             "outlook-refresh": 180}
 
 
 def _eta(kind: str) -> int:
@@ -1474,6 +1474,35 @@ full content with the read_resource tool (each search result carries a resource
 URI) and put the complete plain text in "body". Only fall back to the preview
 for a message whose full read fails."""
 
+# Incremental refresh: bodies already held in the snapshot are not re-fetched —
+# the agent returns a bare id for those and the server splices the stored row
+# back in. On a routine 30-minute auto-refresh this cuts the work from ~20 full
+# message reads to only whatever is genuinely new.
+_CACHED_IDS_HINT = """
+
+EXCEPTION — already-cached messages. The complete bodies of these message ids
+are already stored locally:
+{ids}
+For any search result whose id is in that list, do NOT call read_resource and do
+NOT output its body or other fields — output just {{"id": "<the id>"}} for it.
+Fetch complete bodies only for messages NOT in the list."""
+
+
+def _merge_cached_rows(rows: list, prev_by_id: dict) -> tuple[list, int]:
+    """Splice previously stored rows in place of the agent's bare-id markers."""
+    merged: list = []
+    reused = 0
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        rid = str(r.get("id") or "")
+        if rid in prev_by_id and not (r.get("body") or "").strip():
+            merged.append(prev_by_id[rid])
+            reused += 1
+        else:
+            merged.append(r)
+    return merged, reused
+
 _REFRESH_PARTS = {
     "inbox": (_MCP_PREAMBLE
               + "Fetch my top-level Outlook Inbox: the 20 most recent messages from "
@@ -1509,7 +1538,10 @@ def start_outlook_refresh():
         def fetch(prompt: str) -> list:
             proc = subprocess.run(
                 [cli, "-p", prompt.replace("{shared}", config.SHARED_MAILBOX),
-                 "--allowedTools", _M365_READONLY_TOOLS + ",ToolSearch"],
+                 "--allowedTools", _M365_READONLY_TOOLS + ",ToolSearch",
+                 # Copying mail bodies is transcription, not reasoning — the
+                 # fast model streams them out several times quicker.
+                 "--model", llm._cli_model(config.FAST_MODEL) or "haiku"],
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
                 # Search + a full read_resource per message takes a while.
                 timeout=900, stdin=subprocess.DEVNULL,
@@ -1525,16 +1557,35 @@ def start_outlook_refresh():
 
         def fetch_part(part: str, prompt: str):
             try:
+                target = data_dir / _SNAPSHOT_FILES[part]
+                # Incremental: tell the agent which bodies we already hold so it
+                # only does full reads for genuinely new messages.
+                prev_by_id: dict = {}
+                if part in ("inbox", "shared") and target.exists():
+                    try:
+                        prev_by_id = {
+                            str(r["id"]): r
+                            for r in json.loads(target.read_text(encoding="utf-8"))
+                            if isinstance(r, dict) and r.get("id")}
+                    except Exception:  # noqa: BLE001 - corrupt snapshot → full fetch
+                        prev_by_id = {}
+                if prev_by_id:
+                    prompt = prompt + _CACHED_IDS_HINT.format(
+                        ids="\n".join(prev_by_id))
                 rows = fetch(prompt)
                 if not rows:
                     # Connector attaches asynchronously — one retry on empty.
                     job["stages"].append({"label": f"{part} empty — retrying once",
                                           "detail": "connector may have been slow to attach"})
                     rows = fetch(prompt)
-                target = data_dir / _SNAPSHOT_FILES[part]
+                reused = 0
+                if prev_by_id:
+                    rows, reused = _merge_cached_rows(rows, prev_by_id)
                 if rows or not target.exists():
                     target.write_text(json.dumps(rows, indent=1), encoding="utf-8")
                     counts[part] = len(rows)
+                    if reused:
+                        counts[f"{part}_cached"] = reused
                 else:
                     # Never clobber a good snapshot with an empty fetch — a
                     # missed connector attach must not erase real data.
@@ -1549,7 +1600,7 @@ def start_outlook_refresh():
         from concurrent.futures import ThreadPoolExecutor
 
         job["stages"].append({"label": "Fetch inbox + calendar + shared (in parallel)",
-                              "detail": "full message bodies via your Microsoft 365 connector"})
+                              "detail": "incremental — full bodies fetched only for new messages"})
         with ThreadPoolExecutor(max_workers=3) as pool:
             futures = [pool.submit(fetch_part, part, prompt)
                        for part, prompt in _REFRESH_PARTS.items()]
