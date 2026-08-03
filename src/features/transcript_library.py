@@ -105,3 +105,15 @@ def load(sid: str, live_dir: Path = None, lib_dir: Path = None) -> dict | None:
             except Exception:  # noqa: BLE001
                 return None
     return None
+
+
+def delete(sid: str, live_dir: Path = None, lib_dir: Path = None) -> bool:
+    """Remove a transcript from the library (and any orphaned autosave)."""
+    live_dir, lib_dir = live_dir or LIVE_DIR, lib_dir or LIB_DIR
+    removed = False
+    for base in (lib_dir, live_dir):
+        path = base / f"{_safe_id(sid)}.json"
+        if path.exists():
+            path.unlink()
+            removed = True
+    return removed

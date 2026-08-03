@@ -72,38 +72,49 @@ function Station({ kind, x, active }) {
   );
 }
 
-/* 8-bit flames, two frames flipped by the px-swap pair — shown when Felix is
-   in POWER UP mode (a run is underway). */
-function PixelFire({ width = 150 }) {
+/* One 8-bit flame that fully engulfs Felix — a single silhouette rising
+   around him (behind the sprite), two flickering frames. */
+function PixelFire({ width = 168 }) {
   const px = (cells, fill) => cells.map(([cx, cy, w = 1, h = 1], i) => (
     <rect key={fill + i} x={cx} y={cy} width={w} height={h} fill={fill} />
   ));
+  // Outer silhouette (red), inner body (orange), core (yellow) — one blob.
+  const frameA = (
+    <>
+      {px([[9, 0], [10, 1], [8, 2], [13, 2], [5, 4], [14, 3], [16, 5], [3, 6],
+           [17, 7], [2, 8], [18, 9], [1, 10],
+           [7, 1, 2, 2], [9, 2, 4, 3], [6, 3, 8, 3], [4, 5, 12, 3],
+           [3, 7, 14, 4], [2, 9, 16, 5], [1, 11, 18, 9], [2, 20, 16, 2]],
+          "#E25822")}
+      {px([[8, 4], [12, 5], [6, 6, 8, 3], [5, 8, 10, 4], [4, 11, 12, 6],
+           [5, 17, 10, 3], [15, 12, 2, 3]], "#F59E0B")}
+      {px([[9, 7], [7, 9, 6, 3], [6, 12, 8, 5], [8, 17, 4, 2]], "#FDE68A")}
+    </>
+  );
+  const frameB = (
+    <>
+      {px([[10, 0], [12, 1], [7, 2], [15, 3], [4, 3], [17, 5], [2, 6], [18, 8],
+           [1, 9], [16, 6],
+           [9, 1, 3, 2], [7, 3, 7, 2], [5, 4, 11, 3], [3, 6, 14, 4],
+           [2, 8, 16, 4], [1, 11, 18, 9], [2, 20, 16, 2]],
+          "#E25822")}
+      {px([[11, 4], [6, 5], [8, 6, 6, 3], [5, 9, 11, 4], [4, 12, 13, 5],
+           [6, 17, 9, 3], [3, 10, 2, 4]], "#F59E0B")}
+      {px([[10, 8], [8, 10, 5, 3], [7, 13, 7, 4], [9, 17, 3, 2]], "#FDE68A")}
+    </>
+  );
   return (
-    <svg viewBox="0 0 26 14" width={width} shapeRendering="crispEdges"
-      style={{ position: "absolute", bottom: -4, left: "50%",
-               transform: "translateX(-50%)", pointerEvents: "none" }}>
-      <g style={{ animation: "px-swapA .28s steps(1) infinite" }}>
-        {px([[1, 6], [2, 4], [3, 8], [5, 3], [6, 6], [19, 5], [21, 3], [22, 7],
-             [24, 5], [0, 9, 2, 4], [3, 10, 3, 3], [18, 9, 3, 4], [23, 8, 3, 5]],
-            "#E25822")}
-        {px([[2, 7], [4, 9], [5, 6], [20, 6], [22, 9], [24, 7],
-             [1, 11, 2, 2], [19, 11, 2, 2]], "#F59E0B")}
-        {px([[2, 10], [4, 11], [20, 10], [24, 11]], "#FDE68A")}
-      </g>
-      <g style={{ animation: "px-swapB .28s steps(1) infinite" }}>
-        {px([[0, 4], [2, 6], [4, 2], [5, 7], [20, 2], [21, 6], [23, 4], [25, 7],
-             [1, 8, 3, 5], [4, 9, 2, 4], [19, 8, 3, 5], [23, 9, 3, 4]],
-            "#E25822")}
-        {px([[1, 6], [3, 8], [5, 10], [20, 7], [22, 8], [24, 10],
-             [2, 11, 2, 2], [21, 11, 3, 2]], "#F59E0B")}
-        {px([[3, 11], [1, 10], [21, 9], [23, 12]], "#FDE68A")}
-      </g>
+    <svg viewBox="0 0 20 22" width={width} shapeRendering="crispEdges"
+      style={{ position: "absolute", bottom: -6, left: "50%",
+               transform: "translateX(-50%)", pointerEvents: "none",
+               opacity: .92 }}>
+      <g style={{ animation: "px-swapA .26s steps(1) infinite" }}>{frameA}</g>
+      <g style={{ animation: "px-swapB .26s steps(1) infinite" }}>{frameB}</g>
     </svg>
   );
 }
 
 function Scene({ scene }) {
-  const state = scene.activity === "walk" ? "felix-walk" : "felix-fix";
   const x = STATION_X[scene.zone] ?? 50;
   const fixing = scene.activity === "fix";
   return (
@@ -129,15 +140,31 @@ function Scene({ scene }) {
           </div>
         )}
 
-        {/* Felix — standing at the station's left shoulder, wrench landing
-            on it; mid-walk he moves between stations at floor level. */}
+        {/* Felix — his wrench hand is on his right (viewer left), so he
+            stands just right of the station and works on it. Fixing swaps
+            the hero/strike frames; walking bounces the hero pose along. */}
         <div className={"fx-sprite" + (scene.power ? " powered" : "")}
           style={{ position: "absolute",
-                   left: `calc(${x}% - ${scene.activity === "walk" ? 60 : 104}px)`,
-                   top: 122, width: 120 }}>
+                   left: `calc(${x}% - ${scene.activity === "walk" ? 55 : 6}px)`,
+                   top: 118, width: 110,
+                   animation: scene.activity === "walk"
+                     ? "fx-hop .38s ease-in-out infinite" : "none" }}>
           {scene.power && <PixelFire />}
-          <div style={{ position: "relative" }}>
-            <Mascot state={state} width={124} />
+          <div style={{ position: "relative", height: 134 }}>
+            {fixing ? (
+              <>
+                <div style={{ position: "absolute", inset: 0,
+                              animation: "px-swapA .52s steps(1) infinite" }}>
+                  <Mascot state="felix-hero" width={110} />
+                </div>
+                <div style={{ position: "absolute", inset: 0,
+                              animation: "px-swapB .52s steps(1) infinite" }}>
+                  <Mascot state="felix-strike" width={110} />
+                </div>
+              </>
+            ) : (
+              <Mascot state="felix-hero" width={110} />
+            )}
           </div>
           {scene.labels.map((l, i) => (
             <div key={l.id}

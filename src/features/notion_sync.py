@@ -29,6 +29,16 @@ from src.schemas import DedupeDecision, ExtractedEntity
 
 EntityKind = Literal["contact", "company", "fund"]
 
+# Weybourne's own mail domains — colleagues, not counterparties.
+_INTERNAL_DOMAINS = ("weybourneholdings.com", "weybourne.co.uk")
+
+
+def default_contact_type(email: str) -> str:
+    """The default Type select for a new contact: colleagues on a Weybourne
+    domain are Internal; everyone else defaults to GP-side investments."""
+    domain = (email or "").rsplit("@", 1)[-1].strip().lower()
+    return "Internal" if domain in _INTERNAL_DOMAINS else "GP - Investments"
+
 
 @dataclass
 class CreationProposal:
@@ -72,9 +82,9 @@ def contact_properties(entity: ExtractedEntity) -> dict:
     }
     if entity.contact_email:
         props["Email"] = {"email": entity.contact_email}
-    # Inbound fund managers are GP-side investment contacts by default; the UI
-    # lets a human change this before the page is created.
-    props["Type"] = {"select": {"name": "GP - Investments"}}
+    # Colleagues are Internal; inbound fund managers default to GP-side. The
+    # UI lets a human change this before the page is created.
+    props["Type"] = {"select": {"name": default_contact_type(entity.contact_email)}}
     if entity.summary:
         props["Description"] = _rich_prop(entity.summary)
     return props

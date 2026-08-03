@@ -14,6 +14,8 @@ async function handle(res) {
 
 export const get = (url) => fetch(url).then(handle);
 
+export const del = (url) => fetch(url, { method: "DELETE" }).then(handle);
+
 export const post = (url, body) =>
   fetch(url, {
     method: "POST",

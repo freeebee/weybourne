@@ -1042,8 +1042,23 @@ class SaveDraftIn(BaseModel):
 
 @app.post("/api/drafts/save")
 def save_draft(body: SaveDraftIn):
-    result = _graph.create_reply_draft(body.message_id, body.body)
-    return {"result": result, "live": _graph.live}
+    """Create the reply as a REAL Outlook draft (never sent).
+
+    With Graph credentials this uses the Graph API; without them it goes
+    through the M365 connector like delete/forward do — previously the
+    no-credentials path silently mocked the save, so the button did nothing.
+    """
+    if _graph.live:
+        return {"result": _graph.create_reply_draft(body.message_id, body.body),
+                "live": True}
+    # Send tools are deliberately NOT in the allowlist — drafts only, ever.
+    _mcp_mail_action(
+        f'Create a DRAFT reply (draft ONLY — never send) to the Outlook message '
+        f'with id "{body.message_id}" using the outlook_create_reply_draft tool. '
+        f'The draft body, verbatim:\n\n' + body.body,
+        ["mcp__claude_ai_Microsoft_365__outlook_create_reply_draft"],
+    )
+    return {"result": {"saved": True}, "live": True}
 
 
 class DeleteIn(BaseModel):
@@ -1517,6 +1532,13 @@ def transcript_detail(sid: str):
     if rec is None:
         raise HTTPException(status_code=404, detail="No such transcript")
     return rec
+
+
+@app.delete("/api/transcripts/{sid}")
+def transcript_delete(sid: str):
+    if not transcript_library.delete(sid):
+        raise HTTPException(status_code=404, detail="No such transcript")
+    return {"deleted": sid}
 
 
 # --------------------------------------------------------------------------- #
@@ -2033,7 +2055,7 @@ async def contact_card(file: UploadFile):
         "Name": card.get("name", ""),
         "Email": card.get("email", ""),
         "Title": card.get("title", ""),
-        "Type": "GP - Investments",
+        "Type": notion_sync.default_contact_type(card.get("email", "")),
         "Employed By": (co_dup.matches[0].name
                         if co_dup.action == "link_existing" and co_dup.matches
                         else card.get("company", "")),

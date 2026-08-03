@@ -1,6 +1,6 @@
 /* Live meeting — thin view over liveStore; redesign per handoff. */
 import React from "react";
-import { get } from "../api.js";
+import { del, get } from "../api.js";
 import * as live from "../liveStore.js";
 import {
   Banner, Button, Card, ErrorNote, Field, Mascot, PageHeader, SearchSelect,
@@ -94,14 +94,23 @@ function ContextChip() {
 }
 
 /* Past sessions, autosaved to disk and filed on Stop — reopen any of them to
-   draft the note or pick the meeting back up. */
+   draft the note or pick the meeting back up, or delete for good. */
 function TranscriptLibrary() {
   const [list, setList] = React.useState([]);
   const [showAll, setShowAll] = React.useState(false);
+  const [confirmDel, setConfirmDel] = React.useState("");
 
   React.useEffect(() => {
     get("/api/transcripts").then((d) => setList(d.transcripts || [])).catch(() => {});
   }, []);
+
+  const remove = async (id) => {
+    try {
+      await del(`/api/transcripts/${encodeURIComponent(id)}`);
+      setList((l) => l.filter((t) => t.id !== id));
+    } catch { /* already gone */ }
+    setConfirmDel("");
+  };
 
   if (!list.length) return null;
   return (
@@ -123,7 +132,23 @@ function TranscriptLibrary() {
                 <div className="muted" style={{ fontSize: "12.5px", marginTop: 2 }}>{t.goal}</div>
               )}
             </div>
-            <Button variant="ghost" onClick={() => live.loadFromLibrary(t.id)}>Reopen</Button>
+            <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <Button variant="ghost" onClick={() => live.loadFromLibrary(t.id)}>Reopen</Button>
+              {confirmDel === t.id ? (
+                <>
+                  <Button variant="ghost" onClick={() => remove(t.id)}>
+                    <span style={{ color: "var(--critical-600)" }}>Delete for good</span>
+                  </Button>
+                  <Button variant="ghost" onClick={() => setConfirmDel("")}>Keep</Button>
+                </>
+              ) : (
+                <button onClick={() => setConfirmDel(t.id)} title="Delete transcript"
+                  style={{ background: "none", border: "none", cursor: "pointer",
+                           color: "var(--stone-400)", fontSize: 16, lineHeight: 1 }}>
+                  ×
+                </button>
+              )}
+            </span>
           </div>
         </Card>
       ))}
@@ -268,15 +293,6 @@ export default function Live() {
                 {devices.map((d, i) => (
                   <option key={d.deviceId} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>
                 ))}
-              </select>
-            </Field>
-            <Field label="SUGGESTED QUESTIONS" style={{ flex: "1 1 200px" }}
-              hint="Whether each 30-second read adds suggested questions. Sketching your own always works.">
-              <select value={s.questions ? "on" : "off"}
-                onChange={(e) => live.set({ questions: e.target.value === "on" })}
-                style={inputStyle}>
-                <option value="on">Suggest questions at each read</option>
-                <option value="off">My own questions only</option>
               </select>
             </Field>
           </div>
@@ -444,6 +460,24 @@ export default function Live() {
         <div style={{ flex: "1 1 300px", maxWidth: 420,
                       minWidth: "min(100%,280px)" }}>
           {s.running && <ContextChip />}
+          {/* Meeting context stays settable mid-recording — pick from the
+              calendar, recent managers, or just type the name. */}
+          {s.running && (
+            <details style={{ marginBottom: 12 }}>
+              <summary className="microlabel" style={{ cursor: "pointer",
+                       listStyle: "none", padding: "4px 0" }}>
+                {s.who ? `MEETING: ${s.who.toUpperCase()}` : "SET WHO YOU'RE MEETING"}
+                <span style={{ color: "var(--teal-700)", marginLeft: 8 }}>CHANGE</span>
+              </summary>
+              <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                <CalendarPick />
+                <ManagerPick />
+                <input value={s.who} onChange={(e) => live.set({ who: e.target.value })}
+                  onBlur={() => { if (s.who && !s.manager) live.resolveManager(s.who); }}
+                  placeholder="or type who you're meeting" style={inputStyle} />
+              </div>
+            </details>
+          )}
           {s.running && (
             <Field label="WHAT YOU WANT OUT OF IT" style={{ marginBottom: 12 }}
               hint="Editable mid-meeting — steers the reads and the final note.">
