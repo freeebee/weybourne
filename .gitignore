@@ -36,3 +36,5 @@ data/transcripts/
 # Felix's change log and record snapshots hold real workspace content - never
 # commit them (and undo depends on the snapshots staying put).
 data/felix/
+
+reload-test.*
