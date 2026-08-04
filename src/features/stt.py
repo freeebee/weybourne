@@ -53,6 +53,12 @@ def transcribe_wav(wav_bytes: bytes, language: str = "") -> dict:
         segments, info = model.transcribe(
             io.BytesIO(wav_bytes),
             vad_filter=True,
+            # Defaults are tuned for long recordings and are far too aggressive
+            # for quiet meeting audio (screen-share sound especially): at the
+            # stock 0.5 threshold whole chunks of soft speech vanish. Keep VAD
+            # only as a hallucination guard on true silence.
+            vad_parameters={"threshold": 0.25, "min_silence_duration_ms": 1500,
+                            "speech_pad_ms": 500},
             # Live chunks arrive every 8 seconds — latency wins over the last
             # few points of accuracy. Greedy decoding (beam 1) is 2-3x faster
             # than the default beam of 5.

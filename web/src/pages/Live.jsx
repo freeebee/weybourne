@@ -280,7 +280,8 @@ function LiveTranscript() {
   return (
     <div style={{ marginTop: 14 }}>
       <SectionHead label="LIVE TRANSCRIPT"
-        right={s.tidyPending > 0 ? "CLEANING…" : `${s.entries.length} SEGMENTS`} />
+        right={s.tidyPending > 0 ? "CLEANING…"
+          : `${s.transcript ? s.transcript.trim().split(/\s+/).length : 0} WORDS`} />
       <button className="mono" onClick={() => setPickLang(!pickLang)}
         title="Auto-detected spoken language and the language the transcript is written in — click to change the output"
         style={{ background: "var(--paper-000)", border: "1px solid var(--paper-200)",
@@ -304,13 +305,11 @@ function LiveTranscript() {
               The cleaned-up transcript appears here as speech comes in.
             </span>
           )}
-          {s.entries.slice(-60).map((en, i) => (
-            <p key={i} style={{ fontSize: "12.5px", lineHeight: 1.5, margin: "0 0 6px" }}>
-              <span className="mono" style={{ fontSize: 9.5, color: "var(--stone-400)",
-                                              marginRight: 6 }}>{en.at}</span>
-              {en.text}
+          {s.entries.length > 0 && (
+            <p style={{ fontSize: "12.5px", lineHeight: 1.55, margin: "0 0 6px" }}>
+              {s.entries.slice(-80).map((en) => en.text).join(" ")}
             </p>
-          ))}
+          )}
           {s.tidyPending > 0 && (
             <span className="mono" style={{ fontSize: 10, color: "var(--teal-600)",
                                             letterSpacing: ".08em" }}>

@@ -31,6 +31,7 @@ let micStream = null, displayStream = null, audioCtx = null, analyser = null,
     micAnalyser = null, sysAnalyser = null,
     recorder = null, chunkTimer = null, countdown = null, raf = 0, canvas = null;
 let lastMicAt = 0, lastSysAt = 0, chunkNo = 0;
+let langStreak = { lang: "", n: 0 };   // consecutive confident detections
 
 function levelOf(an) {
   if (!an) return 0;
@@ -112,10 +113,17 @@ async function autosaveNow() {
 
 // ---- tidy queue ----------------------------------------------------------- //
 /* Raw whisper chunks are cleaned into proper sentences (and translated into
-   the chosen output language) by Haiku before they join the transcript. The
-   queue is serialised so chunks land in speaking order; on any failure the
-   raw text goes in instead — nothing is ever lost to a cleanup error. */
-let tidyChain = Promise.resolve();
+   the chosen output language) by Haiku before they join the transcript.
+   One cleanup call runs at a time so chunks land in speaking order — but the
+   queue COALESCES: when the call in flight returns, everything waiting goes
+   into the next call together. A cleanup that runs slower than the chunk
+   cadence therefore drains in one call instead of falling further and further
+   behind (the old strictly-serial chain starved the live window). On any
+   failure the raw text goes in instead — nothing is ever lost to a cleanup
+   error. */
+let tidyQueue = [];
+let tidyBusy = false;
+let tidyWaiters = [];
 
 function appendTranscript(text) {
   S.transcript += (S.transcript ? " " : "") + text;
@@ -126,22 +134,39 @@ function appendTranscript(text) {
 }
 
 function enqueueTidy(raw) {
-  S.tidyPending++; emit();
-  tidyChain = tidyChain.then(async () => {
-    let text = raw;
-    try {
-      const r = await post("/api/live/tidy", {
-        raw,
-        prev_tail: S.transcript.slice(-350),
-        output_language: S.outputLang,
-        detected_language: S.detectedLang,
-      });
-      text = (r.text ?? raw);
-    } catch { /* keep the raw text — better rough than missing */ }
-    S.tidyPending = Math.max(0, S.tidyPending - 1);
-    if (text.trim()) appendTranscript(text.trim());
-    else emit();
-  });
+  tidyQueue.push(raw);
+  S.tidyPending = tidyQueue.length + (tidyBusy ? 1 : 0);
+  emit();
+  pumpTidy();
+}
+
+async function pumpTidy() {
+  if (tidyBusy || !tidyQueue.length) return;
+  tidyBusy = true;
+  const raw = tidyQueue.splice(0).join(" ");   // take the whole backlog
+  S.tidyPending = 1; emit();
+  let text = raw;
+  try {
+    const r = await post("/api/live/tidy", {
+      raw,
+      prev_tail: S.transcript.slice(-350),
+      output_language: S.outputLang,
+      detected_language: S.detectedLang,
+    });
+    text = (r.text ?? raw);
+  } catch { /* keep the raw text — better rough than missing */ }
+  tidyBusy = false;
+  S.tidyPending = tidyQueue.length;
+  if (text.trim()) appendTranscript(text.trim());
+  else emit();
+  if (tidyQueue.length) pumpTidy();
+  else tidyWaiters.splice(0).forEach((res) => res());
+}
+
+/* Resolves once every queued chunk has been cleaned and appended. */
+function tidyDrained() {
+  if (!tidyBusy && !tidyQueue.length) return Promise.resolve();
+  return new Promise((res) => tidyWaiters.push(res));
 }
 
 // ---- read loop ------------------------------------------------------------ //
@@ -187,6 +212,7 @@ export async function performRead() {
 
 export async function start() {
   S.error = null; S.note = null;
+  chunkNo = 0; langStreak = { lang: "", n: 0 };
   ensureSessionId();
   emit();
   try {
@@ -235,18 +261,30 @@ export async function start() {
         if (!parts.length) return;
         const blob = new Blob(parts, { type: rec.mimeType });
         try {
-          // Once the language is confidently known, pin it — detection costs
-          // real CPU per chunk. Every 5th chunk re-detects so a mid-meeting
-          // switch of language is still picked up.
+          // Pin the language only once THREE consecutive chunks agree with
+          // high confidence — whisper is routinely confident-and-wrong on a
+          // single short chunk, and a wrong pin garbles everything after it.
+          // Every 5th chunk re-detects so a mid-meeting language switch is
+          // still picked up, and a pinned chunk that hears nothing drops the
+          // pin entirely (the pin itself may be what is failing).
           chunkNo++;
-          const pin = S.detectedProb >= 0.85 && chunkNo % 5 !== 0 ? S.detectedLang : "auto";
+          const pin = langStreak.n >= 3 && chunkNo % 5 !== 0 ? langStreak.lang : "auto";
           const res = await postFile(`/api/stt?lang=${encodeURIComponent(pin)}`, blob, "chunk.webm");
+          const prob = res.language_probability || 0;
+          if (res.language && prob >= 0.9) {
+            langStreak = res.language === langStreak.lang
+              ? { lang: res.language, n: langStreak.n + 1 }
+              : { lang: res.language, n: 1 };
+          } else if (pin === "auto") {
+            langStreak = { lang: "", n: 0 };   // low-confidence read breaks the streak
+          }
           if (res.language) {
             S.detectedLang = res.language;
-            S.detectedProb = res.language_probability || 0;
+            S.detectedProb = prob;
             emit();
           }
           if (res.text) enqueueTidy(res.text);
+          else if (pin !== "auto") langStreak = { lang: "", n: 0 };
         } catch (e) { S.error = e.message; emit(); }
       };
       rec.start();
@@ -295,7 +333,7 @@ export function stop() {
   if (wasRunning && S.sessionId && S.transcript.trim()) {
     setTimeout(async () => {
       try {
-        await tidyChain;   // let the final chunk finish its Haiku cleanup
+        await tidyDrained();   // let the final chunks finish their Haiku cleanup
         await post("/api/live/finish", sessionPayload());
         S.librarySaved = true; emit();
       } catch { /* the autosave copy still exists on disk */ }
@@ -459,6 +497,7 @@ export async function draftNote() {
 
 export function newSession() {
   stop();
+  tidyQueue = []; chunkNo = 0; langStreak = { lang: "", n: 0 };
   Object.assign(S, {
     transcript: "", entries: [], items: [], batches: [], reads: 0, unreadWords: 0,
     lastTail: "", lastReadAt: 0, startedAt: 0, nextIn: S.cadence, error: null,

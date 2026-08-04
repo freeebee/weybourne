@@ -319,21 +319,25 @@ TIDY_SCHEMA = {
     "additionalProperties": False,
 }
 
-TIDY_SYSTEM_PROMPT = """You clean up one raw speech-to-text chunk from a live meeting into \
-readable transcript text, and you do it in the requested OUTPUT LANGUAGE.
+TIDY_SYSTEM_PROMPT = """You clean up raw speech-to-text output from a live meeting (one \
+chunk, or several consecutive chunks joined together) into readable transcript text, in \
+the requested OUTPUT LANGUAGE.
 
 Rules:
-- Fix punctuation, capitalisation and obvious mis-transcriptions so the chunk reads as \
+- Fix punctuation, capitalisation and obvious mis-transcriptions so the text reads as \
 proper sentences. Keep it verbatim speech: do NOT summarise, do NOT paraphrase, do NOT \
 drop content, do NOT add anything that was not said.
+- KEEP EVERYTHING that could be real speech. Dropping real speech is the worst failure \
+mode — far worse than letting a rough or garbled fragment through. When in doubt, keep \
+it. Return an empty string ONLY when the chunk contains no words at all.
 - If the speech is in a different language from the output language, translate it \
 faithfully into the output language. If it is already in the output language, keep the \
 speaker's own wording.
-- The chunk continues the transcript shown as PREVIOUS TEXT — carry the sentence on \
-naturally, but never repeat any of the previous text.
+- The text continues the transcript shown as PREVIOUS TEXT — carry the sentence on \
+naturally without repeating the previous text word-for-word. If you are unsure whether \
+something repeats, keep it.
 - A chunk may start or end mid-sentence; that is fine, leave it mid-sentence.
-- If the raw chunk is only noise, filler or empty, return an empty string.
-- Output only the cleaned chunk text."""
+- Output only the cleaned text."""
 
 
 def tidy_transcript_chunk(
@@ -352,9 +356,10 @@ def tidy_transcript_chunk(
         f"RAW CHUNK\n\"\"\"{raw}\"\"\""
     )
     response = client.messages.create(
-        # Haiku: this runs on every 8-second chunk, so speed and cost rule.
+        # Haiku: this runs on every batch of live chunks, so speed and cost
+        # rule. The token budget must cover a coalesced backlog, not one chunk.
         model=FAST_MODEL,
-        max_tokens=800,
+        max_tokens=2000,
         system=TIDY_SYSTEM_PROMPT,
         output_config={"format": {"type": "json_schema", "schema": TIDY_SCHEMA}},
         messages=[{"role": "user", "content": user}],
