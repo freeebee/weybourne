@@ -21,7 +21,6 @@ export default function Prep() {
   const [library, setLibrary] = React.useState([]);    // saved preps on disk
   const [viewing, setViewing] = React.useState(null);  // {name, result}
   const [error, setError] = React.useState(null);
-  const [showFull, setShowFull] = React.useState(false);
   const [justDone, setJustDone] = React.useState(null);   // {label, entity, email, company, vehicle}
   const [minimized, setMinimized] = React.useState({});   // {screen: bool, brief: bool}
   const pollRef = React.useRef(null);
@@ -388,70 +387,22 @@ export default function Prep() {
             )
           )}
 
+          {/* The briefing is the briefing — there is no summary-then-expand
+              step. Minimising is the only fold, and it sits in the same
+              top-right position as the screen's. */}
           {viewing?.result?.briefing && (
             minimized.brief ? (
               <MinimizedBar style={{ marginTop: viewing?.result?.screen ? 12 : 0 }}
                 label={`BRIEF · ${(viewing.result.briefing.entity || viewing.name || "").toUpperCase()}`}
                 onExpand={() => setMinimized((m) => ({ ...m, brief: false }))} />
             ) : (
-            <Card accent="brass" style={{ padding: "20px 22px 26px",
-                                          marginTop: viewing?.result?.screen ? 20 : 0 }}>
-              <div className="spread" style={{ marginBottom: 12 }}>
-                <span className="microlabel">
-                  BRIEF · {(viewing.result.briefing.entity || viewing.name || "").toUpperCase()}
-                </span>
-                <span className="row" style={{ gap: 12 }}>
-                  <span className="mono" style={{ fontSize: 10.5, color: "var(--stone-400)" }}>
-                    {viewing.result.briefing.meeting_details || ""}
-                  </span>
-                  <MiniBtn onClick={() => setMinimized((m) => ({ ...m, brief: true }))}>
-                    MINIMIZE
-                  </MiniBtn>
-                </span>
-              </div>
-              <div style={{ font: "400 26px/1.25 var(--serif)", color: "var(--ink-800)", marginBottom: 10 }}>
-                {viewing.result.briefing.descriptor}
-              </div>
-              <p style={{ font: "400 16.5px/1.65 var(--serif)", color: "var(--ink-700)",
-                          maxWidth: "64ch", margin: "0 0 16px" }}>
-                {viewing.result.briefing.relationship}
-                {viewing.result.briefing.vehicle ? ` · ${viewing.result.briefing.vehicle}` : ""}
-              </p>
-              <SectionHead label="WHERE WE LEFT IT · MEETING HISTORY" />
-              {(viewing.result.briefing.meetings || []).length ? (
-                viewing.result.briefing.meetings.slice(0, 3).map((m, i) => (
-                  <div key={i} className="rrow">
-                    <div className="spread">
-                      <b style={{ fontSize: "14px" }}>{m.title}</b>
-                      <span className="mono" style={{ fontSize: 11, color: "var(--stone-400)" }}>{m.date}</span>
-                    </div>
-                    <p style={{ fontSize: "13.5px", lineHeight: 1.55, margin: "4px 0 0" }}>
-                      {(m.summary || "").slice(0, 240)}{(m.summary || "").length > 240 ? "…" : ""}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <p style={{ fontSize: "13.5px", lineHeight: 1.55 }}>
-                  {viewing.result.briefing.no_meetings_text || "No qualifying meetings on record."}
-                </p>
-              )}
-              <SectionHead label="BACKGROUND IN BRIEF" style={{ marginTop: 16 }} />
-              <p style={{ fontSize: "13.5px", lineHeight: 1.6, maxWidth: "70ch" }}>
-                {((viewing.result.briefing.manager_bg_md || viewing.result.briefing.landscape_md || "")
-                  .replace(/[#*]/g, "").split("\n").map((x) => x.replace(/^- /, "").trim())
-                  .filter(Boolean).join(" ")).slice(0, 420)}…
-              </p>
-              <div className="row" style={{ marginTop: 16 }}>
-                <Button onClick={() => setShowFull(!showFull)}>
-                  {showFull ? "Collapse full briefing" : "Open full briefing"}
-                </Button>
-              </div>
-            </Card>
+              <BriefingView data={viewing.result.briefing}
+                entityName={viewing.result.briefing.entity || viewing.name || ""}
+                keyQs={keyQs} onToggleKey={toggleKey} onAddKey={addKey}
+                onMinimize={() => setMinimized((m) => ({ ...m, brief: true }))}
+                style={{ marginTop: viewing?.result?.screen ? 20 : 0 }} />
             )
           )}
-          {viewing?.result?.briefing && !minimized.brief && showFull &&
-            <BriefingView data={viewing.result.briefing}
-              keyQs={keyQs} onToggleKey={toggleKey} onAddKey={addKey} />}
 
           {/* Library — every completed prep is saved automatically. */}
           <div style={{ marginTop: 28 }}>
@@ -482,24 +433,33 @@ export default function Prep() {
   );
 }
 
+/* One fold control, used on paper and on the dark headers alike — hence a
+   solid paper fill rather than `background: none`, which read as a hollow
+   outline against the navy. */
 function MiniBtn({ onClick, children }) {
   return (
     <button onClick={onClick} style={{
-      background: "none", border: "1px solid var(--paper-200)", borderRadius: 4,
-      cursor: "pointer", padding: "2px 8px", color: "var(--teal-700)",
-      fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".1em" }}>
+      background: "var(--paper-050)", border: "1px solid var(--paper-200)",
+      borderRadius: 4, cursor: "pointer", padding: "3px 9px",
+      color: "var(--teal-700)", fontFamily: "var(--mono)", fontSize: 10,
+      letterSpacing: ".1em" }}>
       {children}
     </button>
   );
 }
 
+/* Every fold control sits FOLD_INSET from the right edge of its block, so the
+   screen's and the briefing's stack in one column: minimise one and the next
+   button is already under the cursor. */
+const FOLD_INSET = 28;
+
 function MinimizedBar({ label, onExpand, style }) {
   return (
     <div onClick={onExpand} className="click" style={{
       display: "flex", justifyContent: "space-between", alignItems: "center",
-      padding: "10px 16px", background: "var(--paper-000)", cursor: "pointer",
-      border: "1px solid var(--paper-200)", borderRadius: "var(--radius)",
-      marginBottom: 12, ...style }}>
+      padding: `10px ${FOLD_INSET}px`, background: "var(--paper-000)",
+      cursor: "pointer", border: "1px solid var(--paper-200)",
+      borderRadius: "var(--radius)", marginBottom: 12, ...style }}>
       <span className="microlabel">{label}</span>
       <MiniBtn onClick={onExpand}>EXPAND</MiniBtn>
     </div>
@@ -548,7 +508,7 @@ function ScreenView({ screen, onMinimize, entityName, received }) {
                   overflow: "hidden" }}>
       {/* Header */}
       <div className="spread" style={{ background: "var(--ink-800)",
-                                       padding: "22px 28px 20px", gap: 20,
+                                       padding: `22px ${FOLD_INSET}px 20px`, gap: 20,
                                        flexWrap: "wrap", alignItems: "flex-start" }}>
         <div>
           <div style={eyebrow({ color: "var(--teal-300)" })}>
@@ -564,16 +524,15 @@ function ScreenView({ screen, onMinimize, entityName, received }) {
             </div>
           )}
         </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={eyebrow({ color: "var(--stone-300)" })}>COMPARED AGAINST</div>
-          <div style={{ fontSize: "13px", color: "var(--paper-050)", marginTop: 4 }}>
-            {screen.sleeve} manager preferences
-          </div>
-          {onMinimize && (
-            <div style={{ marginTop: 8 }}>
-              <MiniBtn onClick={onMinimize}>MINIMIZE</MiniBtn>
+        <div style={{ display: "flex", flexDirection: "column",
+                      alignItems: "flex-end", gap: 10 }}>
+          {onMinimize && <MiniBtn onClick={onMinimize}>MINIMIZE</MiniBtn>}
+          <div style={{ textAlign: "right" }}>
+            <div style={eyebrow({ color: "var(--stone-300)" })}>COMPARED AGAINST</div>
+            <div style={{ fontSize: "13px", color: "var(--paper-050)", marginTop: 4 }}>
+              {screen.sleeve} manager preferences
             </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -702,18 +661,9 @@ function ScreenView({ screen, onMinimize, entityName, received }) {
         </>
       )}
 
-      {screen.open_questions?.length > 0 && (
-        <div style={{ borderTop: HAIR, padding: "16px 28px" }}>
-          <div style={eyebrow({ color: "var(--stone-500)" })}>
-            WHAT WOULD MOST CHANGE THE VIEW
-          </div>
-          {screen.open_questions.map((q, i) => (
-            <div key={i} style={{ fontSize: "13.5px", lineHeight: 1.55,
-                                  padding: "4px 0" }}>{q}</div>
-          ))}
-        </div>
-      )}
-
+      {/* The screen ends at the verdicts. Open questions still ride along in
+          the payload — the pass-reply draft builds its rationale from them —
+          but they are not shown here. */}
       <div className="spread" style={{ background: "var(--paper-050)", borderTop: HAIR,
                                        padding: "16px 28px", gap: 14, flexWrap: "wrap" }}>
         <span style={{ fontSize: "13px", color: "var(--stone-600)" }}>
@@ -729,10 +679,45 @@ function ScreenView({ screen, onMinimize, entityName, received }) {
   );
 }
 
-function BriefingView({ data, keyQs = [], onToggleKey, onAddKey }) {
+function BriefingView({ data, keyQs = [], onToggleKey, onAddKey,
+                        entityName = "", onMinimize, style }) {
   const keySet = new Set(keyQs.map((k) => k.q));
   return (
-    <div style={{ marginTop: 20 }}>
+    <div style={{ background: "var(--paper-000)", border: HAIR, borderRadius: 6,
+                  overflow: "hidden", ...style }}>
+      {/* Same shell as the screen above it: navy band, eyebrow, serif title —
+          so the two read as one document and the fold controls align. */}
+      <div className="spread" style={{ background: "var(--ink-800)",
+                                       padding: `22px ${FOLD_INSET}px 20px`, gap: 20,
+                                       flexWrap: "wrap", alignItems: "flex-start" }}>
+        <div>
+          <div style={{ font: "500 10px/1.4 var(--mono)", letterSpacing: ".12em",
+                        textTransform: "uppercase", color: "var(--teal-300)" }}>
+            BRIEF · {(data.entity || entityName).toUpperCase()}
+          </div>
+          <div style={{ font: "300 28px/1.2 var(--serif)", color: "var(--paper-050)",
+                        marginTop: 6, maxWidth: "34ch" }}>
+            {data.descriptor}
+          </div>
+          <div style={{ fontSize: "13px", color: "var(--stone-300)", marginTop: 6,
+                        maxWidth: "60ch", lineHeight: 1.5 }}>
+            {data.relationship}
+            {data.vehicle ? ` · ${data.vehicle}` : ""}
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column",
+                      alignItems: "flex-end", gap: 10 }}>
+          {onMinimize && <MiniBtn onClick={onMinimize}>MINIMIZE</MiniBtn>}
+          {data.meeting_details && (
+            <div className="mono" style={{ fontSize: 10.5, color: "var(--stone-400)",
+                                           textAlign: "right" }}>
+              {data.meeting_details}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ padding: `24px ${FOLD_INSET}px 26px` }}>
       <Section n="1" title="Historical meeting context">
         {data.meetings?.length
           ? data.meetings.map((m, i) => (
@@ -863,6 +848,7 @@ function BriefingView({ data, keyQs = [], onToggleKey, onAddKey }) {
           Prepared from Notion, Outlook and independent research. Teams chat is never used as a source.
         </p>
       </Section>
+      </div>
     </div>
   );
 }
