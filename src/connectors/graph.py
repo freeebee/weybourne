@@ -377,7 +377,7 @@ class GraphConnector:
                 else list(_SAMPLE_EVENTS)
             )
             in_window = [
-                e for e in events if start.isoformat() <= e.start <= end.isoformat()
+                e for e in events if _starts_in_window(e.start, start, end)
             ]
             return in_window or events
         data = self._get(
@@ -453,6 +453,26 @@ def _now() -> dt.datetime:
 def _graph_timestamp(value: dt.datetime) -> str:
     """Format a datetime for a Graph $filter comparison (UTC, 'Z'-suffixed)."""
     return _as_utc(value).replace(microsecond=0).isoformat() + "Z"
+
+
+def _starts_in_window(start_iso: str, win_start: dt.datetime, win_end: dt.datetime) -> bool:
+    """Whether an event's ISO start falls inside [win_start, win_end].
+
+    Snapshot events carry UTC timestamps ("...Z") while the window comes from
+    the local clock — a plain string comparison shifted everything by the UTC
+    offset (in Singapore, today's remaining meetings looked already-past and
+    the list started at tomorrow). Aware values are compared as real instants;
+    naive values (the built-in sample data) compare naive-to-naive as before.
+    Unparseable starts are kept rather than silently dropped.
+    """
+    try:
+        parsed = dt.datetime.fromisoformat((start_iso or "").strip().replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return True
+    if parsed.tzinfo is None:
+        return win_start <= parsed <= win_end
+    # .astimezone() on a naive datetime attaches the LOCAL timezone.
+    return win_start.astimezone() <= parsed <= win_end.astimezone()
 
 
 def _as_utc(value: dt.datetime) -> dt.datetime:

@@ -329,6 +329,12 @@ export default function Live() {
                 onClick={() => { setPanesMin(true); live.draftNote(); }}>Write the note</Button>
             </>
           : <>
+              {(s.transcript || s.note) && (
+                <Button variant="ghost" onClick={live.newSession}
+                  title="File this session away and go back to the start screen">
+                  Back to start
+                </Button>
+              )}
               {s.transcript && (
                 <Button variant="dark" busy={s.busy === "note"}
                   onClick={() => { setPanesMin(true); live.draftNote(); }}>
@@ -460,7 +466,17 @@ export default function Live() {
         {/* Questions pane — always visible: the toggle only controls whether
             reads ADD suggestions; sketching your own works either way. */}
         <div style={{ flex: "1.4 1 440px", minWidth: "min(100%,320px)" }}>
-          <SectionHead label="QUESTIONS WORTH ASKING" right={`${openItems.length} OPEN`} />
+          <SectionHead label="QUESTIONS WORTH ASKING" right={
+            <span style={{ display: "inline-flex", gap: 12, alignItems: "baseline" }}>
+              {`${openItems.length} OPEN`}
+              <button className="mono" onClick={() => setPanesMin(true)}
+                title="Tuck the questions and recaps away so the note below gets the room"
+                style={{ background: "none", border: "1px solid var(--paper-200)",
+                         borderRadius: 4, cursor: "pointer", padding: "2px 8px",
+                         fontSize: 10, letterSpacing: ".1em", color: "var(--teal-700)" }}>
+                MINIMIZE
+              </button>
+            </span>} />
 
           {/* Sketch — available before the meeting starts too, so key
               questions can be prepared in advance. */}
@@ -663,7 +679,6 @@ export default function Live() {
               onClick={() => { live.addPaste(paste, true); setPaste(""); }}>Add and read</Button>
             <Button variant="ghost" disabled={!paste}
               onClick={() => { live.addPaste(paste, false); setPaste(""); }}>Add only</Button>
-            <Button variant="ghost" onClick={live.newSession}>New session</Button>
           </div>
         </div>
       </div>

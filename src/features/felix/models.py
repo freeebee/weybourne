@@ -43,7 +43,9 @@ class ChangeRecord(BaseModel):
     reason: str = ""
     confidence: str = ""             # High / Medium / Low
     execution_status: str = "Pending"  # Pending / Planned (dry-run) / Applied /
-                                       # Failed / Skipped / Undone
+                                       # Failed / Skipped / Undone /
+                                       # Proposed (approve applies it) /
+                                       # Recommended (informational only)
     review_status: str = "Awaiting Review"  # / Approved / Undo Requested
     undo_result: str = ""
     parent_change_id: str = ""

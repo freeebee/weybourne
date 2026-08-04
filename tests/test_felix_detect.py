@@ -134,14 +134,50 @@ class TestOtherIssues:
         kinds = {f["kind"]: f for f in detect.find_formatting_issues([c])}
         assert kinds["title_whitespace"]["to"] == "Fife Capital"
         assert kinds["email_case"]["to"] == "allan@fife.com"
-        clean = card("b", name="ACME LLC", email="x@acme.com")
+        clean = card("b", name="Priya Patel", email="x@acme.com")
         assert detect.find_formatting_issues([clean]) == []
 
-    def test_email_with_display_name_left_alone(self):
-        # "Allison Stavro <allison@sinefine.co>" — the capitals belong to the
-        # display name; lowercasing the whole value would mangle it.
+    def test_person_name_gets_proper_capitalisation(self):
+        # "Kristoffer JONSSON" — the surname should be proper-cased too.
+        c = card("a", name="Kristoffer JONSSON ")
+        found = detect.find_formatting_issues([c])
+        assert found[0]["kind"] == "name_case"
+        assert found[0]["to"] == "Kristoffer Jonsson"
+        low = card("b", name="alex ochoa")
+        assert detect.find_formatting_issues([low])[0]["to"] == "Alex Ochoa"
+
+    def test_name_case_preserves_credentials_and_particles(self):
+        keep = card("a", name="Alex Ochoa, CAIA")
+        assert detect.find_formatting_issues([keep]) == []
+        particle = card("b", name="Robert van Beek")
+        assert detect.find_formatting_issues([particle]) == []
+        hyphen = card("c", name="JEAN-PAUL O'BRIEN")
+        assert detect.find_formatting_issues([hyphen])[0]["to"] == "Jean-Paul O'Brien"
+
+    def test_company_names_never_recased(self):
+        # Acronym-hazardous: KKR, REVA etc. stay exactly as typed.
+        c = card("a", db="companies", name="REVA HOLDINGS", email=None)
+        assert detect.find_formatting_issues([c]) == []
+
+    def test_email_with_clutter_extracts_the_bare_address(self):
+        c = card("a", name="Roy Carmo",
+                 email="C- 5165874019 W- 6466883375 roy@carmocompanies.com")
+        found = detect.find_formatting_issues([c])
+        assert found[0]["kind"] == "email_extract"
+        assert found[0]["to"] == "roy@carmocompanies.com"
+        assert "5165874019" in found[0]["junk"]
+
+    def test_email_with_display_name_extracts_too(self):
         c = card("a", name="Allison Stavro",
                  email="Allison Stavro <allison@sinefine.co>")
+        found = detect.find_formatting_issues([c])
+        assert found[0]["kind"] == "email_extract"
+        assert found[0]["to"] == "allison@sinefine.co"
+
+    def test_email_with_several_addresses_left_alone(self):
+        # Choosing between two different addresses would be a guess.
+        c = card("a", name="Two Mails",
+                 email="a@one.com or b@two.com")
         assert detect.find_formatting_issues([c]) == []
 
     def test_employer_inference_exact_domain_only(self):

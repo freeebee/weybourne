@@ -1394,10 +1394,15 @@ async def track_record(file: UploadFile):
 @app.post("/api/stt")
 async def stt(file: UploadFile, lang: str = "auto"):
     """Transcribe one recorded chunk. ``lang`` pins the spoken language
-    ("auto" lets whisper detect it per chunk, so multilingual meetings work)."""
+    ("auto" lets whisper detect it per chunk, so multilingual meetings work).
+
+    Whisper is CPU-bound and must NOT run on the event loop — inline it wedges
+    every other endpoint for the duration of a busy recording session."""
+    from starlette.concurrency import run_in_threadpool
+
     audio = await file.read()
     try:
-        result = transcribe_wav(audio, language=lang)
+        result = await run_in_threadpool(transcribe_wav, audio, lang)
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     return result
@@ -1922,9 +1927,39 @@ def felix_review(change_id: str, body: FelixReviewIn):
                                           {"review_status": "Superseded"})
 
     if body.action == "approve":
+        # Approve EXECUTES the stored plan when the row hasn't been applied
+        # yet (dry-run plans, model proposals). The exact payload was written
+        # to the snapshot at plan time — nothing is re-derived. Explicit
+        # per-row human approval is its own consent, so this is not gated on
+        # live_enabled (which governs autonomous writes only).
+        result = {"change_id": change_id, "review_status": "Approved"}
+        snap = felix_store.load_snapshot(change_id)
+        if (change.execution_status in ("Proposed", "Planned (dry-run)",
+                                        "Recommended")
+                and snap and snap.get("planned")):
+            from src.features.felix import execute as felix_execute
+            updated = felix_execute.apply_change(
+                _notion, change, snap["planned"],
+                expect_prop=snap.get("expect_prop", ""),
+                scanned_plain=snap.get("scanned_plain"),
+                dry_run=False, quiet_minutes=0,
+                scanned_raw=snap.get("scanned_raw"))
+            if updated.execution_status == "Applied":
+                _notion.invalidate_cache()
+            result["execution_status"] = updated.execution_status
+            if updated.execution_status == "Skipped":
+                result["note"] = ("not written: " +
+                                  (updated.undo_result or "the record moved on "
+                                   "since the scan"))
+        elif change.change_type in ("merge", "merge_transfer", "archive"):
+            result["note"] = ("merges are multi-step: enable live runs and "
+                              "run Felix to consolidate the duplicates")
+        elif change.execution_status in ("Proposed", "Planned (dry-run)"):
+            result["note"] = ("this row predates apply-on-approve and has no "
+                              "stored payload — re-run Felix to regenerate it")
         felix_store.update_change(change_id, {"review_status": "Approved"})
         _supersede_siblings()
-        return {"change_id": change_id, "review_status": "Approved"}
+        return result
     if body.action == "dismiss":
         felix_store.update_change(change_id, {"review_status": "Dismissed"})
         _supersede_siblings()

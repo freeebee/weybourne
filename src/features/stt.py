@@ -8,12 +8,16 @@ from __future__ import annotations
 
 import io
 import os
+import threading
 
 # Windows without Developer Mode can't create symlinks, so the HF cache copies
 # files instead — harmless, and the warning about it just alarms people.
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
 _model = None
+# One transcription at a time: the model is CPU-bound and not thread-safe, and
+# serialising here keeps a burst of chunks from saturating every core.
+_transcribe_lock = threading.Lock()
 
 MODEL_SIZE = os.environ.get("WHISPER_MODEL", "base")
 
@@ -45,17 +49,18 @@ def transcribe_wav(wav_bytes: bytes, language: str = "") -> dict:
         ) from e
 
     pin = (language or os.environ.get("WHISPER_LANGUAGE", "")).strip().lower()
-    segments, info = model.transcribe(
-        io.BytesIO(wav_bytes),
-        vad_filter=True,
-        # Live chunks arrive every 8 seconds — latency wins over the last few
-        # points of accuracy. Greedy decoding (beam 1) is 2-3x faster than the
-        # default beam of 5.
-        beam_size=1,
-        language=pin if pin and pin != "auto" else None,
-        condition_on_previous_text=False,
-    )
-    text = " ".join(seg.text.strip() for seg in segments).strip()
+    with _transcribe_lock:
+        segments, info = model.transcribe(
+            io.BytesIO(wav_bytes),
+            vad_filter=True,
+            # Live chunks arrive every 8 seconds — latency wins over the last
+            # few points of accuracy. Greedy decoding (beam 1) is 2-3x faster
+            # than the default beam of 5.
+            beam_size=1,
+            language=pin if pin and pin != "auto" else None,
+            condition_on_previous_text=False,
+        )
+        text = " ".join(seg.text.strip() for seg in segments).strip()
     return {
         "text": text,
         "language": getattr(info, "language", "") or "",

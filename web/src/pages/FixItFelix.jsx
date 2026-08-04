@@ -313,39 +313,54 @@ function RunPanel({ s }) {
    parent rather than listed. */
 function describeChange(c) {
   const q = (v) => `“${v}”`;
-  switch (c.change_type) {
-    case "fix_formatting":
-      return { problem: `Untidy text in ${c.property_changed} — stray spaces or casing.`,
-               fix: `Changed ${q(c.previous_value)} to ${q(c.new_value)}.` };
-    case "fill_missing":
-      return { problem: `${c.property_changed} was empty.`,
-               fix: `Filled it in with ${q(c.new_value)}.`,
-               source: c.source };
-    case "fix_relation":
-      return { problem: `${c.property_changed} pointed at a record that no longer exists.`,
-               fix: "Removed the dead link and kept the valid ones." };
-    case "fix_icon":
-      return { problem: "The page had no icon.",
-               fix: `Added the standard ${q(c.new_value)} icon.` };
-    case "merge":
-      return { problem: "This record exists twice — a duplicate.",
-               fix: "Merged everything into the richer copy and archived this one. "
-                    + "Nothing was lost, and it can be unwound in one click.",
-               source: c.source };
-    case "recommendation":
-      return { problem: c.reason || "Something needs your judgement.",
-               fix: c.new_value ? `Suggestion: ${c.new_value}` :
-                    "Nothing was changed — this one is your call.",
-               source: c.source };
-    default:
-      return { problem: c.reason || c.change_type.replaceAll("_", " "),
-               fix: c.new_value ? `${q(c.previous_value || "(empty)")} → ${q(c.new_value)}` : "" };
-  }
+  const done = c.execution_status === "Applied";
+  // What pressing Approve will actually DO — stated on every row so there is
+  // never any guessing.
+  const approve = done
+    ? "Approve files it as reviewed (it is already done). Discard undoes it in Notion."
+    : c.change_type === "merge"
+      ? "Approve records your OK; the merge itself runs on the next live Felix run. Discard drops it."
+      : c.new_value && c.property_changed && c.execution_status !== "Recommended"
+        ? `Approve writes ${c.property_changed} = ${q(c.new_value)} to this record in Notion, right now. Discard drops it.`
+        : "Approve only files this away as seen — nothing is written to Notion. Discard drops it.";
+  const base = (() => {
+    switch (c.change_type) {
+      case "fix_formatting":
+        return { problem: `Untidy text in ${c.property_changed} — ${c.reason || "stray spaces or casing"}.`,
+                 fix: `${done ? "Changed" : "Will change"} ${q(c.previous_value)} to ${q(c.new_value)}.` };
+      case "fill_missing":
+        return { problem: `${c.property_changed} was empty.`,
+                 fix: `${done ? "Filled it in with" : "Will fill it in with"} ${q(c.new_value)}.`,
+                 source: c.source };
+      case "fix_relation":
+        return { problem: `${c.property_changed} pointed at a record that no longer exists.`,
+                 fix: `${done ? "Removed" : "Will remove"} the dead link and ${done ? "kept" : "keep"} the valid ones.` };
+      case "fix_icon":
+        return { problem: "The page had no icon.",
+                 fix: `${done ? "Added" : "Will add"} the standard ${q(c.new_value)} icon.` };
+      case "merge":
+        return { problem: "This record exists twice — a duplicate.",
+                 fix: done
+                   ? "Merged everything into the richer copy and archived this one. Nothing was lost, and it can be unwound in one click."
+                   : "Will merge everything into the richer copy and archive this one. Nothing gets lost, and it can be unwound in one click.",
+                 source: c.source };
+      case "recommendation":
+        return { problem: c.reason || "Something needs your judgement.",
+                 fix: c.new_value ? `Suggestion: ${c.new_value}` :
+                      "Nothing was changed — this one is your call.",
+                 source: c.source };
+      default:
+        return { problem: c.reason || c.change_type.replaceAll("_", " "),
+                 fix: c.new_value ? `${q(c.previous_value || "(empty)")} → ${q(c.new_value)}` : "" };
+    }
+  })();
+  return { ...base, approve };
 }
 
 const STATUS_WORDS = {
   "Applied": ["FIXED", "positive"],
-  "Planned (dry-run)": ["WOULD FIX (DRY RUN)", "teal"],
+  "Planned (dry-run)": ["READY — APPROVE TO FIX", "teal"],
+  "Proposed": ["PROPOSED — YOUR CALL", "caution"],
   "Recommended": ["SUGGESTION", "caution"],
   "Failed": ["COULDN'T FIX", "critical"],
   "Undone": ["UNDONE", "neutral"],
@@ -408,6 +423,14 @@ function ReviewTable({ s }) {
             {d.source && (
               <div className="muted" style={{ fontSize: "12px", marginTop: 3 }}>
                 Why Felix is confident: {d.source}
+              </div>
+            )}
+            {awaiting && d.approve && (
+              <div style={{ fontSize: "12px", marginTop: 5, padding: "5px 9px",
+                            background: "var(--paper-050)",
+                            border: "1px solid var(--paper-200)",
+                            borderRadius: 4, color: "var(--stone-600)" }}>
+                {d.approve}
               </div>
             )}
             <div className="row" style={{ marginTop: 9, alignItems: "center" }}>

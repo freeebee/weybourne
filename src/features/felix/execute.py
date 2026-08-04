@@ -49,6 +49,13 @@ def apply_change(notion, change: ChangeRecord, payload: dict,
     if dry_run:
         change.execution_status = "Planned (dry-run)"
         change.timestamp = _now()
+        # The plan itself is snapshotted so Approve in the review UI can
+        # execute EXACTLY this payload later — the guard values travel too.
+        store.save_snapshot(change.change_id, {
+            "kind": "planned", "record_id": change.record_id,
+            "database": change.database, "planned": payload,
+            "expect_prop": expect_prop, "scanned_plain": scanned_plain,
+            "scanned_raw": scanned_raw or {}}, base)
         store.append_change(change, base)
         return change
 

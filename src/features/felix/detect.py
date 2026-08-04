@@ -226,16 +226,75 @@ def find_dangling_relations(cards: list[dict], relation_map: dict,
 import re as _re
 
 _BARE_EMAIL = _re.compile(r"^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$")
+_EMAIL_ANY = _re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
+
+# Tokens kept exactly as typed when proper-casing a person's name: credentials,
+# honours, generational suffixes, and company-form suffixes that occasionally
+# appear on contact rows.
+_NAME_KEEP = {
+    "CFA", "CAIA", "CPA", "CA", "FRM", "MBA", "PHD", "MD", "JD", "OBE", "CBE",
+    "MBE", "KC", "QC", "SC", "II", "III", "IV", "VI", "VII", "VIII",
+    "LLC", "LLP", "PLC", "GMBH", "SA", "AG", "PTE", "BV", "NV", "KK", "SARL",
+}
+# Lowercase particles that are CORRECT lowercase in many names.
+_NAME_PARTICLES = {
+    "van", "de", "der", "den", "von", "di", "da", "del", "della", "dela",
+    "bin", "binti", "binte", "al", "el", "le", "la", "ter", "ten", "te",
+    "op", "'t", "y", "e", "und", "of", "the", "and",
+}
+
+
+def _cap_segmented(word: str) -> str:
+    """Capitalise a single name word, keeping hyphen/apostrophe structure:
+    JEAN-PAUL → Jean-Paul, O'BRIEN → O'Brien."""
+    def cap(seg: str) -> str:
+        return seg[:1].upper() + seg[1:].lower() if seg else seg
+    return "-".join("'".join(cap(p) for p in h.split("'"))
+                    for h in word.split("-"))
+
+
+def proper_name_case(name: str) -> str:
+    """Proper capitalisation for a person's name — conservative.
+
+    Only words that are FULLY uppercase (3+ letters) or fully lowercase are
+    touched; mixed-case words (McDonald, deVere) are trusted as typed.
+    Credentials (CFA, CAIA), generational suffixes (III) and lowercase name
+    particles (van, de, bin) are preserved. Words containing digits are left
+    alone entirely.
+    """
+    out = []
+    for tok in name.split():
+        head, core, tail = "", tok, ""
+        while core and core[0] in "(\"'":
+            head, core = head + core[0], core[1:]
+        while core and core[-1] in ",.;:)\"'":
+            core, tail = core[:-1], core[-1] + tail
+        letters = core.replace("-", "").replace("'", "")
+        if (not letters.isalpha()
+                or core.upper() in _NAME_KEEP
+                or (core.islower() and core in _NAME_PARTICLES)):
+            out.append(tok)
+        elif core.isupper() and len(letters) >= 3:
+            out.append(head + _cap_segmented(core) + tail)
+        elif core.islower():
+            out.append(head + _cap_segmented(core) + tail)
+        else:
+            out.append(tok)
+    return " ".join(out)
 
 
 def find_formatting_issues(cards: list[dict]) -> list[dict]:
-    """High-confidence mechanical fixes only: title whitespace and email
-    casing. Word-casing rewrites are acronym-hazardous and are NOT proposed.
+    """High-confidence mechanical fixes: title whitespace, person-name casing
+    (contacts only — company and fund names are acronym-hazardous), and email
+    hygiene.
 
-    Email lowercasing applies ONLY to a bare address: a value like
-    "Allison Stavro <allison@sinefine.co>" carries a display name whose
-    capitalisation is correct — lowercasing the whole string would mangle it,
-    so those values are left entirely alone.
+    Emails: a bare address is lowercased; a value that is NOT a bare address
+    but contains exactly one email ("C- 5165874019 W- ... roy@carmo.com",
+    "Allison Stavro <allison@sinefine.co>") becomes an ``email_extract`` fix
+    down to the bare address, carrying the leftover text as ``junk`` so the
+    run can propose homes for it (title, phone, description) separately.
+    A value with several different addresses is left alone — choosing one
+    would be a guess.
     """
     out = []
     for c in cards:
@@ -243,16 +302,30 @@ def find_formatting_issues(cards: list[dict]) -> list[dict]:
             continue
         name = c["name"]
         cleaned = " ".join(name.split())
+        if c["db"] == "contacts" and cleaned:
+            cleaned = proper_name_case(cleaned)
         if name and cleaned != name:
-            out.append({"card": c, "kind": "title_whitespace",
+            kind = ("title_whitespace"
+                    if cleaned == " ".join(name.split()) else "name_case")
+            out.append({"card": c, "kind": kind,
                         "property": c["title_prop"], "from": name, "to": cleaned})
         for prop, payload in c["raw"].items():
             if payload.get("type") == "email" and payload.get("email"):
                 email_raw = payload["email"]
                 addr = email_raw.strip()
-                if _BARE_EMAIL.match(addr) and email_raw != addr.lower():
-                    out.append({"card": c, "kind": "email_case", "property": prop,
-                                "from": email_raw, "to": addr.lower()})
+                if _BARE_EMAIL.match(addr):
+                    if email_raw != addr.lower():
+                        out.append({"card": c, "kind": "email_case",
+                                    "property": prop,
+                                    "from": email_raw, "to": addr.lower()})
+                    continue
+                found = _EMAIL_ANY.findall(email_raw)
+                if len({f.lower() for f in found}) == 1:
+                    junk = " ".join(
+                        email_raw.replace(found[0], " ").split()).strip(" ,;|<>-")
+                    out.append({"card": c, "kind": "email_extract",
+                                "property": prop, "from": email_raw,
+                                "to": found[0].lower(), "junk": junk})
     return out
 
 

@@ -162,6 +162,11 @@ ipconfig | findstr /c:"IPv4"
 echo.
 echo Keep this window open while you use the app. Press Ctrl+C to stop.
 echo.
+REM Disable console Quick-Edit for this window: clicking inside it would
+REM otherwise start a text selection that FREEZES the server until a key is
+REM pressed (every stdout write blocks). Copying text still works via
+REM right-click - Mark.
+"%PY%" -c "import ctypes;k=ctypes.windll.kernel32;h=k.GetStdHandle(-10);m=ctypes.c_uint();k.GetConsoleMode(h,ctypes.byref(m));k.SetConsoleMode(h,(m.value|0x80)&~0x40)" >nul 2>&1
 start "" http://localhost:8000
 REM --reload watches ONLY the code directories: backend updates apply
 REM themselves without anyone killing this window. data/ is deliberately not

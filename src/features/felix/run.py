@@ -40,6 +40,23 @@ _EVENT_TEXT = {
     "recommendation": "flagged for review",
 }
 
+_FORMAT_REASONS = {
+    "title_whitespace": "whitespace normalisation",
+    "name_case": "proper name capitalisation",
+    "email_case": "lowercased the address",
+    "email_extract": "the email field held extra text; keeping only the address",
+}
+
+
+def _prop_payload(ptype: str, value: str) -> dict:
+    if ptype == "select":
+        return {"select": {"name": value}}
+    if ptype == "phone_number":
+        return {"phone_number": value}
+    if ptype == "url":
+        return {"url": value}
+    return {"rich_text": [{"text": {"content": str(value)[:1900]}}]}
+
 
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
@@ -71,8 +88,9 @@ def felix_run(job: dict, notion, client, options: RunOptions,
     job["felix_run_id"] = run_id
     seq = 1
     counts: dict = {"applied": 0, "planned": 0, "failed": 0, "skipped": 0,
-                    "recommendations": 0, "merges": 0, "relations_repaired": 0,
-                    "missing_filled": 0, "formatting_fixed": 0, "icons_added": 0,
+                    "recommendations": 0, "proposed": 0, "merges": 0,
+                    "relations_repaired": 0, "missing_filled": 0,
+                    "formatting_fixed": 0, "icons_added": 0,
                     "high": 0, "medium": 0, "deferred": 0, "undone": 0}
 
     def _finish(status: str, error: str = "") -> dict:
@@ -98,6 +116,33 @@ def felix_run(job: dict, notion, client, options: RunOptions,
         store.append_change(rec, base)
         _emit(job, rec)
         counts["recommendations"] += 1
+
+    def record_proposal(db_card: dict, prop: str, value: str, ptype: str,
+                        reason: str, source: str = "") -> None:
+        """A concrete, ready-to-apply change that waits for the user's
+        approval. The exact Notion payload is stored in the snapshot so
+        pressing Approve executes precisely this — nothing is re-derived."""
+        nonlocal seq
+        cid = store.change_id_for(run_id, seq)
+        seq += 1
+        rec = ChangeRecord(
+            change_id=cid, run_id=run_id, timestamp=_now(),
+            database=db_card["db"], record_name=db_card["name"],
+            record_id=db_card["id"], record_url=db_card["url"],
+            change_type="fill_missing", property_changed=prop,
+            previous_value=str(db_card["plain"].get(prop) or ""),
+            new_value=str(value)[:1900], source=source, reason=reason,
+            confidence="Medium", execution_status="Proposed")
+        store.save_snapshot(cid, {
+            "kind": "proposal", "record_id": db_card["id"],
+            "database": db_card["db"],
+            "planned": {"properties": {prop: _prop_payload(ptype, value)}},
+            "expect_prop": prop,
+            "scanned_plain": db_card["plain"].get(prop),
+            "scanned_raw": db_card["raw"]}, base)
+        store.append_change(rec, base)
+        _emit(job, rec)
+        counts["proposed"] = counts.get("proposed", 0) + 1
 
     # ---- Phase 0: preflight ------------------------------------------------ #
     _stage(job, "Preflight", "confirming live database schemas")
@@ -180,6 +225,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
     checkpoint()
     planned: list[dict] = []       # simple changes
     merges: list[dict] = []
+    junk_fields: list[dict] = []   # email-field clutter → parse into proposals
 
     for key, cards in cards_by_db.items():
         # Formatting — High.
@@ -194,14 +240,19 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                 payload = {"email": f["to"]}
             else:
                 continue
+            if f["kind"] == "email_extract" and len(f.get("junk", "")) >= 12:
+                junk_fields.append({"card": f["card"], "original": f["from"]})
             planned.append({
                 "db": key, "card": f["card"], "change_type": "fix_formatting",
                 "property": prop, "previous": f["from"], "new": f["to"],
                 "payload": {"properties": {prop: payload}},
                 "expect_prop": prop, "scanned_plain": f["from"],
                 "confidence": "High",
-                "source": "mechanical formatting rule",
-                "reason": "whitespace/case normalisation"})
+                "source": ("text that is not part of the address"
+                           if f["kind"] == "email_extract"
+                           else "mechanical formatting rule"),
+                "reason": _FORMAT_REASONS.get(f["kind"],
+                                              "whitespace/case normalisation")})
 
         # Dangling relations — High.
         for d in detect.find_dangling_relations(cards, relation_map, ids_by_db):
@@ -317,10 +368,15 @@ def felix_run(job: dict, notion, client, options: RunOptions,
         t = prop_fill["task"]
         card = t["card"]
         if not prop_fill["verified"]:
-            record_recommendation(
-                card, t["property"],
-                f"model proposed '{prop_fill['value']}' but the evidence quote "
-                "did not verify — review manually",
+            # The quote check gates AUTOMATIC writes; a human reading the
+            # proposal can still adopt it — so it becomes an approvable
+            # proposal rather than a dead-end note.
+            record_proposal(
+                card, t["property"], prop_fill["value"],
+                t.get("ptype", "rich_text"),
+                reason="proposed from linked notes, but the supporting quote "
+                       "did not verify word-for-word — approve only if it "
+                       "reads right to you",
                 source=t.get("source_label", "linked notes"))
             continue
         ptype = t.get("ptype", "rich_text")
@@ -335,6 +391,40 @@ def felix_run(job: dict, notion, client, options: RunOptions,
             "confidence": "High" if prop_fill["confidence"] == "high" else "Medium",
             "source": f"{t.get('source_label', 'linked note')} — \"{prop_fill['evidence_quote'][:180]}\"",
             "reason": "explicit information in linked material"})
+
+    # Email-field clutter → parse job titles, phone numbers, descriptions out
+    # of the junk and propose each as its own approvable field change.
+    junk_tasks: list[dict] = []
+    for j in junk_fields[:20]:
+        card = j["card"]
+        evidence = (f"Text found in the email field of \"{card['name']}\" "
+                    f"alongside the address: \"{j['original']}\"")
+        for prop, raw_payload in card["raw"].items():
+            ptype = raw_payload.get("type", "")
+            if ptype not in ("rich_text", "select", "phone_number", "url"):
+                continue
+            if not detect._empty(card["plain"].get(prop)):
+                continue
+            junk_tasks.append({
+                "card": card, "property": prop, "ptype": ptype,
+                "options": options_by_db.get(card["db"], {}).get(prop),
+                "evidence": evidence,
+                "source_label": "text found in the email field"})
+            if len(junk_tasks) >= 40:
+                break
+    if junk_tasks:
+        _stage(job, "Parsing email-field clutter",
+               f"{len(junk_tasks)} candidate field(s)")
+        checkpoint()
+    for pr in adjudicate.evaluate_missing_info(client, junk_tasks, max_calls=4):
+        t = pr["task"]
+        note = ("" if pr["verified"]
+                else " (not quoted word-for-word — double-check it)")
+        record_proposal(
+            t["card"], t["property"], pr["value"], t.get("ptype", "rich_text"),
+            reason="parsed from the extra text that was sitting in the email "
+                   f"field{note}",
+            source=f"email field text — \"{pr['evidence_quote'][:150]}\"")
 
     # ---- Phase 5: plan + order --------------------------------------------- #
     order = {"fix_formatting": 0, "fix_icon": 1, "fill_missing": 2,

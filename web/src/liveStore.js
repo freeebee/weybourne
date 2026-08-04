@@ -30,7 +30,7 @@ let listeners = new Set();
 let micStream = null, displayStream = null, audioCtx = null, analyser = null,
     micAnalyser = null, sysAnalyser = null,
     recorder = null, chunkTimer = null, countdown = null, raf = 0, canvas = null;
-let lastMicAt = 0, lastSysAt = 0;
+let lastMicAt = 0, lastSysAt = 0, chunkNo = 0;
 
 function levelOf(an) {
   if (!an) return 0;
@@ -231,7 +231,12 @@ export async function start() {
         if (!parts.length) return;
         const blob = new Blob(parts, { type: rec.mimeType });
         try {
-          const res = await postFile("/api/stt?lang=auto", blob, "chunk.webm");
+          // Once the language is confidently known, pin it — detection costs
+          // real CPU per chunk. Every 5th chunk re-detects so a mid-meeting
+          // switch of language is still picked up.
+          chunkNo++;
+          const pin = S.detectedProb >= 0.85 && chunkNo % 5 !== 0 ? S.detectedLang : "auto";
+          const res = await postFile(`/api/stt?lang=${encodeURIComponent(pin)}`, blob, "chunk.webm");
           if (res.language) {
             S.detectedLang = res.language;
             S.detectedProb = res.language_probability || 0;
