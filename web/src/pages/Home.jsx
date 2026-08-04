@@ -20,6 +20,27 @@ const WORKSPACES = [
    "The last week in one sitting — team meetings, execution moves, and the shared inbox condensed."],
 ];
 
+/* Thin-stroke line icons for the workspace ledger — house style, no emoji. */
+function WsIcon({ to }) {
+  const paths = {
+    "/triage": ["M3 5.5h18v13H3z", "M3 6.5l9 6.5 9-6.5"],
+    "/prep": ["M6 3.5h9l4 4v13H6z", "M15 3.5v4h4", "M9.5 12h5", "M9.5 15.5h5"],
+    "/live": ["M12 4a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V7a3 3 0 0 1 3-3z",
+              "M6.5 12a5.5 5.5 0 0 0 11 0", "M12 17.5V21", "M9 21h6"],
+    "/track-records": ["M5 20v-9", "M11 20V5", "M17 20v-6", "M3 20h18"],
+    "/fund-data": ["M3 20h18", "M4 16l5-6 4 3 7-8"],
+    "/whats-new": ["M12 4a5 5 0 0 1 5 5v3l2 3.5H5L7 12V9a5 5 0 0 1 5-5z",
+                   "M10 18.5a2 2 0 0 0 4 0"],
+  }[to] || [];
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
+         stroke="var(--teal-700)" strokeWidth="1.5" strokeLinecap="round"
+         strokeLinejoin="round" style={{ marginTop: 5 }}>
+      {paths.map((d, i) => <path key={i} d={d} />)}
+    </svg>
+  );
+}
+
 function todayEyebrow() {
   const d = new Date();
   const day = d.toLocaleDateString("en-GB", { weekday: "long" }).toUpperCase();
@@ -63,8 +84,6 @@ export default function Home() {
         </div>
         <div className="actions">
           <Mascot state="waving" width={88} />
-          <Button onClick={() => nav("/triage")}>Triage the inbox</Button>
-          <Button variant="ghost" onClick={() => nav("/prep")}>Prepare a meeting</Button>
           <button className="mono" title="Watch the opening animation again"
             onClick={() => window.dispatchEvent(new Event("wb-replay-splash"))}
             style={{ background: "none", border: "none", cursor: "pointer",
@@ -108,14 +127,15 @@ export default function Home() {
           <SectionHead label="WORKSPACES" right={String(WORKSPACES.length).padStart(2, "0")} />
           {WORKSPACES.map(([to, title, meta, blurb], i) => (
             <button key={to} onClick={() => nav(to)} className="rrow click" style={{
-              display: "grid", gridTemplateColumns: "38px minmax(0,1fr) auto",
-              gap: "10px 18px", padding: "18px 14px 18px 0", width: "100%",
+              display: "grid", gridTemplateColumns: "34px 32px minmax(0,1fr) auto",
+              gap: "10px 14px", padding: "18px 14px 18px 0", width: "100%",
               textAlign: "left", background: "none", border: "none",
               borderTop: "1px solid var(--paper-200)", cursor: "pointer",
             }}>
               <span className="mono" style={{ fontSize: 11, color: "var(--stone-400)", paddingTop: 6 }}>
                 {String(i + 1).padStart(2, "0")}
               </span>
+              <WsIcon to={to} />
               <span>
                 <span style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                   <span style={{ font: "400 20px/1.25 var(--serif)", color: "var(--ink-800)" }}>{title}</span>

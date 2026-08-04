@@ -1718,8 +1718,12 @@ _REFRESH_PARTS = {
               + "Fetch my top-level Outlook Inbox: the 20 most recent messages from "
                 "the last 7 days. JSON array shape:\n" + _EMAIL_SHAPE),
     "calendar": (_MCP_PREAMBLE
-                 + "Fetch my Outlook calendar events from 30 days ago through "
-                   "the next 21 days (past meetings included). JSON array "
+                 + "Fetch my Outlook calendar events in TWO separate searches, "
+                   "then merge the results into ONE JSON array: search 1 = "
+                   "today through 21 days ahead (do this first — never lose "
+                   "the upcoming meetings to a result cap); search 2 = the "
+                   "past 30 days up to today. If a search caps its results, "
+                   "keep the events closest to today. JSON array "
                    'shape:\n[{"id": str, "subject": str, "start": ISO8601 str, '
                    '"end": ISO8601 str, "location": str, "organizer": {"name": str, '
                    '"email": str}, "attendees": [{"name": str, "email": str}], '

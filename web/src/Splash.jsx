@@ -81,7 +81,14 @@ export default function Splash({ children, speed = 1, onDone }) {
             <div className="wb-mascot-block">
               <span className="wb-mascot" role="img"
                     aria-label="CHAO, the Weybourne assistant">
-                <Mascot state={entered ? "working" : "waving"} width={176} />
+                {/* Both poses stay mounted; activation crossfades wave →
+                    typing-at-the-laptop instead of hard-swapping the SVG. */}
+                <span className="wb-pose wb-pose-wave">
+                  <Mascot state="waving" width={176} />
+                </span>
+                <span className="wb-pose wb-pose-work">
+                  <Mascot state="working" width={176} />
+                </span>
               </span>
               <span className="wb-greeting">
                 {entered ? "CHAO is wiring up your desk…" : "CHAO at your service"}

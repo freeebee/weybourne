@@ -371,11 +371,14 @@ class GraphConnector:
     def list_events(self, start: dt.datetime, end: dt.datetime) -> list[CalendarEvent]:
         if not self.live:
             snapshot = _load_snapshot(CALENDAR_SNAPSHOT)
-            events = (
-                [_event_from_snapshot(e) for e in snapshot]
-                if snapshot is not None
-                else list(_SAMPLE_EVENTS)
-            )
+            if snapshot is not None:
+                events = [_event_from_snapshot(e) for e in snapshot]
+                # Real data: the window is authoritative. Falling back to
+                # "everything" when the window is empty once served a stale
+                # month of past meetings as if they were upcoming.
+                return [e for e in events
+                        if _starts_in_window(e.start, start, end)]
+            events = list(_SAMPLE_EVENTS)
             in_window = [
                 e for e in events if _starts_in_window(e.start, start, end)
             ]

@@ -199,6 +199,16 @@
 @keyframes m-bob  { 0%, 100% { transform: translateY(0); }   50% { transform: translateY(-3.5px); } }
 @keyframes m-wave { 0%, 100% { transform: rotate(-16deg); }  50% { transform: rotate(12deg); } }
 @keyframes m-tilt { 0%, 100% { transform: rotate(-2deg); }   50% { transform: rotate(2deg); } }
+/* alternating typing hands on the working pose — furious keyboard work */
+@keyframes m-tapA { 0%, 100% { transform: translateY(0); }    50% { transform: translateY(-4px); } }
+@keyframes m-tapB { 0%, 100% { transform: translateY(-4px); } 50% { transform: translateY(0); } }
+
+/* crossfading poses: waving melts into working-at-the-laptop instead of a
+   hard swap (the desk used to just pop into existence) */
+.wb-pose { position: absolute; inset: 0; transition: opacity .7s ease; }
+.wb-pose-work { opacity: 0; }
+.wb-activated .wb-pose-wave { opacity: 0; }
+.wb-activated .wb-pose-work { opacity: 1; }
 
 @media (prefers-reduced-motion: reduce) {
   .wb-splash-root * { animation-duration: 1ms !important; animation-delay: 0ms !important; }

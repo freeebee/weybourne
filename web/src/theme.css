@@ -47,6 +47,9 @@ button{font-family:var(--sans)}
    tweening). Fire, POWER UP banner and speech bubbles follow the same idiom. */
 @keyframes px-swapA{0%,49.9%{opacity:1}50%,100%{opacity:0}}
 @keyframes px-swapB{0%,49.9%{opacity:0}50%,100%{opacity:1}}
+/* Typing hands on the working mascot (referenced inside mascot-working.svg). */
+@keyframes m-tapA { 0%, 100% { transform: translateY(0); }    50% { transform: translateY(-4px); } }
+@keyframes m-tapB { 0%, 100% { transform: translateY(-4px); } 50% { transform: translateY(0); } }
 /* Three-frame sprite cycles — smoother than the two-frame flip. */
 @keyframes px-f1{0%,33.2%{opacity:1}33.3%,100%{opacity:0}}
 @keyframes px-f2{0%,33.2%{opacity:0}33.3%,66.5%{opacity:1}66.6%,100%{opacity:0}}
