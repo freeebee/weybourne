@@ -38,19 +38,31 @@ function WbChao() {
         <rect x="53.5" y="50.5" width="18" height="14" rx="4.5" />
         <path d="M46.5 55.5 h7" /><path d="M28.5 54 l-5.5 3" /><path d="M71.5 54 l5.5 3" />
       </g>
-      {variant === "happy" ? (
+      {variant === "happy" && (
         <>
           <g stroke="#1C2430" strokeWidth="2.8" strokeLinecap="round" fill="none">
             <path d="M33 59.5 q4.5 -5.5 9 0" /><path d="M58 59.5 q4.5 -5.5 9 0" />
           </g>
           <path d="M40 72 q10 13 20 0 Z" fill="#8C4038" />
         </>
-      ) : (
+      )}
+      {variant === "focus" && (
         <>
           <g fill="#1C2430">
             <circle cx="37.5" cy="58" r="2.9" /><circle cx="62.5" cy="58" r="2.9" />
           </g>
           <path d="M44 77 h12" stroke="#A2664B" strokeWidth="2.6" fill="none"
+                strokeLinecap="round" />
+        </>
+      )}
+      {variant === "rage" && (
+        <>
+          {/* eyes screwed shut + a huge yell, straight out of the GIF */}
+          <g stroke="#1C2430" strokeWidth="2.8" strokeLinecap="round" fill="none">
+            <path d="M33 57 q4.5 5 9 0" /><path d="M58 57 q4.5 5 9 0" />
+          </g>
+          <ellipse cx="50" cy="77" rx="8.5" ry="8" fill="#8C4038" />
+          <path d="M42.5 73.5 h15" stroke="#FFFFFF" strokeWidth="2.4"
                 strokeLinecap="round" />
         </>
       )}
@@ -74,9 +86,10 @@ function WbChao() {
         </g>
         {head("happy")}
         {head("focus")}
+        {head("rage")}
       </g>
-      {/* laptop (in front of him) — rises with the desk */}
-      <g className="wbc-deskpart">
+      {/* laptop (in front of him) — rises with the desk, jolts on the slams */}
+      <g className="wbc-deskpart wbc-laptop">
         <rect x="88" y="148" width="64" height="40" rx="4" fill="#22394A" />
         <rect x="93" y="153" width="54" height="30" rx="2" fill="#31536A" />
         <circle cx="120" cy="168" r="6" fill="#249692" opacity=".85" />
@@ -110,6 +123,13 @@ function WbChao() {
               strokeLinecap="round" fill="none" />
         <circle cx="137" cy="186" r="7" fill="#F3CBA8" />
       </g>
+      {/* impact debris — flashes when the hands come down on the keyboard */}
+      <g className="wbc-slam" stroke="#9FB2BD" strokeWidth="2.4"
+         strokeLinecap="round" fill="none" opacity="0">
+        <path d="M70 182 l-9 -5" /><path d="M68 192 l-10 1" />
+        <path d="M170 182 l9 -5" /><path d="M172 192 l10 1" />
+        <path d="M78 172 l-6 -8" /><path d="M163 172 l6 -8" />
+      </g>
     </svg>
   );
 }
@@ -133,8 +153,11 @@ export default function Splash({ children, speed = 1, onDone }) {
   const enter = () => {
     if (phase !== "idle") return;
     setPhase("hold");
-    setTimeout(() => setPhase("leave"), 2600 * speed);
-    if (onDone) setTimeout(onDone, 3700 * speed);   // after the veil dissolve
+    // The hold covers the whole bit: arms land (~0.8s), typing accelerates,
+    // wind-up, double keyboard slam + grimace (~3.2s), then the veil leaves
+    // while CHAO is still mid-rage.
+    setTimeout(() => setPhase("leave"), 3400 * speed);
+    if (onDone) setTimeout(onDone, 4500 * speed);   // after the veil dissolve
   };
 
   const entered = phase !== "idle";
@@ -189,7 +212,7 @@ export default function Splash({ children, speed = 1, onDone }) {
                 <WbChao />
               </span>
               <span className="wb-greeting">
-                {entered ? "CHAO is wiring up your desk…" : "CHAO at your service"}
+                {entered ? "CHAO is working very hard…" : "CHAO at your service"}
               </span>
             </div>
             <div className="wb-signals">

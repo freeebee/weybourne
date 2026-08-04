@@ -361,7 +361,12 @@ class NotionConnector:
         hit = cache.get(page_id)
         if hit and time.time() - hit.get("at", 0) < self._PAGE_TEXT_TTL:
             return hit["text"]
-        text = self._blocks_text(page_id, depth=0, max_depth=max_depth)
+        try:
+            text = self._blocks_text(page_id, depth=0, max_depth=max_depth)
+        except Exception:  # noqa: BLE001 - Notion down/unshared mid-refresh
+            if hit:
+                return hit["text"]      # a stale copy beats no copy
+            raise
         if text:
             cache[page_id] = {"text": text, "at": time.time()}
             store["page_text"] = cache
