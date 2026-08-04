@@ -214,9 +214,35 @@ class DedupeDecision(BaseModel):
 
 # --- CHAO preference screening --------------------------------------------- #
 
+class ScreenFact(BaseModel):
+    """One headline term of the offer, for the fact strip."""
+    label: str
+    value: str
+
+
+class ScreenCriterion(BaseModel):
+    """One documented preference, tested against what the materials show.
+
+    The three columns of the screening view: what we like to see (and why),
+    what the fund actually does (with its source), and the verdict.
+    """
+    title: str
+    preference: str = ""
+    rationale: str = ""
+    finding: str = ""
+    source: str = ""
+    verdict: Literal["fit", "conditional", "unevidenced", "not-fit"] = "unevidenced"
+    assessment: str = ""
+
+
 class PreferenceScreen(BaseModel):
     sleeve: Sleeve
     overall_fit: Literal["Fit", "Partial", "Non-fit", "Unclear"]
+    # Criterion-by-criterion is the real output; the flat lists below are
+    # derived from it so triage and the draft-reply rationales keep working.
+    criteria: list[ScreenCriterion] = Field(default_factory=list)
+    facts: list[ScreenFact] = Field(default_factory=list)
+    not_covered: str = ""
     fit_points: list[str] = Field(default_factory=list)
     non_fit_points: list[str] = Field(default_factory=list)
     open_questions: list[str] = Field(default_factory=list)

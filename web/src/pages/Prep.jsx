@@ -383,6 +383,7 @@ export default function Prep() {
             ) : (
               <ScreenView screen={viewing.result.screen}
                 entityName={viewing.result.entity || viewing.name || ""}
+                received={viewing.result.source_label || ""}
                 onMinimize={() => setMinimized((m) => ({ ...m, screen: true }))} />
             )
           )}
@@ -505,63 +506,226 @@ function MinimizedBar({ label, onExpand, style }) {
   );
 }
 
-function ScreenView({ screen, onMinimize, entityName }) {
-  const color = { Fit: "var(--positive-600)", Partial: "var(--caution-600)",
-    "Non-fit": "var(--critical-600)", Unclear: "var(--stone-500)" }[screen.overall_fit];
+/* The screening comparison: every preference we tested, what the fund does,
+   and the verdict — three aligned columns, failures first, each assessment a
+   sentence that reads on its own. Hairlines and type carry the structure. */
+const VERDICT_STYLE = {
+  "not-fit": { label: "Not a fit", bg: "--critical-100", ink: "--critical-600",
+               dot: "--critical-500" },
+  conditional: { label: "Fit only if negotiated", bg: "--caution-100",
+                 ink: "--caution-600", dot: "--caution-500" },
+  unevidenced: { label: "Unevidenced", bg: "--caution-100", ink: "--caution-600",
+                 dot: "--caution-500" },
+  fit: { label: "A fit", bg: "--positive-100", ink: "--positive-600",
+         dot: "--positive-500" },
+};
+const VERDICT_ORDER = { "not-fit": 0, conditional: 1, unevidenced: 2, fit: 3 };
+const HAIR = "1px solid var(--paper-200)";
+const COLS = "1fr 1fr 1.25fr";
+
+function ScreenView({ screen, onMinimize, entityName, received }) {
+  const criteria = [...(screen.criteria || [])].sort(
+    (a, b) => (VERDICT_ORDER[a.verdict] ?? 9) - (VERDICT_ORDER[b.verdict] ?? 9));
+  const count = (v) => criteria.filter((c) => c.verdict === v).length;
+  const legend = [
+    ["--critical-500", `${count("not-fit")} not a fit`, count("not-fit")],
+    ["--caution-500",
+     `${count("unevidenced") + count("conditional")} unevidenced or conditional`,
+     count("unevidenced") + count("conditional")],
+    ["--positive-500", `${count("fit")} a fit`, count("fit")],
+  ].filter(([, , n]) => n > 0);
+  const eyebrow = (extra) => ({
+    font: "500 10px/1.4 var(--mono)", letterSpacing: ".12em",
+    textTransform: "uppercase", ...extra,
+  });
+
+  // No criteria (older saved preps, or a screen that returned only prose):
+  // fall back to the summary and the flat lists rather than an empty frame.
+  const legacy = !criteria.length;
+
   return (
-    <Card accent="teal" style={{ padding: "20px 22px" }}>
-      <div className="spread" style={{ marginBottom: 8 }}>
-        <span className="microlabel">
-          PREFERENCE SCREEN · CHAO{entityName ? ` · ${entityName.toUpperCase()}` : ""}
-        </span>
-        <span className="row" style={{ gap: 12 }}>
-          <span className="mono" style={{ fontSize: 11, letterSpacing: ".1em", color }}>
-            {screen.overall_fit.toUpperCase()} · {screen.sleeve.toUpperCase()}
-          </span>
-          {onMinimize && <MiniBtn onClick={onMinimize}>MINIMIZE</MiniBtn>}
-        </span>
-      </div>
-      <p style={{ fontSize: 14.5, lineHeight: 1.6, margin: "0 0 16px", maxWidth: "72ch" }}>
-        {screen.summary}
-      </p>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
-                    gap: 24 }}>
+    <div style={{ background: "var(--paper-000)", border: HAIR, borderRadius: 6,
+                  overflow: "hidden" }}>
+      {/* Header */}
+      <div className="spread" style={{ background: "var(--ink-800)",
+                                       padding: "22px 28px 20px", gap: 20,
+                                       flexWrap: "wrap", alignItems: "flex-start" }}>
         <div>
-          <span className="microlabel" style={{ color: "var(--positive-600)" }}>FITS</span>
-          {(screen.fit_points.length ? screen.fit_points : ["—"]).map((x, i) => (
-            <div key={i} style={{ display: "flex", gap: 9, padding: "6px 0",
-                                  borderBottom: "1px solid var(--paper-200)" }}>
-              <span className="mono" style={{ fontSize: 10, color: "var(--positive-600)",
-                                              paddingTop: 3, flex: "none" }}>
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <span style={{ fontSize: "13.5px", lineHeight: 1.55 }}>{x}</span>
+          <div style={eyebrow({ color: "var(--teal-300)" })}>
+            {(screen.sleeve || "").toUpperCase()} · SCREENING
+          </div>
+          <div style={{ font: "300 28px/1.15 var(--serif)", color: "var(--paper-050)",
+                        marginTop: 6 }}>
+            {entityName || "This opportunity"}
+          </div>
+          {received && (
+            <div style={{ fontSize: "13px", color: "var(--stone-300)", marginTop: 5 }}>
+              {received}
             </div>
-          ))}
+          )}
         </div>
-        <div>
-          <span className="microlabel" style={{ color: "var(--critical-600)" }}>NON-FITS</span>
-          {(screen.non_fit_points.length ? screen.non_fit_points : ["—"]).map((x, i) => (
-            <div key={i} style={{ display: "flex", gap: 9, padding: "6px 0",
-                                  borderBottom: "1px solid var(--paper-200)" }}>
-              <span className="mono" style={{ fontSize: 10, color: "var(--critical-600)",
-                                              paddingTop: 3, flex: "none" }}>
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <span style={{ fontSize: "13.5px", lineHeight: 1.55 }}>{x}</span>
+        <div style={{ textAlign: "right" }}>
+          <div style={eyebrow({ color: "var(--stone-300)" })}>COMPARED AGAINST</div>
+          <div style={{ fontSize: "13px", color: "var(--paper-050)", marginTop: 4 }}>
+            {screen.sleeve} manager preferences
+          </div>
+          {onMinimize && (
+            <div style={{ marginTop: 8 }}>
+              <MiniBtn onClick={onMinimize}>MINIMIZE</MiniBtn>
             </div>
-          ))}
+          )}
         </div>
       </div>
-      {screen.open_questions?.length > 0 && (
-        <div style={{ marginTop: 16 }}>
-          <span className="microlabel">OPEN QUESTIONS</span>
-          {screen.open_questions.map((q, i) => (
-            <div key={i} style={{ fontSize: "13.5px", lineHeight: 1.55, padding: "4px 0" }}>{q}</div>
+
+      {/* Fact strip */}
+      {screen.facts?.length > 0 && (
+        <div style={{ display: "grid", borderBottom: HAIR,
+                      gridTemplateColumns: `repeat(${screen.facts.length}, 1fr)` }}>
+          {screen.facts.map((f, i) => (
+            <div key={i} style={{ padding: "14px 16px",
+                                  paddingLeft: i === 0 ? 28 : 16,
+                                  borderLeft: i === 0 ? "none" : HAIR }}>
+              <div style={eyebrow({ color: "var(--stone-500)" })}>{f.label}</div>
+              <div style={{ fontSize: "14px", color: "var(--ink-800)", marginTop: 3,
+                            fontVariantNumeric: "tabular-nums" }}>
+                {f.value}
+              </div>
+            </div>
           ))}
         </div>
       )}
-    </Card>
+
+      {/* Verdict band */}
+      <div style={{ background: "var(--paper-050)", padding: "22px 28px",
+                    borderBottom: HAIR }}>
+        <div style={eyebrow({ color: "var(--stone-500)" })}>VERDICT</div>
+        <p style={{ font: "300 21px/1.45 var(--serif)", color: "var(--ink-800)",
+                    margin: "8px 0 0", maxWidth: 1000, textWrap: "pretty" }}>
+          {screen.summary}
+        </p>
+        {(legend.length > 0 || criteria.length > 0) && (
+          <div className="spread" style={{ marginTop: 14, gap: 16, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
+              {legend.map(([tone, text]) => (
+                <span key={text} style={{ display: "flex", alignItems: "center",
+                                          gap: 7, fontSize: "13px",
+                                          color: "var(--stone-600)" }}>
+                  <span style={{ width: 7, height: 7, borderRadius: "50%",
+                                 background: `var(${tone})`, flex: "none" }} />
+                  {text}
+                </span>
+              ))}
+            </div>
+            <span style={eyebrow({ color: "var(--stone-500)", letterSpacing: ".1em" })}>
+              {criteria.length} CRITERIA TESTED
+            </span>
+          </div>
+        )}
+      </div>
+
+      {legacy ? (
+        <div style={{ padding: "18px 28px" }}>
+          {[["WHAT FITS", screen.fit_points, "--positive-600"],
+            ["WHAT DOES NOT", screen.non_fit_points, "--critical-600"]]
+            .filter(([, list]) => list?.length).map(([label, list, tone]) => (
+            <div key={label} style={{ marginBottom: 14 }}>
+              <div style={eyebrow({ color: `var(${tone})` })}>{label}</div>
+              {list.map((x, i) => (
+                <div key={i} style={{ fontSize: "13.5px", lineHeight: 1.55,
+                                      padding: "4px 0", borderBottom: HAIR }}>{x}</div>
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <>
+          {/* Column headers */}
+          <div style={{ display: "grid", gridTemplateColumns: COLS,
+                        padding: "12px 28px", borderBottom: HAIR }}>
+            <div style={eyebrow({ color: "var(--stone-400)" })}>WHAT WE LIKE TO SEE</div>
+            <div style={eyebrow({ color: "var(--stone-400)", paddingLeft: 24 })}>
+              WHAT THE FUND DOES
+            </div>
+            <div style={eyebrow({ color: "var(--stone-400)", paddingLeft: 24 })}>
+              ASSESSMENT
+            </div>
+          </div>
+
+          {criteria.map((c, i) => {
+            const v = VERDICT_STYLE[c.verdict] || VERDICT_STYLE.unevidenced;
+            return (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: COLS,
+                                    padding: "18px 28px",
+                                    borderBottom: i === criteria.length - 1 ? "none" : HAIR }}>
+                <div style={{ paddingRight: 24, display: "flex",
+                              flexDirection: "column", gap: 6 }}>
+                  <div style={{ fontSize: "15px", fontWeight: 600,
+                                color: "var(--ink-800)" }}>{c.title}</div>
+                  {c.preference && (
+                    <div style={{ fontSize: "14px", lineHeight: 1.55,
+                                  color: "var(--stone-600)" }}>{c.preference}</div>
+                  )}
+                  {c.rationale && (
+                    <div style={{ borderTop: HAIR, paddingTop: 8, fontSize: "13px",
+                                  lineHeight: 1.55, color: "var(--stone-500)" }}>
+                      <span style={eyebrow({ color: "var(--brass-700)",
+                                             marginRight: 6, display: "inline" })}>
+                        WHY
+                      </span>
+                      {c.rationale}
+                    </div>
+                  )}
+                </div>
+                <div style={{ borderLeft: HAIR, padding: "0 24px" }}>
+                  <div style={{ fontSize: "14px", lineHeight: 1.55,
+                                color: "var(--ink-700)" }}>{c.finding}</div>
+                  {c.source && (
+                    <div style={eyebrow({ color: "var(--stone-400)", marginTop: 6,
+                                          letterSpacing: ".08em" })}>
+                      {c.source}
+                    </div>
+                  )}
+                </div>
+                {/* Tint bleeds to the card edge: negative margin cancels the
+                    row's right padding. */}
+                <div style={{ borderLeft: HAIR, background: `var(${v.bg})`,
+                              padding: "18px 28px 18px 24px", margin: "-18px -28px -18px 0" }}>
+                  <div style={eyebrow({ color: `var(${v.ink})` })}>{v.label}</div>
+                  <div style={{ fontSize: "15px", lineHeight: 1.55,
+                                color: "var(--ink-800)", marginTop: 5 }}>
+                    {c.assessment}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+
+      {screen.open_questions?.length > 0 && (
+        <div style={{ borderTop: HAIR, padding: "16px 28px" }}>
+          <div style={eyebrow({ color: "var(--stone-500)" })}>
+            WHAT WOULD MOST CHANGE THE VIEW
+          </div>
+          {screen.open_questions.map((q, i) => (
+            <div key={i} style={{ fontSize: "13.5px", lineHeight: 1.55,
+                                  padding: "4px 0" }}>{q}</div>
+          ))}
+        </div>
+      )}
+
+      <div className="spread" style={{ background: "var(--paper-050)", borderTop: HAIR,
+                                       padding: "16px 28px", gap: 14, flexWrap: "wrap" }}>
+        <span style={{ fontSize: "13px", color: "var(--stone-600)" }}>
+          {screen.not_covered
+            ? `Not covered by the materials: ${screen.not_covered}`
+            : "Screened against the preference pages as written."}
+        </span>
+        <span style={eyebrow({ color: "var(--stone-500)", letterSpacing: ".1em" })}>
+          READ ONLY · SCREENING OUTPUT
+        </span>
+      </div>
+    </div>
   );
 }
 

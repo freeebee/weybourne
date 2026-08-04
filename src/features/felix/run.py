@@ -50,28 +50,37 @@ _FORMAT_REASONS = {
 
 
 def _merge_detail(survivor: dict, loser: dict, transfers: dict,
-                  names_by_id: dict) -> str:
+                  names_by_id: dict, notes_by_id: Optional[dict] = None,
+                  web_check: str = "") -> str:
     """Side-by-side of both records (JSON, for the review UI) so an approve
-    decision needs no digging: what the kept copy has, what the archived copy
-    has, what moves over, and any conflicting values."""
+    decision needs no digging: what each copy holds, which meeting notes point
+    at it, whether the pair was verified online, what moves over, and any
+    conflicting values."""
     import json as _json
+
+    notes_by_id = notes_by_id or {}
 
     def snap(c):
         fields = {}
         for k, v in c["plain"].items():
-            if detect._empty(v) or k == c.get("title_prop"):
+            # Unticked checkboxes carry no information about identity — a
+            # column of "False" only crowds out what matters.
+            if detect._empty(v) or v is False or k == c.get("title_prop"):
                 continue
             if k in c["relations"]:
                 v = [names_by_id.get(i, "(unknown)") for i in c["relations"][k]]
             s = ", ".join(map(str, v)) if isinstance(v, list) else str(v)
             fields[k] = s[:120]
         return {"name": c["name"], "created": (c.get("created") or "")[:10],
-                "fields": fields}
+                "fields": fields,
+                "notes": [n[:70] for n in notes_by_id.get(c["id"], [])[:5]],
+                "note_count": len(notes_by_id.get(c["id"], []))}
 
     return _json.dumps({
         "pair": [survivor["id"], loser["id"]],
         "keep": snap(survivor),
         "archive": snap(loser),
+        "web_check": web_check,
         "moves": [t["property"] for t in transfers["transfers"]],
         "conflicts": [{"property": cf["property"],
                        "keep": str(cf["survivor"])[:90],
@@ -252,6 +261,14 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                  for k, v in cards_by_db.items()}
     all_cards = [c for v in cards_by_db.values() for c in v]
     names_by_id = {c["id"]: c["name"] for c in all_cards}
+    # Which meeting notes point at each record — a contact with real meeting
+    # history is not the copy to archive, and it tells the reviewer at a
+    # glance which of the two the workspace actually uses.
+    notes_by_id: dict = {}
+    for note in cards_by_db.get("notes", []):
+        for ids in note["relations"].values():
+            for i in ids:
+                notes_by_id.setdefault(i, []).append(note["name"])
     job["partial"] = job.get("partial") or {}
     job["partial"]["scanned"] = {k: len(v) for k, v in cards_by_db.items()}
 
@@ -364,7 +381,9 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                     "db": key, "survivor": survivor, "loser": loser,
                     "confidence": "High",
                     "source": f"exact {group['evidence']} match: {group['key']}",
-                    "reason": "records share an exact identifier"})
+                    "reason": "records share an exact identifier",
+                    "web_check": f"not needed — the two share an exact "
+                                 f"{group['evidence']}"})
 
     # ---- Phase 4: LLM adjudication ----------------------------------------- #
     fuzzy_all = []
@@ -380,49 +399,58 @@ def felix_run(job: dict, notion, client, options: RunOptions,
         checkpoint()
     merged_ids = {m["loser"]["id"] for m in merges} | \
                  {m["survivor"]["id"] for m in merges}
-    unsure_pairs: list[tuple] = []
+    # EVERY look-alike pair goes to web research before anything is proposed:
+    # a name score plus a model opinion is not evidence that two people are
+    # the same person, and it cannot tell a shared name from a job move.
+    to_research: list[tuple] = []
     for verdict in adjudicate.adjudicate_duplicates(
             client, fuzzy_all, max_calls=max(1, options.max_llm_calls // 2)):
-        p = verdict["pair"]
-        if verdict["verdict"] == "duplicate" and verdict["survivor_card"]:
-            surv = verdict["survivor_card"]
-            loser = p["a"] if surv["id"] == p["b"]["id"] else p["b"]
-            if surv["id"] in merged_ids or loser["id"] in merged_ids:
-                continue
-            merged_ids |= {surv["id"], loser["id"]}
-            merges.append({"db": p["db"], "survivor": surv, "loser": loser,
-                           "confidence": "Medium",
-                           "source": f"name similarity {p['score']} + model "
-                                     f"adjudication: {verdict['reason'][:150]}",
-                           "reason": "adjudicated as the same entity"})
-        elif verdict["verdict"] == "unsure":
-            unsure_pairs.append((p, verdict))
+        if verdict["verdict"] in ("duplicate", "unsure"):
+            to_research.append((verdict["pair"], verdict))
         elif verdict["verdict"] == "deferred":
             counts["deferred"] += 1
 
-    # Unsure pairs get a proper look: a web search on the names + employers
-    # rather than a shrug. Budgeted; anything over budget stays a plain
-    # recommendation.
     research_budget = options.max_research if client is not None else 0
-    if unsure_pairs and research_budget > 0:
+    if to_research and research_budget > 0:
         _stage(job, "Researching online",
-               f"{min(len(unsure_pairs), research_budget)} unsure duplicate(s)")
+               f"{min(len(to_research), research_budget)} look-alike pair(s)")
         checkpoint()
-    for p, verdict in unsure_pairs:
-        pair_detail = json.dumps({"pair": [p["a"]["id"], p["b"]["id"]]})
+
+    def _pair_detail(a: dict, b: dict, web_check: str = "") -> str:
+        """Side-by-side of both records — same evidence a merge row carries,
+        so a possible-duplicate can be judged without opening Notion."""
+        surv, losers = detect.choose_survivor([a, b])
+        return _merge_detail(surv, losers[0],
+                             detect.plan_merge_transfers(surv, losers[0]),
+                             names_by_id, notes_by_id, web_check)
+
+    for p, verdict in to_research:
+        pair_detail = _pair_detail(p["a"], p["b"], "not yet web-checked")
         if research_budget <= 0:
+            # Out of budget: never merge on similarity alone — flag it and let
+            # a later run do the search.
             record_recommendation(
                 p["a"], "(possible duplicate)",
                 f"may duplicate '{p['b']['name']}' — {verdict['reason'][:600]} "
                 "(queued for web research on a later run)",
-                source=f"name similarity {p['score']}", detail=pair_detail)
+                source=f"name similarity {p['score']}, not yet web-checked",
+                detail=pair_detail)
             continue
         research_budget -= 1
         try:
             r = research.research_duplicate(client, p["a"], p["b"], names_by_id)
         except Exception:  # noqa: BLE001
             r = {"verdict": "unsure", "confidence": "low",
-                 "explanation": "the research call failed", "evidence": ""}
+                 "explanation": "the research call failed", "evidence": "",
+                 "employer_check": ""}
+        emp = (r.get("employer_check") or "").strip()
+        emp_txt = f" Employers: {emp[:300]}" if emp else ""
+        _v = r.get("verdict", "unsure")
+        pair_detail = _pair_detail(
+            p["a"], p["b"],
+            f"web-checked: {'same person' if _v == 'duplicate' else 'different people' if _v == 'distinct' else 'inconclusive'}"
+            + (f" ({r['confidence']} confidence)" if r.get("confidence") else "")
+            + (f" — {emp[:200]}" if emp else ""))
         if (r.get("verdict") == "duplicate"
                 and r.get("confidence") in ("high", "medium")
                 and p["a"]["id"] not in merged_ids
@@ -436,14 +464,17 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                 "confidence": "Medium",
                 "source": f"online research — {r.get('evidence', '')[:400]}",
                 "reason": "researched online: same entity — "
-                          f"{r.get('explanation', '')[:500]}"})
+                          f"{r.get('explanation', '')[:500]}{emp_txt}",
+                "web_check": f"web-checked: same person "
+                             f"({r.get('confidence', '')} confidence)"
+                             + (f" — {emp[:200]}" if emp else "")})
         elif r.get("verdict") == "distinct":
             store.resolve_pair(p["a"]["id"], p["b"]["id"],
                                "research-distinct", base)
             record_recommendation(
                 p["a"], "(possible duplicate)",
                 f"researched online: DISTINCT from '{p['b']['name']}' — "
-                f"{r.get('explanation', '')[:600]}",
+                f"{r.get('explanation', '')[:600]}{emp_txt}",
                 source=f"web research — {r.get('evidence', '')[:400]}",
                 detail=pair_detail)
         else:
@@ -453,8 +484,11 @@ def felix_run(job: dict, notion, client, options: RunOptions,
             record_recommendation(
                 p["a"], "(possible duplicate)",
                 f"may duplicate '{p['b']['name']}' — online research was "
-                f"inconclusive: {r.get('explanation', '')[:600]}{lean_txt}",
-                source=f"name similarity {p['score']}", detail=pair_detail)
+                f"inconclusive: {r.get('explanation', '')[:600]}{emp_txt}"
+                f"{lean_txt}",
+                source=f"web research — {r.get('evidence', '')[:400]}"
+                       if r.get("evidence") else f"name similarity {p['score']}",
+                detail=pair_detail)
 
     # Evidence-based fills for missing text/select properties.
     fill_tasks = _build_fill_tasks(cards_by_db, schemas, options_by_db,
@@ -624,7 +658,8 @@ def felix_run(job: dict, notion, client, options: RunOptions,
             dry_run=options.dry_run, quiet_minutes=options.quiet_minutes,
             base=base, on_change=lambda c: _emit(job, c),
             detail=_merge_detail(m["survivor"], m["loser"], transfers,
-                                 names_by_id))
+                                 names_by_id, notes_by_id,
+                                 m.get("web_check", "")))
         job["done"] += 1
         parent = records[0]
         if parent.execution_status == "Applied":

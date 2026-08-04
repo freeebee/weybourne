@@ -28,6 +28,12 @@ _DUP_SCHEMA = {
                  "description": "When the verdict is unsure: which way the "
                                 "balance of evidence points. 'none' only when "
                                 "there is truly nothing to go on."},
+        "employer_check": {"type": "string",
+                           "description": "Explicitly: are the two employers "
+                                          "the same firm, related entities, a "
+                                          "documented job move by one person, "
+                                          "or unrelated firms? Say which, and "
+                                          "how you established it."},
         "explanation": {"type": "string",
                         "description": "What the research found and your read "
                                        "of it, two or three sentences a "
@@ -36,7 +42,8 @@ _DUP_SCHEMA = {
                      "description": "The key fact(s) found online, with the "
                                     "source site named"},
     },
-    "required": ["verdict", "confidence", "lean", "explanation", "evidence"],
+    "required": ["verdict", "confidence", "lean", "employer_check",
+                 "explanation", "evidence"],
     "additionalProperties": False,
 }
 

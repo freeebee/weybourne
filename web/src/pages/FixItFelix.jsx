@@ -386,7 +386,7 @@ function describeChange(c) {
 /* The two records of a proposed merge, side by side — everything each copy
    holds, what moves over, and any conflicting values — so approving needs no
    digging around in Notion. */
-function MergeCompare({ detail }) {
+function MergeCompare({ detail, done }) {
   let d;
   try { d = JSON.parse(detail); } catch { return null; }
   if (!d || !d.keep || !d.archive) return null;
@@ -419,15 +419,40 @@ function MergeCompare({ detail }) {
             </span>{" "}{v}
           </div>
         ))}
+        {/* Meeting history is the strongest signal of which copy is real. */}
+        <div style={{ fontSize: "12px", marginTop: 4, paddingTop: 4,
+                      borderTop: "1px solid var(--paper-200)" }}>
+          <span className="mono" style={{ fontSize: 9.5, letterSpacing: ".06em",
+                                          color: "var(--stone-500)" }}>
+            LINKED NOTES
+          </span>{" "}
+          {rec.note_count
+            ? `${rec.note_count} — ${(rec.notes || []).join(", ")}`
+            : <span className="muted" style={{ fontStyle: "italic" }}>
+                none
+              </span>}
+        </div>
       </div>
     </div>
   );
   return (
     <div style={{ marginTop: 8 }}>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {col(d.keep, "KEPT — THE RICHER COPY", "--positive-600")}
-        {col(d.archive, "ARCHIVED — THE DUPLICATE", "--caution-600")}
+        {col(d.keep, done ? "KEPT — THE RICHER COPY" : "WOULD KEEP — THE RICHER COPY",
+             "--positive-600")}
+        {col(d.archive, done ? "ARCHIVED — THE DUPLICATE" : "WOULD ARCHIVE",
+             "--caution-600")}
       </div>
+      {d.web_check && (
+        <div style={{ fontSize: "12px", marginTop: 6,
+                      color: d.web_check.startsWith("not yet")
+                        ? "var(--caution-600)" : "var(--stone-600)" }}>
+          <span className="mono" style={{ fontSize: 9.5, letterSpacing: ".08em",
+                                          color: "var(--stone-500)" }}>
+            ONLINE CHECK
+          </span>{" "}{d.web_check}
+        </div>
+      )}
       {(d.moves || []).length > 0 && (
         <div style={{ fontSize: "12px", marginTop: 6 }}>
           <span style={{ color: "var(--teal-700)", fontWeight: 600 }}>Moves over: </span>
@@ -543,8 +568,11 @@ function ReviewTable({ s }) {
                 {d.fix}
               </div>
             )}
-            {c.change_type === "merge" && c.detail && (
-              <MergeCompare detail={c.detail} />
+            {/* Any duplicate finding shows both records side by side, not
+                just an executed merge — the evidence is what makes the call. */}
+            {c.detail && (c.change_type === "merge"
+              || (c.property_changed || "").includes("duplicate")) && (
+              <MergeCompare detail={c.detail} done={applied} />
             )}
             {d.source && (
               <div className="muted" style={{ fontSize: "12px", marginTop: 3 }}>

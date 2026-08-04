@@ -93,6 +93,50 @@ class TestPreferenceScreen:
         assert "general" in prompt.lower()
         assert "Diversifiers" in prompt
 
+    CRITERIA_PAYLOAD = {
+        "sleeve": "Private Growth", "overall_fit": "Non-fit",
+        "summary": "Not a fit as offered.",
+        "not_covered": "co-investment rights",
+        "open_questions": ["What discount applies at $50m?"],
+        "facts": [{"label": "Target size", "value": "$1.6bn hard cap"}],
+        "criteria": [
+            {"title": "Fee savings quantified", "preference": "Discounts stated",
+             "rationale": "Undocumented discounts do not survive a re-up.",
+             "finding": "2.0 / 20 / 8 with no discount schedule.",
+             "source": "Deck p.31", "verdict": "not-fit",
+             "assessment": "Not a fit because no discount is quantified."},
+            {"title": "Portable playbook", "preference": "Repeatable process",
+             "rationale": "One-off wins do not compound.",
+             "finding": "The materials do not describe it.", "source": "",
+             "verdict": "unevidenced",
+             "assessment": "Unevidenced because the deck never sets it out."},
+            {"title": "Equity-like return bar", "preference": "2x net or better",
+             "rationale": "It must beat the public alternative.",
+             "finding": "2.5x / 20% net target.", "source": "Deck p.4",
+             "verdict": "fit", "assessment": "A fit because the target clears the bar."},
+        ],
+    }
+
+    def test_criteria_drive_the_flat_fit_lists(self):
+        """The pass rationales and triage view read the flat lists, so they
+        must be derived from the criteria rather than separately invented."""
+        entity = ExtractedEntity(fund_name="Northlight III", sleeve="Private Growth")
+        screen = screen_opportunity(FakeClient(self.CRITERIA_PAYLOAD), entity, [])
+        assert len(screen.criteria) == 3
+        assert screen.non_fit_points == [
+            "Not a fit because no discount is quantified."]
+        assert screen.fit_points == [
+            "A fit because the target clears the bar."]
+        # An unevidenced criterion counts as neither a fit nor a non-fit.
+        unevidenced = [c for c in screen.criteria if c.verdict == "unevidenced"]
+        assert unevidenced and not unevidenced[0].source
+        assert screen.facts[0].value == "$1.6bn hard cap"
+        assert screen.not_covered == "co-investment rights"
+
+    def test_prompt_forbids_scoring_the_unevidenced(self):
+        from src.features.preferences import SCREEN_SYSTEM_PROMPT
+        assert "Absence of evidence is not evidence" in SCREEN_SYSTEM_PROMPT
+
 
 class TestDraftReplies:
     SCREEN = PreferenceScreen(
