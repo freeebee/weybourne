@@ -70,6 +70,7 @@ def _summary(path: Path, unfinished: bool) -> dict | None:
         "saved_at": rec.get("saved_at", ""),
         "words": rec.get("words", 0),
         "goal": rec.get("goal", ""),
+        "has_note": bool(rec.get("note_markdown")),
         "unfinished": unfinished,
     }
 

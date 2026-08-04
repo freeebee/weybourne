@@ -8,33 +8,113 @@ import {
 } from "../ui.jsx";
 import { Markdown } from "./Prep.jsx";
 
+/* Calendar picker — a scrollable list rather than a native select, so past
+   meetings are reachable too: scroll up for earlier days (tinted brown),
+   TODAY jumps back to the present. Picking fills "who" and loads the
+   manager thread, exactly as before. */
 function CalendarPick() {
   const [events, setEvents] = React.useState([]);
-  const [idx, setIdx] = React.useState("");
+  const [open, setOpen] = React.useState(false);
+  const [picked, setPicked] = React.useState("");
+  const wrapRef = React.useRef(null);
+  const todayRef = React.useRef(null);
 
   React.useEffect(() => {
-    get("/api/calendar?days=2").then((d) => setEvents(d.events)).catch(() => {});
+    get("/api/calendar?days=7&back=30")
+      .then((d) => setEvents(d.events || [])).catch(() => {});
   }, []);
 
+  React.useEffect(() => {
+    if (!open) return;
+    const close = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    // Land on today — the past sits above, one scroll away.
+    setTimeout(() => todayRef.current?.scrollIntoView({ block: "start" }), 0);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+  const firstCurrentIdx = events.findIndex(
+    (e) => new Date(e.start) >= startOfToday);
+  const scrollToToday = () =>
+    todayRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+
+  const pick = async (ev) => {
+    setPicked(`${fmtDate(ev.start)} ${fmtTime(ev.start)} · ${ev.subject}`);
+    setOpen(false);
+    // Only "who" is filled from the calendar — the goal box is yours.
+    live.set({ who: ev.counterparty_name || ev.subject });
+    // Fuzzy-resolve to the manager thread (prep questions, Notion links).
+    const hit = await live.resolveManager(ev.counterparty_name);
+    if (!hit && ev.subject) await live.resolveManager(ev.subject);
+  };
+
   return (
-    <select value={idx} style={inputStyle} onChange={async (e) => {
-      setIdx(e.target.value);
-      const ev = events[+e.target.value];
-      if (ev) {
-        // Only "who" is filled from the calendar — the goal box is yours.
-        live.set({ who: ev.counterparty_name || ev.subject });
-        // Fuzzy-resolve to the manager thread (prep questions, Notion links).
-        const hit = await live.resolveManager(ev.counterparty_name);
-        if (!hit && ev.subject) await live.resolveManager(ev.subject);
-      }
-    }}>
-      <option value="">— pick a meeting —</option>
-      {events.map((e, i) => (
-        <option key={i} value={i}>
-          {fmtDate(e.start)} {fmtTime(e.start)} · {e.subject}
-        </option>
-      ))}
-    </select>
+    <div ref={wrapRef} style={{ position: "relative" }}>
+      <button type="button" onClick={() => setOpen(!open)}
+        style={{ ...inputStyle, width: "100%", textAlign: "left",
+                 cursor: "pointer", background: "var(--paper-000)",
+                 whiteSpace: "nowrap", overflow: "hidden",
+                 textOverflow: "ellipsis",
+                 color: picked ? "inherit" : "var(--stone-400)" }}>
+        {picked || "— pick a meeting —"}
+      </button>
+      {open && (
+        <div style={{ position: "absolute", zIndex: 40, left: 0, right: 0,
+                      top: "calc(100% + 4px)", background: "var(--paper-000)",
+                      border: "1px solid var(--paper-200)",
+                      borderRadius: "var(--radius)",
+                      boxShadow: "0 10px 30px rgba(28,36,48,.14)" }}>
+          <div className="spread" style={{ padding: "7px 12px",
+                        borderBottom: "1px solid var(--paper-200)" }}>
+            <span className="mono" style={{ fontSize: 9.5, letterSpacing: ".1em",
+                                            color: "var(--stone-400)" }}>
+              SCROLL UP FOR PAST MEETINGS
+            </span>
+            <button type="button" className="mono" onClick={scrollToToday}
+              style={{ background: "none", border: "1px solid var(--paper-200)",
+                       borderRadius: 4, cursor: "pointer", padding: "2px 8px",
+                       fontSize: 9.5, letterSpacing: ".1em",
+                       color: "var(--teal-700)" }}>
+              TODAY
+            </button>
+          </div>
+          <div style={{ maxHeight: 280, overflowY: "auto" }}>
+            {events.length === 0 && (
+              <div className="muted" style={{ padding: "10px 12px",
+                                              fontSize: "12.5px" }}>
+                No calendar entries in the window.
+              </div>
+            )}
+            {events.map((e, i) => {
+              const past = i < firstCurrentIdx || firstCurrentIdx === -1;
+              return (
+                <div key={e.id || i}
+                  ref={i === firstCurrentIdx ? todayRef : undefined}
+                  onClick={() => pick(e)}
+                  style={{ padding: "8px 12px", cursor: "pointer",
+                           fontSize: "12.5px", lineHeight: 1.4,
+                           borderTop: i === firstCurrentIdx
+                             ? "2px solid var(--teal-500)" : "none",
+                           color: past ? "var(--brass-700)" : "inherit",
+                           background: past ? "var(--brass-100)" : "transparent" }}
+                  onMouseEnter={(ev) => { ev.currentTarget.style.background = "var(--paper-100)"; }}
+                  onMouseLeave={(ev) => { ev.currentTarget.style.background = past ? "var(--brass-100)" : "transparent"; }}>
+                  <span className="mono" style={{ fontSize: 10,
+                        letterSpacing: ".06em", marginRight: 8,
+                        color: past ? "var(--brass-700)" : "var(--teal-700)" }}>
+                    {past ? "PAST · " : ""}{fmtDate(e.start)} {fmtTime(e.start)}
+                  </span>
+                  {e.subject}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -126,6 +206,7 @@ function TranscriptLibrary() {
                 {(t.started || t.saved_at)
                   ? `${fmtDate(t.started || t.saved_at)} ${fmtTime(t.started || t.saved_at)} · ` : ""}
                 {(t.words || 0).toLocaleString()} WORDS
+                {t.has_note && <span style={{ color: "var(--teal-700)" }}> · NOTE DRAFTED</span>}
                 {t.unfinished && <span style={{ color: "var(--caution-600)" }}> · UNFINISHED</span>}
               </span>
               {t.goal && (
@@ -701,7 +782,7 @@ export default function Live() {
 
       {s.note && (
         <Card accent="brass" style={{ marginTop: 24 }}>
-          <span className="microlabel">NOTE DRAFT · {s.note.note.note_type.toUpperCase()}</span>
+          <span className="microlabel">NOTE DRAFT · {(s.note.note.note_type || "MEETING NOTE").toUpperCase()}</span>
           <Markdown text={s.note.markdown} />
           <div className="row" style={{ flexWrap: "wrap" }}>
             <Button onClick={() => {

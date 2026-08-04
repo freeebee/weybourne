@@ -94,6 +94,10 @@ function sessionPayload() {
     questions: S.items.map((it) => ({
       q: it.q, starred: !!it.starred, flag: !!it.flag, answer: it.answer || null,
     })),
+    // The drafted note is part of the session: it survives Stop, lives in the
+    // library record, and comes back when the transcript is reopened.
+    note_markdown: S.note?.markdown || "",
+    note_fields: S.note?.note || {},
   };
 }
 
@@ -441,6 +445,16 @@ export async function draftNote() {
     catch (e2) { S.error = e2.message; }
   }
   S.noteDraftText = ""; S.busy = ""; emit();
+  // File the finished note with the session straight away — pressing
+  // "Back to start" later must not lose it.
+  if (S.note) {
+    if (S.running) autosaveNow();
+    else if (S.sessionId && S.transcript.trim()) {
+      post("/api/live/finish", sessionPayload())
+        .then(() => { S.librarySaved = true; emit(); })
+        .catch(() => { /* the autosave copy still stands */ });
+    }
+  }
 }
 
 export function newSession() {
@@ -471,6 +485,10 @@ export async function loadFromLibrary(sid) {
     answer: q.answer || null,
   }));
   if (rec.started) S.startedAt = Date.parse(rec.started) || 0;
+  // A note drafted in the original session reappears with it.
+  if (rec.note_markdown) {
+    S.note = { note: rec.note_fields || {}, markdown: rec.note_markdown };
+  }
   emit();
   if (rec.who) resolveManager(rec.who);
 }

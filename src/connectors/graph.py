@@ -396,6 +396,13 @@ class GraphConnector:
         now = _now()
         return self.list_events(now, now + dt.timedelta(days=days))
 
+    def events_window(self, back_days: int, ahead_days: int) -> list[CalendarEvent]:
+        """Events from ``back_days`` ago through ``ahead_days`` ahead — the
+        note taker's picker lets the user scroll back to past meetings."""
+        now = _now()
+        return self.list_events(now - dt.timedelta(days=back_days),
+                                now + dt.timedelta(days=ahead_days))
+
     def find_free_slots(
         self,
         days_ahead: int = 10,

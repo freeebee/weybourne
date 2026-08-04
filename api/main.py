@@ -1091,10 +1091,13 @@ def delete_message(body: DeleteIn):
 # --------------------------------------------------------------------------- #
 
 @app.get("/api/calendar")
-def calendar(days: int = 21):
-    events = _graph.upcoming_events(days=days)
+def calendar(days: int = 21, back: int = 0):
+    """Calendar window: ``days`` ahead and optionally ``back`` days into the
+    past (the note taker's picker scrolls to previous meetings)."""
+    events = (_graph.events_window(back, days) if back > 0
+              else _graph.upcoming_events(days=days))
     out = []
-    for e in events:
+    for e in sorted(events, key=lambda ev: ev.start or ""):
         name, email = counterparty_from_event(e)
         out.append({**e.model_dump(), "counterparty_name": name,
                     "counterparty_email": email})
@@ -1527,13 +1530,19 @@ class LiveSessionIn(BaseModel):
     entries: list[dict] = []
     recaps: list[dict] = []
     questions: list[dict] = []
+    # The drafted note travels with the session, so reopening a library
+    # transcript brings the written note back too.
+    note_markdown: str = ""
+    note_fields: dict = {}
 
 
 def _session_record(body: LiveSessionIn) -> dict:
     return {"id": body.id, "who": body.who, "goal": body.goal,
             "started": body.started, "transcript": body.transcript,
             "entries": body.entries, "recaps": body.recaps,
-            "questions": body.questions}
+            "questions": body.questions,
+            "note_markdown": body.note_markdown,
+            "note_fields": body.note_fields}
 
 
 @app.post("/api/live/autosave")
@@ -1709,7 +1718,8 @@ _REFRESH_PARTS = {
               + "Fetch my top-level Outlook Inbox: the 20 most recent messages from "
                 "the last 7 days. JSON array shape:\n" + _EMAIL_SHAPE),
     "calendar": (_MCP_PREAMBLE
-                 + "Fetch my Outlook calendar events for the next 21 days. JSON array "
+                 + "Fetch my Outlook calendar events from 30 days ago through "
+                   "the next 21 days (past meetings included). JSON array "
                    'shape:\n[{"id": str, "subject": str, "start": ISO8601 str, '
                    '"end": ISO8601 str, "location": str, "organizer": {"name": str, '
                    '"email": str}, "attendees": [{"name": str, "email": str}], '
