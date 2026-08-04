@@ -71,6 +71,29 @@ def list_runs(base: Optional[Path] = None, limit: int = 50) -> list[RunRecord]:
     return out
 
 
+def mark_interrupted_runs(base: Optional[Path] = None) -> list[str]:
+    """Close out runs left flagged 'running' by a process that went away.
+
+    A run whose thread dies — the server reloading mid-run is the usual cause —
+    never reaches _finish, so its record says "running" for ever, it holds no
+    changes, and the review queue quietly goes on showing the previous run's
+    rows. Called at startup: anything still marked running cannot be, because
+    nothing has started yet.
+    """
+    runs, _, _ = _dirs(base)
+    if not runs.exists():
+        return []
+    stale = []
+    for r in list_runs(base, limit=200):
+        if r.status == "running":
+            r.status = "interrupted"
+            r.error = ("the run stopped before it finished — most often the "
+                       "server restarted while it was working")
+            save_run(r, base)
+            stale.append(r.run_id)
+    return stale
+
+
 # -- changes ---------------------------------------------------------------- #
 
 def save_changes(run_id: str, changes: list[ChangeRecord],

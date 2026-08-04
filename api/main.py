@@ -2301,6 +2301,18 @@ def _auto_felix_run():
 
 threading.Thread(target=_auto_felix_run, daemon=True).start()
 
+# A Felix run whose thread died — the server reloading mid-run is the usual
+# cause — leaves its record saying "running" for ever and records nothing, so
+# the review queue silently goes on showing the previous run's rows. Nothing
+# can be running at import time, so anything that says it is, was interrupted.
+try:
+    _stale_runs = felix_store.mark_interrupted_runs()
+    if _stale_runs:
+        print(f"[felix] marked {len(_stale_runs)} interrupted run(s): "
+              + ", ".join(_stale_runs))
+except Exception:  # noqa: BLE001 - never block startup on housekeeping
+    pass
+
 
 # --------------------------------------------------------------------------- #
 # Contact creator — business card (photo / file / paste) → a Notion contact.

@@ -188,6 +188,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                               source: str = "", new_value: str = "",
                               detail: str = "") -> None:
         nonlocal seq
+        _supersede_older(db_card["id"], prop, "recommendation")
         rec = ChangeRecord(
             change_id=store.change_id_for(run_id, seq), run_id=run_id,
             timestamp=_now(), database=db_card["db"],
@@ -201,12 +202,28 @@ def felix_run(job: dict, notion, client, options: RunOptions,
         _emit(job, rec)
         counts["recommendations"] += 1
 
+    # Rows this run replaces. A finding re-detected on a later run used to be
+    # appended alongside the old one, so the queue kept showing the FIRST
+    # wording for ever — including evidence written under an older, shorter
+    # truncation limit. The newest row wins; the old one is marked Superseded
+    # rather than deleted, so the history stays intact.
+    def _supersede_older(card_id: str, prop: str, ctype: str) -> None:
+        for old in store.list_all_changes(base=base, review="Awaiting Review",
+                                          limit=5000):
+            if (old.run_id != run_id and old.record_id == card_id
+                    and old.property_changed == prop
+                    and old.change_type == ctype
+                    and old.execution_status != "Applied"):
+                store.update_change(old.change_id,
+                                    {"review_status": "Superseded"}, base)
+
     def record_proposal(db_card: dict, prop: str, value: str, ptype: str,
                         reason: str, source: str = "") -> None:
         """A concrete, ready-to-apply change that waits for the user's
         approval. The exact Notion payload is stored in the snapshot so
         pressing Approve executes precisely this — nothing is re-derived."""
         nonlocal seq
+        _supersede_older(db_card["id"], prop, "fill_missing")
         cid = store.change_id_for(run_id, seq)
         seq += 1
         # Carry what kind of value this is, and the workspace's own options
