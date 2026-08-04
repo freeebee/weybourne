@@ -3,237 +3,13 @@
    real change events. */
 import React from "react";
 import * as fx from "../felixStore.js";
+import PixelOfficeScene, {
+  CleanupHud, StationStrip, StatusConsole,
+} from "./PixelOffice.jsx";
 import {
-  Banner, Button, Card, Chip, ErrorNote, Mascot, PageHeader, SectionHead,
+  Banner, Button, Card, Chip, ErrorNote, PageHeader, SectionHead,
   fmtDT, inputStyle,
 } from "../ui.jsx";
-
-const STATION_X = { contacts: 8, companies: 29, funds: 50, notes: 70, research: 90 };
-
-function Station({ kind, x, active }) {
-  const art = {
-    contacts: (
-      <svg viewBox="0 0 90 110" width="72">
-        <rect x="10" y="8" width="70" height="94" rx="4" fill="#C9B392" />
-        {[0, 1, 2].map((i) => (
-          <g key={i}>
-            <rect x="16" y={14 + i * 30} width="58" height="24" rx="2" fill="#B39C79" />
-            <rect x="38" y={23 + i * 30} width="14" height="5" rx="2" fill="#8A6642" />
-          </g>
-        ))}
-      </svg>),
-    companies: (
-      <svg viewBox="0 0 90 110" width="72">
-        <rect x="8" y="6" width="74" height="98" rx="3" fill="#C9B392" />
-        {[0, 1, 2].map((i) => (
-          <rect key={i} x="14" y={14 + i * 30} width="62" height="4" fill="#8A6642" />
-        ))}
-        {[0, 1, 2].map((i) => (
-          <g key={i}>
-            <rect x={16 + i * 4} y={18 + i * 30 - 12} width="0" height="0" />
-            <rect x="18" y={-8 + 30 * (i + 1)} width="9" height="18" rx="1" fill="#2F6688" />
-            <rect x="30" y={-6 + 30 * (i + 1)} width="9" height="16" rx="1" fill="#249692" />
-            <rect x="42" y={-9 + 30 * (i + 1)} width="9" height="19" rx="1" fill="#B0894E" />
-            <rect x="54" y={-7 + 30 * (i + 1)} width="9" height="17" rx="1" fill="#41688A" />
-          </g>
-        ))}
-      </svg>),
-    funds: (
-      <svg viewBox="0 0 90 110" width="72">
-        <rect x="12" y="10" width="66" height="92" rx="6" fill="#2F6688" />
-        <rect x="18" y="16" width="54" height="80" rx="4" fill="#41688A" />
-        <circle cx="45" cy="52" r="15" fill="none" stroke="#C9B392" strokeWidth="5" />
-        <circle cx="45" cy="52" r="5" fill="#C9B392" />
-        <rect x="60" y="46" width="7" height="12" rx="2" fill="#B0894E" />
-      </svg>),
-    notes: (
-      <svg viewBox="0 0 90 110" width="72">
-        <rect x="6" y="66" width="78" height="8" rx="2" fill="#C9B392" />
-        <rect x="12" y="74" width="8" height="30" fill="#B39C79" />
-        <rect x="70" y="74" width="8" height="30" fill="#B39C79" />
-        <rect x="16" y="38" width="34" height="28" rx="2" fill="#F7F3EA" stroke="#C9B392" />
-        <g stroke="#8298A6" strokeWidth="2">
-          <path d="M21 46 h24" /><path d="M21 52 h24" /><path d="M21 58 h16" />
-        </g>
-        <rect x="54" y="46" width="22" height="20" rx="2" fill="#249692" opacity=".8" />
-      </svg>),
-    research: (
-      <svg viewBox="0 0 90 110" width="72">
-        <rect x="6" y="66" width="78" height="8" rx="2" fill="#C9B392" />
-        <rect x="12" y="74" width="8" height="30" fill="#B39C79" />
-        <rect x="70" y="74" width="8" height="30" fill="#B39C79" />
-        <rect x="22" y="28" width="46" height="32" rx="3" fill="#1C2430" />
-        <rect x="26" y="32" width="38" height="24" fill="#249692" />
-        <g fill="#F7F3EA">
-          <rect x="29" y="36" width="20" height="2" />
-          <rect x="29" y="41" width="28" height="2" />
-          <rect x="29" y="46" width="16" height="2" />
-          <rect x="29" y="51" width="24" height="2" />
-        </g>
-        <rect x="41" y="60" width="8" height="6" fill="#1C2430" />
-        <rect x="28" y="61" width="26" height="5" rx="1" fill="#41688A" />
-      </svg>),
-  }[kind];
-  return (
-    <div style={{ position: "absolute", left: `${x}%`, top: 132,
-                  transform: "translateX(-50%)", textAlign: "center",
-                  transformOrigin: "50% 100%",
-                  animation: active ? "fx-wobble .55s ease-in-out infinite" : "none" }}>
-      {art}
-      <div className="mono" style={{ fontSize: 9.5, letterSpacing: ".14em",
-                                     color: "var(--stone-500)", marginTop: 2 }}>
-        {kind.toUpperCase()}
-      </div>
-    </div>
-  );
-}
-
-function Scene({ scene }) {
-  const x = STATION_X[scene.zone] ?? 50;
-  const fixing = scene.activity === "fix";
-  const typing = scene.activity === "type";
-  return (
-    <Card style={{ padding: 0, overflow: "hidden" }}>
-      <div style={{ position: "relative", height: 330,
-                    background: "linear-gradient(var(--paper-050) 72%, var(--paper-200) 72.5%, var(--paper-100) 73%)" }}>
-        {Object.entries(STATION_X).map(([kind, sx]) => (
-          <Station key={kind} kind={kind} x={sx}
-            active={(fixing || typing) && scene.zone === kind} />
-        ))}
-
-        {/* POWER UP splash on run start */}
-        {scene.power && scene.powerBanner > 0 && (
-          <div key={scene.powerBanner} className="mono"
-            style={{ position: "absolute", left: "50%", top: "42%", zIndex: 5,
-                     transform: "translate(-50%,-50%)",
-                     background: "var(--ink-800)", color: "#FDE68A",
-                     border: "3px solid #E25822", borderRadius: 4,
-                     padding: "10px 22px", fontSize: 20, fontWeight: 700,
-                     letterSpacing: ".22em", textIndent: ".22em",
-                     animation: "fx-power 2.8s steps(24) forwards" }}>
-            POWER UP
-          </div>
-        )}
-
-        {/* Felix — his wrench hand is on his right (viewer left), so he
-            stands just right of the station and works on it. Fixing swaps
-            the hero/strike frames; walking bounces the hero pose along. */}
-        <div className={"fx-sprite" + (scene.power ? " powered" : "")}
-          style={{ position: "absolute",
-                   left: `calc(${x}% - ${scene.activity === "walk" ? 55 : 6}px)`,
-                   top: 118, width: 110,
-                   animation: scene.activity === "walk"
-                     ? "fx-hop .38s ease-in-out infinite" : "none" }}>
-          <div style={{ position: "relative", height: 134 }}>
-            {fixing || typing ? (
-              <>
-                {/* Typing at the research desk swaps the frames twice as
-                    fast — furious keyboard work rather than wrench swings. */}
-                <div style={{ position: "absolute", inset: 0,
-                              animation: `px-swapA ${typing ? ".24s" : ".52s"} steps(1) infinite` }}>
-                  <Mascot state="felix-hero" width={110} />
-                </div>
-                <div style={{ position: "absolute", inset: 0,
-                              animation: `px-swapB ${typing ? ".24s" : ".52s"} steps(1) infinite` }}>
-                  <Mascot state="felix-strike" width={110} />
-                </div>
-              </>
-            ) : (
-              <Mascot state="felix-hero" width={110} />
-            )}
-          </div>
-          {scene.labels.map((l, i) => (
-            <div key={l.id}
-              onAnimationEnd={() => fx.dropLabel(l.id)}
-              style={{ position: "absolute", top: -14 - i * 6, left: "50%",
-                       whiteSpace: "nowrap", zIndex: 6,
-                       fontSize: 13.5, fontWeight: 700, padding: "5px 12px",
-                       borderRadius: 10, background: "#FFFFFF",
-                       border: "2px solid var(--ink-800)",
-                       boxShadow: "2px 2px 0 rgba(28,36,48,.25)",
-                       color: l.tone === "positive" ? "var(--teal-700)"
-                         : l.tone === "caution" ? "var(--caution-600)"
-                         : "var(--ink-700)",
-                       animation: "fx-bubble 2.4s steps(20) forwards" }}>
-              {l.text}
-              <span style={{ position: "absolute", left: 16, bottom: -7,
-                             width: 0, height: 0,
-                             borderLeft: "6px solid transparent",
-                             borderRight: "6px solid transparent",
-                             borderTop: "7px solid var(--ink-800)" }} />
-            </div>
-          ))}
-        </div>
-        <div className="mono" style={{ position: "absolute", left: 14, bottom: 10,
-              fontSize: 10.5, letterSpacing: ".1em", color: "var(--stone-500)" }}>
-          {scene.caption.toUpperCase()}{scene.power ? " · POWERED UP" : ""}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-/* Game-Dev-Story-style tracker: pixel icon + chunky count, everything Felix
-   has cleaned up since the start. */
-function Tracker({ stats }) {
-  if (!stats) return null;
-  const icon = (draw) => (
-    <svg viewBox="0 0 10 10" width="22" shapeRendering="crispEdges">{draw}</svg>
-  );
-  const wrench = icon(<>
-    <rect x="2" y="6" width="6" height="2" fill="#9FB2BD" transform="rotate(-45 5 7)" />
-    <rect x="6" y="1" width="3" height="3" fill="#9FB2BD" />
-    <rect x="7" y="2" width="2" height="1" fill="#F7F3EA" /></>);
-  const pair = icon(<>
-    <rect x="1" y="2" width="3" height="3" fill="#41688A" />
-    <rect x="6" y="2" width="3" height="3" fill="#B0894E" />
-    <rect x="2" y="6" width="6" height="2" fill="#249692" /></>);
-  const link = icon(<>
-    <rect x="1" y="4" width="4" height="2" fill="#249692" />
-    <rect x="5" y="4" width="4" height="2" fill="#41688A" />
-    <rect x="4" y="3" width="2" height="4" fill="#1C2430" /></>);
-  const drop = icon(<>
-    <rect x="4" y="1" width="2" height="2" fill="#41688A" />
-    <rect x="3" y="3" width="4" height="4" fill="#41688A" />
-    <rect x="2" y="5" width="6" height="3" fill="#2F6688" /></>);
-  const flag = icon(<>
-    <rect x="2" y="1" width="1" height="8" fill="#1C2430" />
-    <rect x="3" y="1" width="5" height="3" fill="#D97706" /></>);
-  const rewind = icon(<>
-    <rect x="1" y="4" width="3" height="2" fill="#8C4038" />
-    <rect x="4" y="3" width="2" height="4" fill="#8C4038" />
-    <rect x="6" y="2" width="2" height="6" fill="#8C4038" /></>);
-  const items = [
-    [wrench, stats.applied_total, "fixes"],
-    [pair, stats.by_type?.merge || 0, "merges"],
-    [drop, stats.by_type?.fill_missing || 0, "fills"],
-    [link, stats.by_type?.fix_relation || 0, "links"],
-    [flag, stats.recommendations, "flagged"],
-    [rewind, stats.undone, "undone"],
-  ];
-  return (
-    <div style={{ display: "flex", gap: 26, alignItems: "center",
-                  flexWrap: "wrap", padding: "10px 16px", margin: "14px 0 18px",
-                  background: "var(--paper-000)",
-                  border: "1px solid var(--paper-200)",
-                  borderRadius: "var(--radius)" }}>
-      <span className="mono" style={{ fontSize: 9.5, letterSpacing: ".14em",
-                                      color: "var(--stone-400)" }}>
-        CLEANED UP SINCE THE START
-      </span>
-      {items.map(([ic, v, label], i) => (
-        <span key={i} title={label}
-          style={{ display: "inline-flex", gap: 7, alignItems: "center" }}>
-          {ic}
-          <b style={{ fontSize: 21, color: "var(--ink-600)",
-                      fontVariantNumeric: "tabular-nums" }}>
-            {(v ?? 0).toLocaleString()}
-          </b>
-        </span>
-      ))}
-    </div>
-  );
-}
 
 function RunPanel({ s }) {
   const job = s.runJob;
@@ -859,8 +635,16 @@ function ChangeRow({ c, s }) {
 export default function FixItFelix() {
   React.useSyncExternalStore(fx.subscribe, fx.getVersion);
   const s = fx.S;
+  const [narrow, setNarrow] = React.useState(
+    typeof window !== "undefined" && window.innerWidth < 820);
 
   React.useEffect(() => { fx.restore(); }, []);
+
+  React.useEffect(() => {
+    const onResize = () => setNarrow(window.innerWidth < 820);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   return (
     <div className="fade-in">
@@ -877,11 +661,21 @@ export default function FixItFelix() {
       )}
 
       {/* Sticky: the workshop scrolls WITH you through the change log, so
-          Felix's dash-and-fix theatrics stay in view while reviewing. */}
-      <div style={{ position: "sticky", top: 8, zIndex: 30 }}>
-        <Scene scene={s.scene} />
+          Felix's dash-and-fix theatrics stay in view while reviewing. Below
+          ~820px there is no room for a cinematic room, so the stations become
+          a plain row of buttons doing exactly the same thing. */}
+      {narrow ? (
+        <StationStrip scene={s.scene} onSelect={fx.selectStation} />
+      ) : (
+        <div style={{ position: "sticky", top: 8, zIndex: 30 }}>
+          <PixelOfficeScene scene={s.scene} stats={s.stats}
+            onSelect={fx.selectStation} />
+        </div>
+      )}
+      <div className="px-hudrow">
+        <StatusConsole scene={s.scene} />
+        <CleanupHud stats={s.stats} />
       </div>
-      <Tracker stats={s.stats} />
       <RunPanel s={s} />
       <ReviewTable s={s} />
     </div>

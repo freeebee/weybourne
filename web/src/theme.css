@@ -63,6 +63,92 @@ button{font-family:var(--sans)}
 .fx-sprite.powered{filter:drop-shadow(0 0 6px rgba(226,88,34,.55))}
 @media (prefers-reduced-motion: reduce){.fade-in,[aria-label^="mascot"]{animation:none!important}.fx-sprite{transition:none}}
 
+/* ---- Fix-it Felix: the pixel office --------------------------------------- */
+/* The room is drawn once at 1600x430 and scaled as a single unit, so the
+   furniture, the plaques and Felix keep their proportions to each other at
+   every width and can never drift into one another. */
+.px-office{position:relative;overflow:hidden;width:100%;
+  border:1px solid var(--paper-200);border-radius:var(--radius);
+  background:#F0E8D8}
+.px-stage{position:absolute;top:0;left:0;transform-origin:0 0}
+.px-svg{display:block;image-rendering:pixelated}
+
+/* The plaque is drawn in the SVG; this invisible button over it carries the
+   semantics, the focus ring and the keyboard. */
+.px-hit{position:absolute;padding:0;border:2px solid transparent;
+  background:none;cursor:pointer;border-radius:3px}
+.px-hit:hover{border-color:rgba(28,36,48,.35)}
+.px-hit:focus-visible{outline:none;border-color:var(--teal-500);
+  box-shadow:0 0 0 3px rgba(36,150,146,.45)}
+.px-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+/* Felix walks on integer pixel positions along the floor line. */
+.px-felix{position:absolute;bottom:130px;left:0;width:116px;
+  transition:transform 1.05s cubic-bezier(.35,.05,.25,1);will-change:transform}
+.px-felix-body{position:relative;height:116px;image-rendering:pixelated}
+.px-felix-body.walking{animation:px-step .42s steps(2) infinite}
+.px-felix.powered{filter:drop-shadow(0 0 6px rgba(226,88,34,.5))}
+.px-frame{position:absolute;inset:0}
+@keyframes px-step{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes px-station-shake{0%,100%{transform:translateX(0)}
+  25%{transform:translateX(-2px)}75%{transform:translateX(2px)}}
+.px-station-active{animation:px-station-shake .5s steps(2) infinite}
+
+.px-bubble{position:absolute;left:50%;transform:translateX(-50%);
+  white-space:nowrap;z-index:6;font-size:13.5px;font-weight:700;
+  padding:5px 12px;border-radius:10px;background:#FFF;
+  border:2px solid var(--ink-800);box-shadow:2px 2px 0 rgba(28,36,48,.25);
+  animation:fx-bubble 2.4s steps(20) forwards}
+.px-bubble-tail{position:absolute;left:16px;bottom:-7px;width:0;height:0;
+  border-left:6px solid transparent;border-right:6px solid transparent;
+  border-top:7px solid var(--ink-800)}
+.px-powerup{position:absolute;left:50%;top:40%;z-index:5;
+  transform:translate(-50%,-50%);background:var(--ink-800);color:#FDE68A;
+  border:3px solid #E25822;border-radius:4px;padding:10px 22px;
+  font:700 20px/1 var(--mono);letter-spacing:.22em;text-indent:.22em;
+  animation:fx-power 2.8s steps(24) forwards}
+
+/* ---- the HUD under the room ---------------------------------------------- */
+.px-hudrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;
+  align-items:stretch;margin:12px 0 18px}
+.px-console{display:flex;align-items:center;gap:14px;padding:14px 18px;
+  background:var(--ink-800);border:3px solid var(--brass-500);border-radius:4px;
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.06)}
+.px-led{width:11px;height:11px;border-radius:50%;flex:none;
+  background:#3B5468;box-shadow:0 0 0 2px rgba(0,0,0,.35) inset}
+.px-led.on{background:#5BE0A8;animation:px-blink 1.6s steps(2) infinite}
+@keyframes px-blink{0%,100%{opacity:1}50%{opacity:.35}}
+.px-console-text{font:500 15px/1.3 var(--mono);letter-spacing:.14em;
+  color:var(--teal-300)}
+.px-hud{display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+  padding:12px 18px;background:var(--paper-000);
+  border:3px solid var(--brass-500);border-radius:4px}
+.px-hud-title{font:500 10px/1.4 var(--mono);letter-spacing:.14em;
+  color:var(--stone-500)}
+.px-hud-counts{display:flex;gap:10px;flex-wrap:wrap}
+.px-hud-item{display:inline-flex;gap:8px;align-items:center;padding:5px 11px;
+  background:var(--paper-050);border:1px solid var(--paper-200);border-radius:3px}
+.px-hud-item b{font-size:19px;color:var(--ink-700);font-variant-numeric:tabular-nums}
+.px-hud-item svg{image-rendering:pixelated}
+
+/* ---- narrow fallback ------------------------------------------------------ */
+.px-strip{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.px-strip-btn{cursor:pointer;padding:9px 14px;border-radius:3px;
+  background:var(--paper-000);border:1px solid var(--paper-200);
+  font:500 11px/1 var(--mono);letter-spacing:.12em;color:var(--stone-600)}
+.px-strip-btn.on{background:var(--teal-100);border-color:var(--teal-500);
+  color:var(--teal-700)}
+@media (max-width: 780px){
+  .px-hudrow{grid-template-columns:minmax(0,1fr)}
+  .px-console-text{font-size:12.5px;letter-spacing:.1em}
+}
+@media (prefers-reduced-motion: reduce){
+  .px-felix{transition:none}
+  .px-felix-body.walking,.px-station-active,.px-led.on,.px-bubble,.px-powerup{
+    animation:none!important}
+}
+
 /* ---- App shell ------------------------------------------------------------ */
 .shell{display:grid;grid-template-columns:236px minmax(0,1fr);min-height:100vh}
 .sidebar{background:var(--ink-800);position:sticky;top:0;height:100vh;

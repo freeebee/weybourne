@@ -160,9 +160,10 @@ export default function Splash({ children, speed = 1, onDone }) {
     setPhase("hold");
     // The hold covers the whole bit: arms land (~0.8s), a long stretch of
     // accelerating typing (~1.5s), wind-up + double keyboard slam + grimace
-    // (~2.5s), then the veil leaves quickly while CHAO is still mid-scream.
-    setTimeout(() => setPhase("leave"), 3300 * speed);
-    if (onDone) setTimeout(onDone, 4400 * speed);   // after the veil dissolve
+    // (~2.5s). The veil then starts leaving almost on top of the scream —
+    // the joke is the scream, and holding on it past the laugh kills it.
+    setTimeout(() => setPhase("leave"), 2850 * speed);
+    if (onDone) setTimeout(onDone, 3800 * speed);   // after the veil dissolve
   };
 
   const entered = phase !== "idle";
@@ -217,7 +218,7 @@ export default function Splash({ children, speed = 1, onDone }) {
                 <WbChao />
               </span>
               <span className="wb-greeting">
-                {entered ? "CHAO is working very hard…" : "CHAO at your service"}
+                {entered ? "CHAO is preparing your workstation…" : "CHAO at your service"}
               </span>
             </div>
             <div className="wb-signals">

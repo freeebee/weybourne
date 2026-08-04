@@ -17,6 +17,7 @@ export const S = {
   lastResult: null,
   scene: {
     zone: "contacts", activity: "tinker",  // tinker | walk | fix | type
+    selected: "",          // the station the user clicked, if any
     labels: [], caption: "tinkering…",
     power: false,          // POWER UP: a run is underway — flames on
     powerBanner: 0,        // timestamp key; re-renders the POWER UP splash
@@ -85,6 +86,29 @@ export async function fetchChanges(filter) {
     const d = await get(`/api/felix/changes?${q}&limit=100`);
     S.changes = d.changes || [];
   } catch (e) { S.error = e.message; }
+  emit();
+}
+
+/* Clicking a station is a real action, not decoration: Felix walks over and
+   the review list below filters to that database. Clicking it again clears
+   the filter. The research desk has no database of its own — it stands for
+   the web lookups, so it just sends him there. */
+export function selectStation(zone) {
+  const same = S.scene.selected === zone;
+  S.scene.selected = same ? "" : zone;
+  if (!same) {
+    if (S.scene.zone !== zone) {
+      S.scene.zone = zone;
+      S.scene.activity = "walk";
+      S.scene.caption = `heading to ${zone}…`;
+      phaseUntil = Date.now() + 1100;
+    }
+    const db = ZONES.includes(zone) ? zone : "";
+    fetchChanges({ ...S.changesFilter, db });
+  } else {
+    const { db, ...rest } = S.changesFilter;   // eslint-disable-line no-unused-vars
+    fetchChanges(rest);
+  }
   emit();
 }
 
