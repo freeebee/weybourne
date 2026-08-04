@@ -158,11 +158,11 @@ export default function Splash({ children, speed = 1, onDone }) {
   const enter = () => {
     if (phase !== "idle") return;
     setPhase("hold");
-    // The hold covers the whole bit: arms land (~0.8s), typing accelerates,
-    // wind-up, double keyboard slam + grimace (~3.2s), then the veil leaves
-    // while CHAO is still mid-rage.
-    setTimeout(() => setPhase("leave"), 3400 * speed);
-    if (onDone) setTimeout(onDone, 4500 * speed);   // after the veil dissolve
+    // The hold covers the whole bit: arms land (~0.8s), a long stretch of
+    // accelerating typing (~1.5s), wind-up + double keyboard slam + grimace
+    // (~2.5s), then the veil leaves quickly while CHAO is still mid-scream.
+    setTimeout(() => setPhase("leave"), 3300 * speed);
+    if (onDone) setTimeout(onDone, 4400 * speed);   // after the veil dissolve
   };
 
   const entered = phase !== "idle";
