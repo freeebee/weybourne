@@ -386,18 +386,37 @@ function describeChange(c) {
 /* The two records of a proposed merge, side by side — everything each copy
    holds, what moves over, and any conflicting values — so approving needs no
    digging around in Notion. */
-function MergeCompare({ detail, done }) {
+function MergeCompare({ detail, done, keepId, onPick }) {
   let d;
   try { d = JSON.parse(detail); } catch { return null; }
   if (!d || !d.keep || !d.archive) return null;
-  const col = (rec, label, tone) => (
-    <div style={{ flex: "1 1 220px", minWidth: 200, padding: "8px 11px",
-                  background: "var(--paper-050)",
-                  border: "1px solid var(--paper-200)",
-                  borderTop: `2px solid var(${tone})`,
-                  borderRadius: 4 }}>
+  // Older rows carry no per-record id; keep is pair[0], archive is pair[1].
+  const idOf = (rec, i) => rec.id || (d.pair || [])[i] || "";
+  const pickable = !!onPick && !done;
+  const col = (rec, label, tone, i) => {
+    const id = idOf(rec, i);
+    const chosen = pickable && keepId === id;
+    const other = pickable && keepId && keepId !== id;
+    return (
+    <div onClick={pickable ? () => onPick(id) : undefined}
+         role={pickable ? "button" : undefined}
+         tabIndex={pickable ? 0 : undefined}
+         onKeyDown={pickable ? (e) => {
+           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(id); }
+         } : undefined}
+         style={{ flex: "1 1 220px", minWidth: 200, padding: "8px 11px",
+                  background: chosen ? "var(--teal-050, #EAF4F3)"
+                    : other ? "var(--paper-100)" : "var(--paper-050)",
+                  border: `1px solid ${chosen ? "var(--teal-500)" : "var(--paper-200)"}`,
+                  borderTop: `2px solid ${chosen ? "var(--teal-500)" : `var(${tone})`}`,
+                  borderRadius: 4,
+                  opacity: other ? 0.62 : 1,
+                  cursor: pickable ? "pointer" : "default",
+                  transition: "background .15s ease, opacity .15s ease, border-color .15s ease" }}>
       <div className="mono" style={{ fontSize: 9.5, letterSpacing: ".1em",
-                                     color: "var(--stone-500)" }}>{label}</div>
+                                     color: chosen ? "var(--teal-700)" : "var(--stone-500)" }}>
+        {chosen ? "KEEPING THIS ONE" : other ? "WILL BE ARCHIVED" : label}
+      </div>
       <b style={{ fontSize: "13px" }}>{rec.name}</b>
       {rec.created && (
         <span className="mono" style={{ fontSize: 9.5, marginLeft: 6,
@@ -434,14 +453,21 @@ function MergeCompare({ detail, done }) {
         </div>
       </div>
     </div>
-  );
+    );
+  };
   return (
     <div style={{ marginTop: 8 }}>
+      {pickable && (
+        <div className="mono" style={{ fontSize: 9.5, letterSpacing: ".08em",
+                                       color: "var(--stone-500)", marginBottom: 5 }}>
+          CLICK THE COPY TO KEEP — THE OTHER IS ARCHIVED
+        </div>
+      )}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {col(d.keep, done ? "KEPT — THE RICHER COPY" : "WOULD KEEP — THE RICHER COPY",
-             "--positive-600")}
-        {col(d.archive, done ? "ARCHIVED — THE DUPLICATE" : "WOULD ARCHIVE",
-             "--caution-600")}
+        {col(d.keep, done ? "KEPT — THE RICHER COPY" : "FELIX WOULD KEEP THIS",
+             "--positive-600", 0)}
+        {col(d.archive, done ? "ARCHIVED — THE DUPLICATE" : "WOULD BE ARCHIVED",
+             "--caution-600", 1)}
       </div>
       {d.web_check && (
         <div style={{ fontSize: "12px", marginTop: 6,
@@ -540,14 +566,27 @@ function ReviewTable({ s }) {
         <p className="muted small">Nothing waiting — run Felix, or switch the
           view to see easy fixes or past decisions.</p>
       )}
-      {rows.map((c) => {
-        const d = describeChange(c);
-        const [statusWord, statusTone] = STATUS_WORDS[c.execution_status]
-          || [c.execution_status.toUpperCase(), "neutral"];
-        const awaiting = c.review_status === "Awaiting Review";
-        const applied = c.execution_status === "Applied";
-        return (
-          <Card key={c.change_id} style={{ padding: "13px 16px", marginBottom: 8 }}>
+      {rows.map((c) => <ChangeRow key={c.change_id} c={c} s={s} />)}
+    </div>
+  );
+}
+
+/* One finding: what was wrong, the evidence, and the decision. Duplicate rows
+   let the reviewer pick which copy survives before approving. */
+function ChangeRow({ c, s }) {
+  const [keepId, setKeepId] = React.useState("");
+  const d = describeChange(c);
+  const [statusWord, statusTone] = STATUS_WORDS[c.execution_status]
+    || [c.execution_status.toUpperCase(), "neutral"];
+  const awaiting = c.review_status === "Awaiting Review";
+  const applied = c.execution_status === "Applied";
+  const isDup = c.detail && (c.change_type === "merge"
+    || (c.property_changed || "").includes("duplicate"));
+  // A distinct verdict is not a merge proposal, so there is nothing to pick.
+  const canPick = isDup && awaiting && !applied
+    && !(c.reason || "").includes("DISTINCT");
+  return (
+          <Card style={{ padding: "13px 16px", marginBottom: 8 }}>
             <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
               <b style={{ fontSize: "14px" }}>
                 {c.record_name || "(unnamed record)"}
@@ -570,9 +609,9 @@ function ReviewTable({ s }) {
             )}
             {/* Any duplicate finding shows both records side by side, not
                 just an executed merge — the evidence is what makes the call. */}
-            {c.detail && (c.change_type === "merge"
-              || (c.property_changed || "").includes("duplicate")) && (
-              <MergeCompare detail={c.detail} done={applied} />
+            {isDup && (
+              <MergeCompare detail={c.detail} done={applied}
+                keepId={keepId} onPick={canPick ? setKeepId : undefined} />
             )}
             {d.source && (
               <div className="muted" style={{ fontSize: "12px", marginTop: 3 }}>
@@ -591,7 +630,9 @@ function ReviewTable({ s }) {
               {awaiting ? (
                 <>
                   <Button variant="dark" busy={s.busy === `review-${c.change_id}`}
-                    onClick={() => fx.review(c.change_id, "approve")}>Approve</Button>
+                    onClick={() => fx.review(c.change_id, "approve", keepId)}>
+                    {canPick && keepId ? "Approve — keep the chosen copy" : "Approve"}
+                  </Button>
                   <Button variant="ghost" busy={s.busy === `review-${c.change_id}`}
                     onClick={() => fx.review(c.change_id,
                                              applied ? "undo" : "dismiss")}>
@@ -613,9 +654,6 @@ function ReviewTable({ s }) {
               )}
             </div>
           </Card>
-        );
-      })}
-    </div>
   );
 }
 

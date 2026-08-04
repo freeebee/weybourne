@@ -170,10 +170,11 @@ function attach(jobId) {
 
 // ---- review --------------------------------------------------------------- //
 
-export async function review(changeId, action) {
+export async function review(changeId, action, survivorId = "") {
   S.busy = `review-${changeId}`; emit();
   try {
-    const res = await post(`/api/felix/changes/${changeId}/review`, { action });
+    const res = await post(`/api/felix/changes/${changeId}/review`,
+                           { action, survivor_id: survivorId });
     const next = { approve: "Approved", dismiss: "Dismissed",
                    undo: "Undo Requested" }[action];
     const change = S.changes.find((c) => c.change_id === changeId);

@@ -71,7 +71,9 @@ def _merge_detail(survivor: dict, loser: dict, transfers: dict,
                 v = [names_by_id.get(i, "(unknown)") for i in c["relations"][k]]
             s = ", ".join(map(str, v)) if isinstance(v, list) else str(v)
             fields[k] = s[:120]
-        return {"name": c["name"], "created": (c.get("created") or "")[:10],
+        return {"id": c["id"], "name": c["name"],
+                "created": (c.get("created") or "")[:10],
+                "url": c.get("url", ""),
                 "fields": fields,
                 "notes": [n[:70] for n in notes_by_id.get(c["id"], [])[:5]],
                 "note_count": len(notes_by_id.get(c["id"], []))}

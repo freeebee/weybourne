@@ -1920,6 +1920,9 @@ def felix_changes(status: str = "", review: str = "", db: str = "",
 
 class FelixReviewIn(BaseModel):
     action: str          # approve | undo
+    # Which record of a duplicate pair to keep. Empty means Felix's own pick
+    # (the richer copy); the reviewer can override it in the side-by-side.
+    survivor_id: str = ""
 
 
 _FELIX_TOPUP = {"last": 0.0}
@@ -2029,11 +2032,14 @@ def felix_review(change_id: str, body: FelixReviewIn):
             # Approve EXECUTES the merge: fetch fresh, keep the richer record
             # (or the planned survivor), transfer, repoint, archive.
             from src.features.felix import run as felix_runmod
+            # The reviewer's choice of which copy to keep wins over Felix's.
+            chosen = body.survivor_id if body.survivor_id in _pair else ""
             out = felix_runmod.merge_pair_now(
                 _notion, _pair, change.database,
                 source="approved in review — " + (change.source or "")[:150],
                 reason=(change.reason or "")[:300],
-                survivor_id=_pair[0] if change.change_type == "merge" else "")
+                survivor_id=chosen or (_pair[0] if change.change_type == "merge"
+                                       else ""))
             result["execution_status"] = out.get("status", "")
             if out.get("status") == "Applied":
                 _notion.invalidate_cache()
