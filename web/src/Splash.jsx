@@ -1,10 +1,19 @@
-/* Weybourne FI assistant — opening animation (design_handoff_opening_animation).
-   Mounts OVER the app shell; the timeline plays, then waits on the ENTER APP
-   button — clicking it dissolves the veil and the app rises in underneath.
-   Plays once per session; prefers-reduced-motion collapses it to instant. */
+/* Weybourne Investment Connector — opening animation.
+   Ported natively from the Remotion "precision opening" (design bundle
+   weybourne-remotion-opening): precision grid, brand blades flying in,
+   editorial hero, signal lines converging, and the ENTER APP gate. Runs as
+   CSS timeline over the real app shell, so pressing ENTER APP dissolves the
+   veil straight into the live interface — no pre-rendered video, no mock
+   screen. Plays once per session; prefers-reduced-motion collapses it. */
 import React from "react";
 import { Mascot } from "./ui.jsx";
 import "./splash.css";
+
+const SIGNALS = [
+  ["INBOX", "Triage with context"],
+  ["MEETINGS", "Notes that write themselves"],
+  ["NOTION", "A workspace that keeps itself clean"],
+];
 
 export default function Splash({ children, speed = 1, onDone }) {
   const [entered, setEntered] = React.useState(false);
@@ -16,7 +25,7 @@ export default function Splash({ children, speed = 1, onDone }) {
   const enter = () => {
     if (entered) return;
     setEntered(true);
-    if (onDone) setTimeout(onDone, 800 * speed);   // after the veil dissolve
+    if (onDone) setTimeout(onDone, 950 * speed);   // after the veil dissolve
   };
 
   return (
@@ -25,32 +34,65 @@ export default function Splash({ children, speed = 1, onDone }) {
       <div className="wb-app">{children}</div>
 
       <div className="wb-veil">
+        {/* Precision grid + roaming scan line + teal glow */}
+        <div className="wb-grid" />
+        <div className="wb-scan" />
         <div className="wb-veil-glow" />
-        <div className="wb-lockup">
-          <div className="wb-mark-slot">
-            <div className="wb-mark">
-              <i className="wb-stroke" /><i className="wb-stroke" /><i className="wb-stroke" />
-              <i className="wb-stroke" /><i className="wb-stroke" />
+
+        <div className="wb-corner wb-corner-l">
+          WEYBOURNE FAMILY OFFICE · LONDON · SINGAPORE
+        </div>
+        <div className="wb-corner wb-corner-r">
+          <i className="wb-brass-tick" />INVESTMENT CONNECTOR
+        </div>
+
+        <div className="wb-stage">
+          {/* Left: the hero */}
+          <div className="wb-hero">
+            <div className="wb-mark-slot">
+              <div className="wb-mark">
+                <i className="wb-stroke" /><i className="wb-stroke" /><i className="wb-stroke" />
+                <i className="wb-stroke" /><i className="wb-stroke" />
+              </div>
+            </div>
+            <div className="wb-eyebrow">OUTLOOK · NOTION · CALENDAR · MEETINGS</div>
+            <h1 className="wb-headline">Connecting your<br />investment tools.</h1>
+            <div className="wb-rule" />
+            <div className="wb-sub">
+              One desk that reads the inbox, preps the meeting, takes the note
+              and keeps the workspace clean.
+            </div>
+            <button type="button" className="wb-enter" onClick={enter}>
+              <span className="wb-sheen" />
+              <span className="wb-enter-ring" />
+              ENTER APP <span className="wb-arrow">→</span>
+            </button>
+          </div>
+
+          {/* Right: the mascot and the signals that converge on him */}
+          <div className="wb-side">
+            <div className="wb-mascot-block">
+              <span className="wb-mascot" role="img"
+                    aria-label="CHAO, the Weybourne assistant">
+                <Mascot state={entered ? "working" : "waving"} width={176} />
+              </span>
+              <span className="wb-greeting">CHAO at your service</span>
+            </div>
+            <div className="wb-signals">
+              {SIGNALS.map(([label, detail], i) => (
+                <div key={label} className="wb-signal" style={{ "--i": i }}>
+                  <span className="wb-diamond" />
+                  <span className="wb-signal-label">{label}</span>
+                  <span className="wb-signal-line" />
+                  <span className="wb-signal-detail">{detail}</span>
+                </div>
+              ))}
             </div>
           </div>
-
-          <div className="wb-text">
-            <div className="wb-wordmark">Weybourne</div>
-            <div className="wb-rule" />
-            <div className="wb-eyebrow">FI ASSISTANT</div>
-          </div>
-
-          <div className="wb-mascot-block">
-            <span className="wb-mascot" role="img" aria-label="Wey, the Weybourne assistant">
-              <Mascot state="waving" width={176} />
-            </span>
-            <span className="wb-greeting">CHAO at your service</span>
-          </div>
-
-          <button type="button" className="wb-enter" onClick={enter}>
-            ENTER APP
-          </button>
         </div>
+
+        {/* Activation: the teal line that sweeps across on ENTER APP */}
+        <div className="wb-centerline" />
       </div>
     </div>
   );
