@@ -1908,6 +1908,54 @@ class FelixReviewIn(BaseModel):
     action: str          # approve | undo
 
 
+_FELIX_TOPUP = {"last": 0.0}
+
+
+def _felix_topup_if_low():
+    """Keep the review queue stocked: when clearing decisions drops the pool
+    of outstanding suggestions below ten, quietly start another dry run (which
+    researches the next unsure items — decided pairs are never re-searched)."""
+    if time.time() - _FELIX_TOPUP["last"] < 900:
+        return
+    with _JOBS_LOCK:
+        if any(j["kind"] == "felix" and j["status"] == "running"
+               for j in _JOBS.values()):
+            return
+    waiting = [c for c in felix_store.list_all_changes(
+                   review="Awaiting Review", limit=300)
+               if c.execution_status in ("Proposed", "Recommended",
+                                         "Planned (dry-run)")]
+    if len(waiting) >= 10:
+        return
+    client = _client()
+    if client is None:
+        return
+    _FELIX_TOPUP["last"] = time.time()
+    opts = FelixRunOptions(dry_run=True)
+
+    def work(job: dict):
+        return felix_run(job, _notion, client, opts,
+                         checkpoint=lambda: _checkpoint(job))
+
+    _start_job("felix", "Felix top-up (dry run)", work)
+
+
+def _resolve_reviewed_pair(change, action: str) -> None:
+    """A human decision on a duplicate finding settles that pair for good —
+    future runs neither re-flag nor re-research it."""
+    try:
+        pair = (json.loads(change.detail or "{}")).get("pair") or []
+    except Exception:  # noqa: BLE001
+        pair = []
+    if len(pair) != 2:
+        return
+    if (change.change_type == "recommendation"
+            and "duplicate" in change.property_changed):
+        felix_store.resolve_pair(pair[0], pair[1], f"user-{action}")
+    elif change.change_type == "merge" and action == "dismiss":
+        felix_store.resolve_pair(pair[0], pair[1], "user-not-duplicate")
+
+
 @app.post("/api/felix/changes/{change_id}/review")
 def felix_review(change_id: str, body: FelixReviewIn):
     change = felix_store.find_change(change_id)
@@ -1959,10 +2007,14 @@ def felix_review(change_id: str, body: FelixReviewIn):
                               "stored payload — re-run Felix to regenerate it")
         felix_store.update_change(change_id, {"review_status": "Approved"})
         _supersede_siblings()
+        _resolve_reviewed_pair(change, "approve")
+        _felix_topup_if_low()
         return result
     if body.action == "dismiss":
         felix_store.update_change(change_id, {"review_status": "Dismissed"})
         _supersede_siblings()
+        _resolve_reviewed_pair(change, "dismiss")
+        _felix_topup_if_low()
         return {"change_id": change_id, "review_status": "Dismissed"}
     if body.action == "undo":
         felix_store.update_change(change_id,

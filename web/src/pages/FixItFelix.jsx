@@ -8,7 +8,7 @@ import {
   fmtDT, inputStyle,
 } from "../ui.jsx";
 
-const STATION_X = { contacts: 10, companies: 36, funds: 62, notes: 87 };
+const STATION_X = { contacts: 8, companies: 29, funds: 50, notes: 70, research: 90 };
 
 function Station({ kind, x, active }) {
   const art = {
@@ -57,6 +57,22 @@ function Station({ kind, x, active }) {
         </g>
         <rect x="54" y="46" width="22" height="20" rx="2" fill="#249692" opacity=".8" />
       </svg>),
+    research: (
+      <svg viewBox="0 0 90 110" width="72">
+        <rect x="6" y="66" width="78" height="8" rx="2" fill="#C9B392" />
+        <rect x="12" y="74" width="8" height="30" fill="#B39C79" />
+        <rect x="70" y="74" width="8" height="30" fill="#B39C79" />
+        <rect x="22" y="28" width="46" height="32" rx="3" fill="#1C2430" />
+        <rect x="26" y="32" width="38" height="24" fill="#249692" />
+        <g fill="#F7F3EA">
+          <rect x="29" y="36" width="20" height="2" />
+          <rect x="29" y="41" width="28" height="2" />
+          <rect x="29" y="46" width="16" height="2" />
+          <rect x="29" y="51" width="24" height="2" />
+        </g>
+        <rect x="41" y="60" width="8" height="6" fill="#1C2430" />
+        <rect x="28" y="61" width="26" height="5" rx="1" fill="#41688A" />
+      </svg>),
   }[kind];
   return (
     <div style={{ position: "absolute", left: `${x}%`, top: 132,
@@ -75,13 +91,14 @@ function Station({ kind, x, active }) {
 function Scene({ scene }) {
   const x = STATION_X[scene.zone] ?? 50;
   const fixing = scene.activity === "fix";
+  const typing = scene.activity === "type";
   return (
     <Card style={{ padding: 0, overflow: "hidden" }}>
       <div style={{ position: "relative", height: 330,
                     background: "linear-gradient(var(--paper-050) 72%, var(--paper-200) 72.5%, var(--paper-100) 73%)" }}>
         {Object.entries(STATION_X).map(([kind, sx]) => (
           <Station key={kind} kind={kind} x={sx}
-            active={fixing && scene.zone === kind} />
+            active={(fixing || typing) && scene.zone === kind} />
         ))}
 
         {/* POWER UP splash on run start */}
@@ -108,14 +125,16 @@ function Scene({ scene }) {
                    animation: scene.activity === "walk"
                      ? "fx-hop .38s ease-in-out infinite" : "none" }}>
           <div style={{ position: "relative", height: 134 }}>
-            {fixing ? (
+            {fixing || typing ? (
               <>
+                {/* Typing at the research desk swaps the frames twice as
+                    fast — furious keyboard work rather than wrench swings. */}
                 <div style={{ position: "absolute", inset: 0,
-                              animation: "px-swapA .52s steps(1) infinite" }}>
+                              animation: `px-swapA ${typing ? ".24s" : ".52s"} steps(1) infinite` }}>
                   <Mascot state="felix-hero" width={110} />
                 </div>
                 <div style={{ position: "absolute", inset: 0,
-                              animation: "px-swapB .52s steps(1) infinite" }}>
+                              animation: `px-swapB ${typing ? ".24s" : ".52s"} steps(1) infinite` }}>
                   <Mascot state="felix-strike" width={110} />
                 </div>
               </>
@@ -550,7 +569,11 @@ export default function FixItFelix() {
         <Banner>Notion is in demo mode — runs exercise sample data only.</Banner>
       )}
 
-      <Scene scene={s.scene} />
+      {/* Sticky: the workshop scrolls WITH you through the change log, so
+          Felix's dash-and-fix theatrics stay in view while reviewing. */}
+      <div style={{ position: "sticky", top: 8, zIndex: 30 }}>
+        <Scene scene={s.scene} />
+      </div>
       <Tracker stats={s.stats} />
       <RunPanel s={s} />
       <ReviewTable s={s} />

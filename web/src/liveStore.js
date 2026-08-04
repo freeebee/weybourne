@@ -353,11 +353,12 @@ export function keepSharp() {
 }
 
 /* Your own question, added verbatim — marked as key (starred). */
-export function addOwnQuestion(q, starred = true) {
+export function addOwnQuestion(q, starred = true, fromThread = false) {
   const text = (q || "").trim();
   if (!text || S.items.some((it) => it.q === text)) return;
   S.items = [...S.items, {
     id: S.seq++, batch: 0, q: text, flag: false, answer: null, starred,
+    fromThread,
   }];
   emit();
 }
@@ -366,9 +367,17 @@ export function addOwnQuestion(q, starred = true) {
 
 export function setManagerContext(thread) {
   if (!thread || !thread.entity) return;
+  const previous = S.manager;
+  if (previous && previous.entity !== thread.entity) {
+    // Switching managers: the OLD thread's prepped questions leave with it —
+    // even when the new manager has none prepped. Questions the user typed
+    // or that came from reads stay.
+    S.items = S.items.filter((it) => !it.fromThread);
+    if (S.who === previous.entity) S.who = thread.entity;
+  }
   S.manager = thread;
   S.who = S.who || thread.entity;
-  (thread.questions || []).forEach((k) => addOwnQuestion(k.q, true));
+  (thread.questions || []).forEach((k) => addOwnQuestion(k.q, true, true));
   emit();
   persistLibraryRecord();   // retitle the stored session if one is loaded
 }

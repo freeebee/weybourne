@@ -44,6 +44,13 @@ class TestDryRun:
         assert merges[0].record_id == "mc2"
         assert "mc3" in merges[0].new_value
 
+    def test_resolved_pair_never_reflagged(self, tmp_path):
+        # The user decided these two are NOT duplicates — later runs must not
+        # propose the merge again.
+        store.resolve_pair("mc2", "mc3", "user-not-duplicate", base=tmp_path)
+        run_felix(tmp_path, dry=True)
+        assert store.list_all_changes(base=tmp_path, change_type="merge") == []
+
 
 class TestLiveMock:
     def test_live_run_applies_and_snapshots(self, tmp_path):

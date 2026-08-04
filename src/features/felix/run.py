@@ -7,6 +7,7 @@ without a single Notion write.
 """
 from __future__ import annotations
 
+import json
 import time
 from datetime import datetime
 from pathlib import Path
@@ -68,6 +69,7 @@ def _merge_detail(survivor: dict, loser: dict, transfers: dict,
                 "fields": fields}
 
     return _json.dumps({
+        "pair": [survivor["id"], loser["id"]],
         "keep": snap(survivor),
         "archive": snap(loser),
         "moves": [t["property"] for t in transfers["transfers"]],
@@ -133,7 +135,8 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                 "status": status, "error": error}
 
     def record_recommendation(db_card: dict, prop: str, reason: str,
-                              source: str = "", new_value: str = "") -> None:
+                              source: str = "", new_value: str = "",
+                              detail: str = "") -> None:
         nonlocal seq
         rec = ChangeRecord(
             change_id=store.change_id_for(run_id, seq), run_id=run_id,
@@ -141,7 +144,8 @@ def felix_run(job: dict, notion, client, options: RunOptions,
             record_name=db_card["name"], record_id=db_card["id"],
             record_url=db_card["url"], change_type="recommendation",
             property_changed=prop, new_value=new_value, source=source,
-            reason=reason, confidence="Low", execution_status="Recommended")
+            reason=reason, confidence="Low", execution_status="Recommended",
+            detail=detail)
         seq += 1
         store.append_change(rec, base)
         _emit(job, rec)
@@ -342,11 +346,20 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                 "corporate domain matches no existing company — confirm before "
                 "creating one", source=f"email domain {cand['domain']}")
 
+    # Pairs the user has already decided (or research has settled) are done —
+    # never re-flagged, never re-searched.
+    resolved_pairs = store.load_resolved_pairs(base)
+
+    def _pair_resolved(x: dict, y: dict) -> bool:
+        return store.pair_key(x["id"], y["id"]) in resolved_pairs
+
     # Exact duplicates — High merges.
     for key, cards in cards_by_db.items():
         for group in detect.find_exact_duplicate_groups(cards):
             survivor, losers = detect.choose_survivor(group["cards"])
             for loser in losers:
+                if _pair_resolved(survivor, loser):
+                    continue
                 merges.append({
                     "db": key, "survivor": survivor, "loser": loser,
                     "confidence": "High",
@@ -357,6 +370,8 @@ def felix_run(job: dict, notion, client, options: RunOptions,
     fuzzy_all = []
     for key, cards in cards_by_db.items():
         for p in detect.find_fuzzy_duplicate_pairs(cards):
+            if _pair_resolved(p["a"], p["b"]):
+                continue                # decided in an earlier run — stay quiet
             p["db"] = key
             fuzzy_all.append(p)
     if fuzzy_all:
@@ -394,11 +409,13 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                f"{min(len(unsure_pairs), research_budget)} unsure duplicate(s)")
         checkpoint()
     for p, verdict in unsure_pairs:
+        pair_detail = json.dumps({"pair": [p["a"]["id"], p["b"]["id"]]})
         if research_budget <= 0:
             record_recommendation(
                 p["a"], "(possible duplicate)",
-                f"may duplicate '{p['b']['name']}' — {verdict['reason'][:200]}",
-                source=f"name similarity {p['score']}")
+                f"may duplicate '{p['b']['name']}' — {verdict['reason'][:180]} "
+                "(queued for web research on a later run)",
+                source=f"name similarity {p['score']}", detail=pair_detail)
             continue
         research_budget -= 1
         try:
@@ -412,6 +429,8 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                 and p["b"]["id"] not in merged_ids):
             surv, losers = detect.choose_survivor([p["a"], p["b"]])
             merged_ids |= {p["a"]["id"], p["b"]["id"]}
+            store.resolve_pair(p["a"]["id"], p["b"]["id"],
+                               "research-duplicate", base)
             merges.append({
                 "db": p["db"], "survivor": surv, "loser": losers[0],
                 "confidence": "Medium",
@@ -419,17 +438,20 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                 "reason": "researched online: same entity — "
                           f"{r.get('explanation', '')[:200]}"})
         elif r.get("verdict") == "distinct":
+            store.resolve_pair(p["a"]["id"], p["b"]["id"],
+                               "research-distinct", base)
             record_recommendation(
                 p["a"], "(possible duplicate)",
                 f"researched online: DISTINCT from '{p['b']['name']}' — "
                 f"{r.get('explanation', '')[:220]}",
-                source=f"web research — {r.get('evidence', '')[:180]}")
+                source=f"web research — {r.get('evidence', '')[:180]}",
+                detail=pair_detail)
         else:
             record_recommendation(
                 p["a"], "(possible duplicate)",
                 f"may duplicate '{p['b']['name']}' — online research was "
                 f"inconclusive: {r.get('explanation', '')[:180]}",
-                source=f"name similarity {p['score']}")
+                source=f"name similarity {p['score']}", detail=pair_detail)
 
     # Evidence-based fills for missing text/select properties.
     fill_tasks = _build_fill_tasks(cards_by_db, schemas, options_by_db,

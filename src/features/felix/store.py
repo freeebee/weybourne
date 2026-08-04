@@ -189,6 +189,37 @@ def load_snapshot(change_id: str, base: Optional[Path] = None) -> Optional[dict]
         return None
 
 
+# -- resolved duplicate pairs ----------------------------------------------- #
+# Once a pair is decided — by the user clearing a possible-duplicate flag, or
+# by confident web research — future runs neither re-flag it nor spend another
+# web search on it.
+
+def pair_key(a: str, b: str) -> str:
+    return "|".join(sorted((a or "", b or "")))
+
+
+def load_resolved_pairs(base: Optional[Path] = None) -> dict:
+    root = base or FELIX_DIR
+    path = root / "resolved_pairs.json"
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("pairs", {})
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def resolve_pair(a: str, b: str, decision: str,
+                 base: Optional[Path] = None) -> None:
+    root = base or FELIX_DIR
+    root.mkdir(parents=True, exist_ok=True)
+    pairs = load_resolved_pairs(base)
+    pairs[pair_key(a, b)] = {"decision": decision,
+                             "at": datetime.now().isoformat(timespec="seconds")}
+    (root / "resolved_pairs.json").write_text(
+        json.dumps({"pairs": pairs}, indent=1), encoding="utf-8")
+
+
 # -- config ----------------------------------------------------------------- #
 
 _DEFAULT_CONFIG = {

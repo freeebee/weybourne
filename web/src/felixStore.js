@@ -16,10 +16,11 @@ export const S = {
   runJob: null,            // summary of the running/last-polled felix job
   lastResult: null,
   scene: {
-    zone: "contacts", activity: "tinker",  // tinker | walk | fix
+    zone: "contacts", activity: "tinker",  // tinker | walk | fix | type
     labels: [], caption: "tinkering…",
     power: false,          // POWER UP: a run is underway — flames on
     powerBanner: 0,        // timestamp key; re-renders the POWER UP splash
+    researching: false,    // the run is in a web-research stage — desk time
   },
   busy: "", error: null, version: 0,
 };
@@ -137,6 +138,10 @@ function attach(jobId) {
       ]);
       S.runJob = summary;
       if (summary.status === "running") powerUp();
+      // Web-research stages put Felix at his computer desk.
+      const stage = (summary.stages || [])[summary.stages?.length - 1];
+      S.scene.researching = summary.status === "running"
+        && !!stage && /^Researching/.test(stage.label || "");
       const events = partial?.partial?.events || [];
       for (const ev of events) {
         const key = ev.change_id + ev.status;
@@ -149,6 +154,7 @@ function attach(jobId) {
       if (summary.status !== "running") {
         clearInterval(pollTimer); pollTimer = null;
         powerDown();
+        S.scene.researching = false;
         S.lastResult = summary.result || null;
         refreshStatus();
         fetchChanges();
@@ -163,14 +169,28 @@ function attach(jobId) {
 export async function review(changeId, action) {
   S.busy = `review-${changeId}`; emit();
   try {
-    await post(`/api/felix/changes/${changeId}/review`, { action });
+    const res = await post(`/api/felix/changes/${changeId}/review`, { action });
     const next = { approve: "Approved", dismiss: "Dismissed",
                    undo: "Undo Requested" }[action];
+    const change = S.changes.find((c) => c.change_id === changeId);
     S.changes = S.changes.map((c) => c.change_id === changeId
       ? { ...c, review_status: next } : c);
     if (action === "undo") {
       spawnLabel(UNDO_PHRASES[Math.floor(Math.random() * UNDO_PHRASES.length)],
                  "caution");
+    } else if (action === "approve" && change) {
+      if (res.execution_status === "Applied") {
+        // The approval genuinely wrote to Notion — Felix runs over to that
+        // database's station and celebrates the real fix.
+        eventQueue.push({
+          change_id: `${changeId}-approved`, db: change.database,
+          record: change.record_name, type: change.change_type,
+          status: "Applied", label: "fixed on your say-so",
+        });
+        lastEventAt = Date.now();
+      } else {
+        spawnLabel("Filed away!", "teal");
+      }
     }
     fetchChanges();   // twins of this finding get superseded server-side
   } catch (e) { S.error = e.message; }
@@ -205,6 +225,9 @@ function ensureSceneLoop() {
 
 const TINKER_LINES = ["tinkering…", "tightening bolts…", "oiling the hinges…",
                       "checking the wiring…", "calibrating…", "polishing…"];
+const RESEARCH_LINES = ["searching the web…", "digging on LinkedIn…",
+                        "cross-checking names…", "reading team pages…",
+                        "typing furiously…", "comparing fund docs…"];
 
 function tick() {
   const now = Date.now();
@@ -232,6 +255,26 @@ function tick() {
         spawnLabel("Hmm, that one wouldn't budge.", "caution");
       }
     }
+    emit();
+    return;
+  }
+
+  // Web research underway: Felix sits at his computer desk, typing away.
+  if (S.scene.researching) {
+    if (S.scene.zone !== "research") {
+      S.scene.zone = "research";
+      set("walk", "heading to the research desk…", walkMs);
+    } else {
+      set("type", RESEARCH_LINES[Math.floor(Math.random() * RESEARCH_LINES.length)],
+          1100 + Math.random() * 900);
+    }
+    emit();
+    return;
+  }
+  if (S.scene.zone === "research") {
+    // Research over — back to the workshop floor.
+    S.scene.zone = ZONES[Math.floor(Math.random() * ZONES.length)];
+    set("walk", "back to the floor…", walkMs);
     emit();
     return;
   }
