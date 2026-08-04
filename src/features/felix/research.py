@@ -24,24 +24,39 @@ _DUP_SCHEMA = {
     "properties": {
         "verdict": {"type": "string", "enum": ["duplicate", "distinct", "unsure"]},
         "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+        "lean": {"type": "string", "enum": ["duplicate", "distinct", "none"],
+                 "description": "When the verdict is unsure: which way the "
+                                "balance of evidence points. 'none' only when "
+                                "there is truly nothing to go on."},
         "explanation": {"type": "string",
-                        "description": "What the research found, one or two "
-                                       "sentences a reviewer can act on"},
+                        "description": "What the research found and your read "
+                                       "of it, two or three sentences a "
+                                       "reviewer can act on"},
         "evidence": {"type": "string",
                      "description": "The key fact(s) found online, with the "
                                     "source site named"},
     },
-    "required": ["verdict", "confidence", "explanation", "evidence"],
+    "required": ["verdict", "confidence", "lean", "explanation", "evidence"],
     "additionalProperties": False,
 }
 
 _DUP_SYSTEM = """You research whether two CRM records describe the SAME real \
 person or company. Use web search: look the names up together with their \
-employers/context. People can share similar names and work at different firms \
-(distinct); one person can appear twice with their name written differently, or \
-have moved firms (duplicate). Decide from what you actually find online — \
-LinkedIn, company team pages, news. If the web gives no clear answer, say \
-"unsure". Name the source of your key evidence."""
+employers/context.
+
+Rules:
+- Different employers are NOT evidence of different people. The same person may \
+have changed firms — check career history (LinkedIn moves, old team pages, \
+press announcements) before treating an employer mismatch as distinctness. Say \
+explicitly whether a job change explains the difference.
+- People can genuinely share similar names at different firms (distinct); one \
+person can appear twice with the name spelled differently or under an old \
+employer (duplicate).
+- Decide from what you actually find online — LinkedIn, company team pages, \
+registries, news. Name the source of your key evidence.
+- If the web gives no definitive answer, the verdict is "unsure" — but still \
+give your view: set "lean" to the side the balance of evidence favours and say \
+why in the explanation. The reviewer wants your read, not a shrug."""
 
 
 def research_duplicate(client, a: dict, b: dict,

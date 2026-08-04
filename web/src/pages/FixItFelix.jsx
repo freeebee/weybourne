@@ -456,8 +456,17 @@ const STATUS_WORDS = {
   "Pending": ["IN PROGRESS", "teal"],
 };
 
+/* High-confidence mechanical rows — the ones Felix would do unattended in
+   live mode. They get their own EASY FIXES view with a fix-everything button;
+   everything needing judgement stays under NEEDS YOUR OKAY. */
+const EASY_TYPES = ["fix_formatting", "fix_icon", "fix_relation"];
+const isEasyFix = (c) => c.confidence === "High"
+  && EASY_TYPES.includes(c.change_type);
+
 function ReviewTable({ s }) {
   const f = s.changesFilter;
+  const [bulkDone, setBulkDone] = React.useState(0);
+  const [bulkTotal, setBulkTotal] = React.useState(0);
   const setF = (patch) => fx.fetchChanges({ ...f, ...patch });
   const sel = (key, opts) => (
     <select value={f[key] || ""} style={{ ...inputStyle, width: "auto", padding: "5px 8px" }}
@@ -465,20 +474,46 @@ function ReviewTable({ s }) {
       {opts.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
     </select>
   );
-  const rows = s.changes.filter((c) => !c.parent_change_id);
+  const all = s.changes.filter((c) => !c.parent_change_id);
+  const rows = f.review === "easy" ? all.filter(isEasyFix)
+    : f.review === "Awaiting Review" ? all.filter((c) => !isEasyFix(c))
+    : all;
+  const fixAll = async () => {
+    const list = [...rows];
+    setBulkTotal(list.length); setBulkDone(0);
+    for (const c of list) {
+      await fx.review(c.change_id, "approve");
+      setBulkDone((n) => n + 1);
+    }
+    setBulkTotal(0);
+  };
   return (
     <div style={{ marginTop: 22 }}>
       <SectionHead label="WHAT FELIX FOUND" right={`${rows.length} SHOWN`} />
       <div className="row" style={{ marginBottom: 10, flexWrap: "wrap" }}>
-        {sel("review", [["Awaiting Review", "Needs your OK"], ["", "Everything"],
+        {sel("review", [["Awaiting Review", "Needs your okay"],
+                        ["easy", "Easy fixes"],
                         ["Approved", "Approved"], ["Dismissed", "Discarded"],
                         ["Undo Requested", "Undo requested"]])}
         {sel("db", [["", "All databases"], ["contacts", "Contacts"],
                     ["companies", "Companies"], ["funds", "Funds"], ["notes", "Notes"]])}
+        {f.review === "easy" && rows.length > 0 && (
+          <Button onClick={fixAll} disabled={bulkTotal > 0}>
+            {bulkTotal > 0 ? `Fixing ${bulkDone}/${bulkTotal}…`
+              : `Fix all ${rows.length}`}
+          </Button>
+        )}
       </div>
+      {f.review === "easy" && (
+        <p className="muted small" style={{ marginBottom: 8 }}>
+          High-confidence mechanical fixes (formatting, icons, dead links) —
+          the kind Felix applies automatically in live mode. Fix all runs the
+          lot; each one stays individually undoable.
+        </p>
+      )}
       {rows.length === 0 && (
         <p className="muted small">Nothing waiting — run Felix, or switch the
-          filter to Everything to see past changes.</p>
+          view to see easy fixes or past decisions.</p>
       )}
       {rows.map((c) => {
         const d = describeChange(c);

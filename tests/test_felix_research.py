@@ -27,6 +27,16 @@ class TestDuplicateResearch:
         user = call["messages"][0]["content"]
         assert "Fund Alpha" in user and "Beta Partners" in user
 
+    def test_briefed_on_job_moves_and_required_to_lean(self):
+        """A different employer must not be read as a different person, and an
+        unsure verdict still has to give the reviewer a view."""
+        system = research._DUP_SYSTEM.lower()
+        assert "changed firms" in system or "job change" in system
+        assert "lean" in system
+        assert "lean" in research._DUP_SCHEMA["required"]
+        assert research._DUP_SCHEMA["properties"]["lean"]["enum"] == [
+            "duplicate", "distinct", "none"]
+
 
 class TestFundFieldResearch:
     def test_values_validated_against_options(self):

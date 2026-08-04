@@ -447,10 +447,13 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                 source=f"web research — {r.get('evidence', '')[:400]}",
                 detail=pair_detail)
         else:
+            lean = r.get("lean", "")
+            lean_txt = (f" On balance the research leans {lean.upper()}."
+                        if lean in ("duplicate", "distinct") else "")
             record_recommendation(
                 p["a"], "(possible duplicate)",
                 f"may duplicate '{p['b']['name']}' — online research was "
-                f"inconclusive: {r.get('explanation', '')[:600]}",
+                f"inconclusive: {r.get('explanation', '')[:600]}{lean_txt}",
                 source=f"name similarity {p['score']}", detail=pair_detail)
 
     # Evidence-based fills for missing text/select properties.

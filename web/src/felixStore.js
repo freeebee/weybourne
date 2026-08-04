@@ -75,8 +75,12 @@ export async function refreshStatus() {
 
 export async function fetchChanges(filter) {
   if (filter) S.changesFilter = filter;
+  // "easy" is a client-side view over the awaiting queue (high-confidence
+  // mechanical fixes) — the API only knows review statuses.
+  const apiFilter = { ...S.changesFilter };
+  if (apiFilter.review === "easy") apiFilter.review = "Awaiting Review";
   const q = new URLSearchParams(
-    Object.entries(S.changesFilter).filter(([, v]) => v));
+    Object.entries(apiFilter).filter(([, v]) => v));
   try {
     const d = await get(`/api/felix/changes?${q}&limit=100`);
     S.changes = d.changes || [];
