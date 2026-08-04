@@ -14,7 +14,7 @@ from typing import Optional
 
 from src import config
 from src.connectors.notion_client import NotionPartialResult
-from src.features.felix import adjudicate, detect, execute, store, undo
+from src.features.felix import adjudicate, detect, execute, research, store, undo
 from src.features.felix.models import ChangeRecord, RunOptions, RunRecord
 
 # Scan-property allowlist where computed properties 500 inside Notion.
@@ -46,6 +46,36 @@ _FORMAT_REASONS = {
     "email_case": "lowercased the address",
     "email_extract": "the email field held extra text; keeping only the address",
 }
+
+
+def _merge_detail(survivor: dict, loser: dict, transfers: dict,
+                  names_by_id: dict) -> str:
+    """Side-by-side of both records (JSON, for the review UI) so an approve
+    decision needs no digging: what the kept copy has, what the archived copy
+    has, what moves over, and any conflicting values."""
+    import json as _json
+
+    def snap(c):
+        fields = {}
+        for k, v in c["plain"].items():
+            if detect._empty(v) or k == c.get("title_prop"):
+                continue
+            if k in c["relations"]:
+                v = [names_by_id.get(i, "(unknown)") for i in c["relations"][k]]
+            s = ", ".join(map(str, v)) if isinstance(v, list) else str(v)
+            fields[k] = s[:120]
+        return {"name": c["name"], "created": (c.get("created") or "")[:10],
+                "fields": fields}
+
+    return _json.dumps({
+        "keep": snap(survivor),
+        "archive": snap(loser),
+        "moves": [t["property"] for t in transfers["transfers"]],
+        "conflicts": [{"property": cf["property"],
+                       "keep": str(cf["survivor"])[:90],
+                       "loses": str(cf["loser"])[:90]}
+                      for cf in transfers["conflicts"]],
+    })[:3800]
 
 
 def _prop_payload(ptype: str, value: str) -> dict:
@@ -217,6 +247,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
     ids_by_db = {k: {c["id"] for c in v if not c["archived"]}
                  for k, v in cards_by_db.items()}
     all_cards = [c for v in cards_by_db.values() for c in v]
+    names_by_id = {c["id"]: c["name"] for c in all_cards}
     job["partial"] = job.get("partial") or {}
     job["partial"]["scanned"] = {k: len(v) for k, v in cards_by_db.items()}
 
@@ -334,6 +365,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
         checkpoint()
     merged_ids = {m["loser"]["id"] for m in merges} | \
                  {m["survivor"]["id"] for m in merges}
+    unsure_pairs: list[tuple] = []
     for verdict in adjudicate.adjudicate_duplicates(
             client, fuzzy_all, max_calls=max(1, options.max_llm_calls // 2)):
         p = verdict["pair"]
@@ -349,12 +381,55 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                                      f"adjudication: {verdict['reason'][:150]}",
                            "reason": "adjudicated as the same entity"})
         elif verdict["verdict"] == "unsure":
+            unsure_pairs.append((p, verdict))
+        elif verdict["verdict"] == "deferred":
+            counts["deferred"] += 1
+
+    # Unsure pairs get a proper look: a web search on the names + employers
+    # rather than a shrug. Budgeted; anything over budget stays a plain
+    # recommendation.
+    research_budget = options.max_research if client is not None else 0
+    if unsure_pairs and research_budget > 0:
+        _stage(job, "Researching online",
+               f"{min(len(unsure_pairs), research_budget)} unsure duplicate(s)")
+        checkpoint()
+    for p, verdict in unsure_pairs:
+        if research_budget <= 0:
             record_recommendation(
                 p["a"], "(possible duplicate)",
                 f"may duplicate '{p['b']['name']}' — {verdict['reason'][:200]}",
                 source=f"name similarity {p['score']}")
-        elif verdict["verdict"] == "deferred":
-            counts["deferred"] += 1
+            continue
+        research_budget -= 1
+        try:
+            r = research.research_duplicate(client, p["a"], p["b"], names_by_id)
+        except Exception:  # noqa: BLE001
+            r = {"verdict": "unsure", "confidence": "low",
+                 "explanation": "the research call failed", "evidence": ""}
+        if (r.get("verdict") == "duplicate"
+                and r.get("confidence") in ("high", "medium")
+                and p["a"]["id"] not in merged_ids
+                and p["b"]["id"] not in merged_ids):
+            surv, losers = detect.choose_survivor([p["a"], p["b"]])
+            merged_ids |= {p["a"]["id"], p["b"]["id"]}
+            merges.append({
+                "db": p["db"], "survivor": surv, "loser": losers[0],
+                "confidence": "Medium",
+                "source": f"online research — {r.get('evidence', '')[:200]}",
+                "reason": "researched online: same entity — "
+                          f"{r.get('explanation', '')[:200]}"})
+        elif r.get("verdict") == "distinct":
+            record_recommendation(
+                p["a"], "(possible duplicate)",
+                f"researched online: DISTINCT from '{p['b']['name']}' — "
+                f"{r.get('explanation', '')[:220]}",
+                source=f"web research — {r.get('evidence', '')[:180]}")
+        else:
+            record_recommendation(
+                p["a"], "(possible duplicate)",
+                f"may duplicate '{p['b']['name']}' — online research was "
+                f"inconclusive: {r.get('explanation', '')[:180]}",
+                source=f"name similarity {p['score']}")
 
     # Evidence-based fills for missing text/select properties.
     fill_tasks = _build_fill_tasks(cards_by_db, schemas, options_by_db,
@@ -426,6 +501,43 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                    f"field{note}",
             source=f"email field text — \"{pr['evidence_quote'][:150]}\"")
 
+    # Asset class / geography gaps on funds → web lookup. Values are validated
+    # against the live select options in code; each lands as a Proposed change
+    # the user approves.
+    if research_budget > 0 and "funds" in cards_by_db:
+        fund_opts = options_by_db.get("funds", {})
+        research_props = [pr for pr in ("Asset Class", "Geographic Focus")
+                          if fund_opts.get(pr)]
+        targets = []
+        for miss in detect.find_missing_props(cards_by_db["funds"], "funds",
+                                              schemas.get("funds", set())):
+            wanted = [{"property": pr, "options": fund_opts[pr]}
+                      for pr in miss["missing"] if pr in research_props]
+            if wanted:
+                targets.append((miss["card"], wanted))
+        if targets:
+            _stage(job, "Researching fund classifications",
+                   f"{min(len(targets), research_budget)} fund(s)")
+            checkpoint()
+        for card, wanted in targets:
+            if research_budget <= 0:
+                break
+            research_budget -= 1
+            comp_rel = (card["relations"].get("Company")
+                        or card["relations"].get("Company Name") or [])
+            company = names_by_id.get(comp_rel[0], "") if comp_rel else \
+                str(card["plain"].get("Company Name") or "")
+            try:
+                found = research.research_fund_fields(client, card, wanted,
+                                                      company)
+            except Exception:  # noqa: BLE001
+                found = []
+            for pr in found:
+                record_proposal(
+                    card, pr["property"], pr["value"], "select",
+                    reason=f"researched online: {pr['explanation'][:200]}",
+                    source=f"web — {pr['source'][:180]}")
+
     # ---- Phase 5: plan + order --------------------------------------------- #
     order = {"fix_formatting": 0, "fix_icon": 1, "fill_missing": 2,
              "fix_relation": 3}
@@ -485,7 +597,9 @@ def felix_run(job: dict, notion, client, options: RunOptions,
             notion, run_id, seq, m["survivor"], m["loser"], transfers,
             all_cards, prop_ids, m["confidence"], m["source"], m["reason"],
             dry_run=options.dry_run, quiet_minutes=options.quiet_minutes,
-            base=base, on_change=lambda c: _emit(job, c))
+            base=base, on_change=lambda c: _emit(job, c),
+            detail=_merge_detail(m["survivor"], m["loser"], transfers,
+                                 names_by_id))
         job["done"] += 1
         parent = records[0]
         if parent.execution_status == "Applied":

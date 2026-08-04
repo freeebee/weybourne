@@ -139,7 +139,7 @@ def execute_merge(notion, run_id: str, seq_start: int, survivor: dict,
                   schema_prop_ids: dict, confidence: str, source: str,
                   reason: str, dry_run: bool = True, quiet_minutes: int = 10,
                   base: Optional[Path] = None,
-                  on_change=None) -> tuple[list[ChangeRecord], int]:
+                  on_change=None, detail: str = "") -> tuple[list[ChangeRecord], int]:
     """The full reversible consolidation. Returns (records, next_seq)."""
     seq = seq_start
     parent_id = store.change_id_for(run_id, seq)
@@ -171,7 +171,7 @@ def execute_merge(notion, run_id: str, seq_start: int, survivor: dict,
         property_changed="(whole record)",
         previous_value=f"standalone record '{loser['name']}'",
         new_value=f"merged into '{survivor['name']}' ({survivor['id']})",
-        source=source, reason=reason, confidence=confidence,
+        source=source, reason=reason, confidence=confidence, detail=detail,
     )
 
     if dry_run:

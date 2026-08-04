@@ -357,6 +357,68 @@ function describeChange(c) {
   return { ...base, approve };
 }
 
+/* The two records of a proposed merge, side by side — everything each copy
+   holds, what moves over, and any conflicting values — so approving needs no
+   digging around in Notion. */
+function MergeCompare({ detail }) {
+  let d;
+  try { d = JSON.parse(detail); } catch { return null; }
+  if (!d || !d.keep || !d.archive) return null;
+  const col = (rec, label, tone) => (
+    <div style={{ flex: "1 1 220px", minWidth: 200, padding: "8px 11px",
+                  background: "var(--paper-050)",
+                  border: "1px solid var(--paper-200)",
+                  borderTop: `2px solid var(${tone})`,
+                  borderRadius: 4 }}>
+      <div className="mono" style={{ fontSize: 9.5, letterSpacing: ".1em",
+                                     color: "var(--stone-500)" }}>{label}</div>
+      <b style={{ fontSize: "13px" }}>{rec.name}</b>
+      {rec.created && (
+        <span className="mono" style={{ fontSize: 9.5, marginLeft: 6,
+                                        color: "var(--stone-400)" }}>
+          SINCE {rec.created}
+        </span>
+      )}
+      <div style={{ marginTop: 5 }}>
+        {Object.keys(rec.fields || {}).length === 0 && (
+          <div className="muted" style={{ fontSize: "12px", fontStyle: "italic" }}>
+            No other fields filled in.
+          </div>
+        )}
+        {Object.entries(rec.fields || {}).map(([k, v]) => (
+          <div key={k} style={{ fontSize: "12px", marginBottom: 2 }}>
+            <span className="mono" style={{ fontSize: 9.5, letterSpacing: ".06em",
+                                            color: "var(--stone-500)" }}>
+              {k.toUpperCase()}
+            </span>{" "}{v}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {col(d.keep, "KEPT — THE RICHER COPY", "--positive-600")}
+        {col(d.archive, "ARCHIVED — THE DUPLICATE", "--caution-600")}
+      </div>
+      {(d.moves || []).length > 0 && (
+        <div style={{ fontSize: "12px", marginTop: 6 }}>
+          <span style={{ color: "var(--teal-700)", fontWeight: 600 }}>Moves over: </span>
+          {d.moves.join(", ")} — nothing on the archived copy is lost.
+        </div>
+      )}
+      {(d.conflicts || []).map((cf) => (
+        <div key={cf.property} style={{ fontSize: "12px", marginTop: 3,
+                                        color: "var(--caution-600)" }}>
+          Both records fill {cf.property}: keeping “{cf.keep}”, the duplicate’s
+          “{cf.loses}” is logged here but not written.
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const STATUS_WORDS = {
   "Applied": ["FIXED", "positive"],
   "Planned (dry-run)": ["READY — APPROVE TO FIX", "teal"],
@@ -419,6 +481,9 @@ function ReviewTable({ s }) {
                 <span style={{ color: "var(--teal-700)", fontWeight: 600 }}>Fix: </span>
                 {d.fix}
               </div>
+            )}
+            {c.change_type === "merge" && c.detail && (
+              <MergeCompare detail={c.detail} />
             )}
             {d.source && (
               <div className="muted" style={{ fontSize: "12px", marginTop: 3 }}>

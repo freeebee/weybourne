@@ -12,6 +12,8 @@ class RunOptions(BaseModel):
     max_writes: int = int(os.environ.get("FELIX_MAX_WRITES", "50"))
     max_merges: int = int(os.environ.get("FELIX_MAX_MERGES", "5"))
     max_llm_calls: int = int(os.environ.get("FELIX_MAX_LLM_CALLS", "30"))
+    # Web-search escalations per run (unsure duplicates + fund field lookups).
+    max_research: int = int(os.environ.get("FELIX_MAX_RESEARCH", "10"))
     quiet_minutes: int = int(os.environ.get("FELIX_QUIET_MINUTES", "10"))
     databases: list[str] = Field(
         default_factory=lambda: ["contacts", "companies", "funds", "notes"])
@@ -49,6 +51,10 @@ class ChangeRecord(BaseModel):
     review_status: str = "Awaiting Review"  # / Approved / Undo Requested
     undo_result: str = ""
     parent_change_id: str = ""
+    # Structured extras for the review UI (JSON string). Merges store the
+    # side-by-side record comparison here so an approve decision needs no
+    # digging.
+    detail: str = ""
 
 
 class RunRecord(BaseModel):
