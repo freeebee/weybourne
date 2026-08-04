@@ -732,9 +732,9 @@ export default function Live() {
               )}
               <details style={{ marginTop: 12 }}>
                 <summary className="microlabel" style={{ cursor: "pointer",
-                         listStyle: "none", padding: "4px 0" }}>
-                  AUDIO
-                  <span style={{ color: "var(--teal-700)", marginLeft: 8 }}>FIX</span>
+                         listStyle: "none", padding: "4px 0",
+                         color: "var(--teal-700)" }}>
+                  AUDIO<span style={{ marginLeft: 8 }}>FIX</span>
                 </summary>
                 <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
                   <select value={s.deviceId} disabled={!!s.busy}

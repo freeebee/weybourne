@@ -474,7 +474,9 @@ def felix_run(job: dict, notion, client, options: RunOptions,
     def _pair_resolved(x: dict, y: dict) -> bool:
         return store.pair_key(x["id"], y["id"]) in resolved_pairs
 
-    # Exact duplicates — High merges.
+    # Exact duplicates — High merges. A contested same-name group is NOT one:
+    # it is routed to adjudication and the web alongside the fuzzy pairs.
+    contested_pairs: list[dict] = []
     for key, cards in cards_by_db.items():
         if key not in DEDUPE_DBS:
             continue
@@ -482,6 +484,11 @@ def felix_run(job: dict, notion, client, options: RunOptions,
             survivor, losers = detect.choose_survivor(group["cards"])
             for loser in losers:
                 if _pair_resolved(survivor, loser):
+                    continue
+                if group.get("contested"):
+                    contested_pairs.append({
+                        "db": key, "a": survivor, "b": loser, "score": 1.0,
+                        "contested": group["contested"]})
                     continue
                 merges.append({
                     "db": key, "survivor": survivor, "loser": loser,
@@ -492,13 +499,16 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                                  f"{group['evidence']}"})
 
     # ---- Phase 4: LLM adjudication ----------------------------------------- #
-    fuzzy_all = []
+    fuzzy_all = list(contested_pairs)   # same name, contradicting records
     for key, cards in cards_by_db.items():
         if key not in DEDUPE_DBS:
             continue
         for p in detect.find_fuzzy_duplicate_pairs(cards):
             if _pair_resolved(p["a"], p["b"]):
                 continue                # decided in an earlier run — stay quiet
+            if any(q["a"]["id"] == p["a"]["id"] and q["b"]["id"] == p["b"]["id"]
+                   for q in contested_pairs):
+                continue                # already queued as a contested name
             p["db"] = key
             fuzzy_all.append(p)
     if fuzzy_all:
@@ -534,9 +544,11 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                        if client is not None and options.web_research else 0)
     if to_research and not options.web_research:
         for p, verdict in to_research:
+            why = p.get("contested")
             defer_to_web("duplicate", p["a"], "(possible duplicate)",
                          f"may duplicate '{p['b']['name']}' — "
-                         f"{verdict['reason'][:200]}")
+                         + (f"same name, but {why}. " if why else "")
+                         + verdict["reason"][:200])
         to_research = []
     if to_research and research_budget > 0:
         _stage(job, "Researching online",
@@ -558,7 +570,9 @@ def felix_run(job: dict, notion, client, options: RunOptions,
             # a later run do the search.
             record_recommendation(
                 p["a"], "(possible duplicate)",
-                f"may duplicate '{p['b']['name']}' — {verdict['reason'][:600]} "
+                f"may duplicate '{p['b']['name']}' — "
+                + (f"same name, but {p['contested']}. " if p.get("contested") else "")
+                + f"{verdict['reason'][:600]} "
                 "(queued for web research on a later run)",
                 source=f"name similarity {p['score']}, not yet web-checked",
                 detail=pair_detail)
@@ -632,13 +646,19 @@ def felix_run(job: dict, notion, client, options: RunOptions,
             # The quote check gates AUTOMATIC writes; a human reading the
             # proposal can still adopt it — so it becomes an approvable
             # proposal rather than a dead-end note.
+            # Naming the note without saying what it said made this
+            # unreviewable — the whole question is whether the passage
+            # actually supports the value.
+            quote = (prop_fill.get("evidence_quote") or "").strip()
             record_proposal(
                 card, t["property"], prop_fill["value"],
                 t.get("ptype", "rich_text"),
                 reason="proposed from linked notes, but the supporting quote "
                        "did not verify word-for-word — approve only if it "
                        "reads right to you",
-                source=t.get("source_label", "linked notes"))
+                source=(f"{t.get('source_label', 'linked notes')} — "
+                        f"paraphrased as \"{quote[:220]}\"" if quote
+                        else t.get("source_label", "linked notes")))
             continue
         ptype = t.get("ptype", "rich_text")
         payload = ({"select": {"name": prop_fill["value"]}} if ptype == "select"

@@ -109,12 +109,52 @@ def relation_count(card: dict) -> int:
 
 # -- duplicates ------------------------------------------------------------- #
 
+def _distinct_values(cards: list[dict], key: str) -> set:
+    """The non-empty values of `key` across a group — more than one means the
+    records disagree about it."""
+    return {c[key] for c in cards if c.get(key)}
+
+
+def employers_of(card: dict) -> set:
+    """Whatever the card points at as an employer, by relation id.
+
+    Read off the relations rather than a named property so it survives the
+    workspace's emoji-prefixed '🏢 Employed By'.
+    """
+    out = set()
+    for name, ids in (card.get("relations") or {}).items():
+        if "employ" in _prop_key(name) or "compan" in _prop_key(name):
+            out.update(ids)
+    return out
+
+
+def group_is_contested(cards: list[dict]) -> str:
+    """Why a same-name group might be two different people, or "" if nothing
+    in the records argues against them being one.
+
+    Sharing a name is not sharing an identity. Two people called Amy Zhao at
+    two different firms, with two different addresses, are exactly what this
+    catches — and a name match alone used to merge them at High confidence.
+    """
+    if len(_distinct_values(cards, "email")) > 1:
+        return "the records carry different email addresses"
+    employers = [employers_of(c) for c in cards]
+    named = [e for e in employers if e]
+    if len(named) > 1 and not set.intersection(*named):
+        return "the records are employed by different companies"
+    return ""
+
+
 def find_exact_duplicate_groups(cards: list[dict]) -> list[dict]:
     """Groups sharing an exact identifier — High confidence by the spec.
 
-    Keys: exact email (contacts), exact squashed non-empty name. Corporate
-    domains identify the EMPLOYER, not identity — two colleagues share one —
-    so domains are deliberately not a duplicate key.
+    An email is an identifier. A NAME IS NOT: people share names, and a
+    same-name group whose records disagree about employer or address is as
+    likely to be two people as one. Those come back marked `contested` for the
+    adjudicator and the web to settle, never as a High auto-merge.
+
+    Corporate domains identify the EMPLOYER, not identity — two colleagues
+    share one — so domains are deliberately not a duplicate key.
     """
     groups: dict[tuple, list[dict]] = {}
     for c in cards:
@@ -132,7 +172,8 @@ def find_exact_duplicate_groups(cards: list[dict]) -> list[dict]:
         if len(ids) < 2 or ids in seen:
             continue
         seen.add(ids)
-        out.append({"evidence": kind, "key": key,
+        contested = group_is_contested(members) if kind == "name" else ""
+        out.append({"evidence": kind, "key": key, "contested": contested,
                     "cards": sorted(members, key=lambda m: m["id"])})
     return out
 

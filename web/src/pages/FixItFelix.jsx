@@ -342,7 +342,26 @@ const PENDING_LABEL = {
 function PendingResearch({ s }) {
   const p = s.status?.pending_research;
   const [open, setOpen] = React.useState(false);
-  if (!p || !p.total) return null;
+  // Say so when there is nothing to look up, rather than hiding the whole
+  // mechanism — otherwise the web search looks like it does not exist.
+  if (!p || !p.total) {
+    if (!s.lastResult) return null;
+    return (
+      <div style={{ marginTop: 12, borderTop: "1px solid var(--paper-200)",
+                    paddingTop: 11, display: "flex", gap: 12, flexWrap: "wrap",
+                    alignItems: "center" }}>
+        <span className="muted" style={{ fontSize: "12.5px" }}>
+          Nothing is waiting on the web — the last run settled everything from
+          your notes and records.
+        </span>
+        <Button variant="ghost"
+          busy={s.busy === "search" || s.runJob?.status === "running"}
+          onClick={() => fx.startRun({ webResearch: true })}>
+          Run with web searches anyway
+        </Button>
+      </div>
+    );
+  }
   const searching = s.busy === "search" || s.runJob?.status === "running";
   return (
     <div style={{ marginTop: 12, borderTop: "1px solid var(--paper-200)",
