@@ -15,6 +15,9 @@ import "./splash.css";
 function WbChao() {
   const head = (variant) => (
     <g className={`wbc-head wbc-head-${variant}`} transform="translate(70,24)">
+      {/* inner group so the rage head can be thrown back in CSS without
+          clobbering the SVG translate above */}
+      <g className="wbc-headin">
       <ellipse cx="24" cy="60" rx="5" ry="7.5" fill="#EBBB94" />
       <ellipse cx="76" cy="60" rx="5" ry="7.5" fill="#EBBB94" />
       <path d="M26 40 C26 31 34 25 50 25 C66 25 74 31 74 40 V57 C74 76 64 88 50 88 C36 88 26 76 26 57 Z" fill="#F3CBA8" />
@@ -57,15 +60,17 @@ function WbChao() {
       )}
       {variant === "rage" && (
         <>
-          {/* eyes screwed shut + a huge yell, straight out of the GIF */}
+          {/* eyes screwed shut + a huge open-mouthed yell, per the GIF */}
           <g stroke="#1C2430" strokeWidth="2.8" strokeLinecap="round" fill="none">
             <path d="M33 57 q4.5 5 9 0" /><path d="M58 57 q4.5 5 9 0" />
           </g>
-          <ellipse cx="50" cy="77" rx="8.5" ry="8" fill="#8C4038" />
-          <path d="M42.5 73.5 h15" stroke="#FFFFFF" strokeWidth="2.4"
+          <ellipse cx="50" cy="76" rx="11.5" ry="10" fill="#8C4038" />
+          <path d="M43 82 q7 5.5 14 0" fill="#6E2F29" />
+          <path d="M40.5 69 h19" stroke="#FFFFFF" strokeWidth="2.6"
                 strokeLinecap="round" />
         </>
       )}
+      </g>
     </g>
   );
 

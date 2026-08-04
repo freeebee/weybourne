@@ -259,6 +259,20 @@
   88%  { transform: rotate(-4deg) translateY(2px); }
   100% { transform: rotate(-3deg) translateY(1px); }
 }
+/* Head flung backwards at the wind-up, jerking with each slam, then held
+   back mid-yell. Same 2.3s clock as the arms so the beats line up. */
+@keyframes wbc-head-throw {
+  0%, 40% { transform: none; }
+  42%  { transform: translateY(-8px) rotate(-16deg); }
+  45%  { transform: translateY(-2px) rotate(-5deg); }
+  49%  { transform: translateY(-8px) rotate(-15deg); }
+  53%  { transform: translateY(-2px) rotate(-5deg); }
+  58%  { transform: translateY(-7px) rotate(-13deg); }
+  66%  { transform: translateY(-6px) rotate(-11deg); }
+  73%  { transform: translateY(-7px) rotate(-13deg); }
+  80%  { transform: translateY(-6px) rotate(-11deg); }
+  100% { transform: translateY(-7px) rotate(-12deg); }
+}
 @keyframes wbc-shake {
   0%, 100% { transform: translate(0, 0); }
   15% { transform: translate(-1.5px, 1px); }
@@ -302,6 +316,10 @@
 .wb-activated .wbc-head-happy { opacity: 0; transition: opacity .35s ease .25s; }
 .wb-activated .wbc-head-focus { animation: wbc-focus-phase 3.4s linear both; }
 .wb-activated .wbc-head-rage { animation: wbc-rage-phase 3.4s linear both; }
+/* the rage face rides an inner group thrown back at the neck */
+.wbc-head-rage .wbc-headin { transform-box: fill-box; transform-origin: 50% 92%; }
+.wb-activated .wbc-head-rage .wbc-headin {
+  animation: wbc-head-throw 2.3s linear .85s both; }
 .wbc-body { animation: m-bob 2.6s ease-in-out infinite; }
 .wb-activated .wbc-body { animation: m-bob 2.6s ease-in-out infinite,
   wbc-shake .7s linear 1.9s 1; }
