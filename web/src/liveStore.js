@@ -16,6 +16,7 @@ export const S = {
   outputLang: "English",          // the transcript is cleaned INTO this language
   detectedLang: "", detectedProb: 0,   // what whisper heard on the last chunk
   tidyPending: 0,    // chunks transcribed but still being cleaned up by Haiku
+  rawPending: "",    // heard and already on screen, not yet cleaned up
   transcript: "", entries: [], items: [], batches: [], reads: 0, unreadWords: 0,
   lastTail: "", lastReadAt: 0, startedAt: 0, reading: false, nextIn: 30,
   error: null, note: null, noteDraftText: "", sharp: null, sharpPending: "", busy: "", seq: 1, version: 0,
@@ -130,16 +131,26 @@ let tidyQueue = [];
 let tidyBusy = false;
 let tidyWaiters = [];
 
-function appendTranscript(text) {
+function appendTranscript(text, countWords = true) {
   S.transcript += (S.transcript ? " " : "") + text;
   S.entries = [...S.entries, { at: stamp(), text }];
-  S.unreadWords += text.split(/\s+/).length;
+  if (countWords) S.unreadWords += text.split(/\s+/).length;
   emit();
   autosaveNow();
 }
 
+/* Whisper's raw text goes on screen the moment it lands, and is replaced by
+   the cleaned version when that returns. Waiting for the cleanup before
+   showing anything made a "live" transcript arrive fifteen to twenty seconds
+   after the words were spoken: an eight-second chunk, then whisper, then a
+   Haiku round trip. The rough text is readable immediately and the polish
+   catches up. */
 function enqueueTidy(raw) {
   tidyQueue.push(raw);
+  S.rawPending = (S.rawPending ? S.rawPending + " " : "") + raw;
+  // Counted here, not on append: the read loop should react to speech as it
+  // happens, not to how quickly the cleanup keeps up.
+  S.unreadWords += raw.split(/\s+/).length;
   S.tidyPending = tidyQueue.length + (tidyBusy ? 1 : 0);
   emit();
   pumpTidy();
@@ -162,7 +173,12 @@ async function pumpTidy() {
   } catch { /* keep the raw text — better rough than missing */ }
   tidyBusy = false;
   S.tidyPending = tidyQueue.length;
-  if (text.trim()) appendTranscript(text.trim());
+  // Drop exactly the raw this call consumed; anything that arrived while it
+  // was in flight is still provisional and stays on screen.
+  S.rawPending = S.rawPending.startsWith(raw)
+    ? S.rawPending.slice(raw.length).trim()
+    : tidyQueue.join(" ");
+  if (text.trim()) appendTranscript(text.trim(), false);
   else emit();
   if (tidyQueue.length) pumpTidy();
   else tidyWaiters.splice(0).forEach((res) => res());
@@ -274,6 +290,14 @@ async function attachSystem() {
   });
 }
 
+/* Dismissing the browser's share or microphone dialogue is a decision, not a
+   fault. It used to surface as "Permission denied by user" under SOMETHING
+   WENT WRONG, which reads like the app broke. */
+function isCancelled(e) {
+  return e?.name === "NotAllowedError"
+    || /permission denied|dismissed|cancell?ed/i.test(e?.message || "");
+}
+
 /* Swap the microphone without interrupting the recording. Before the meeting
    starts this only remembers the choice. */
 export async function switchMic(deviceId) {
@@ -284,7 +308,7 @@ export async function switchMic(deviceId) {
     await attachMic(deviceId);
     S.error = null;
   } catch (e) {
-    S.error = `Could not switch microphone: ${e.message}`;
+    if (!isCancelled(e)) S.error = `Could not switch microphone: ${e.message}`;
   }
   S.busy = ""; emit();
 }
@@ -299,7 +323,9 @@ export async function reshareSystem() {
     S.source = "system";
     S.error = null;
   } catch (e) {
-    S.error = e.message;
+    // Changed your mind at the picker: nothing is wrong, and the meeting is
+    // still recording whatever it was recording before.
+    if (!isCancelled(e)) S.error = e.message;
   }
   S.busy = ""; emit();
 }
@@ -391,7 +417,9 @@ export async function start() {
       }
     }, 1000);
   } catch (e) {
-    S.error = `Audio unavailable: ${e.message}`;
+    S.error = isCancelled(e)
+      ? "Recording not started — the microphone or screen-share prompt was dismissed."
+      : `Audio unavailable: ${e.message}`;
     emit();
   }
 }
@@ -582,7 +610,7 @@ export function newSession() {
   Object.assign(S, {
     transcript: "", entries: [], items: [], batches: [], reads: 0, unreadWords: 0,
     lastTail: "", lastReadAt: 0, startedAt: 0, nextIn: S.cadence, error: null,
-    detectedLang: "", detectedProb: 0, tidyPending: 0,
+    detectedLang: "", detectedProb: 0, tidyPending: 0, rawPending: "",
     note: null, noteDraftText: "", sharp: null, sharpPending: "", busy: "", seq: 1, manager: null,
     noteSave: null, noteSaveEdits: {}, noteSaveEditing: {}, noteSaveUrl: "",
     sessionId: "", librarySaved: false,

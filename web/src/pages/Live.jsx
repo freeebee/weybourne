@@ -274,14 +274,16 @@ function LiveTranscript() {
   React.useEffect(() => {
     const el = boxRef.current;
     if (el) el.scrollTop = el.scrollHeight;   // newest line at the bottom
-  }, [s.entries.length]);
+  }, [s.entries.length, s.rawPending]);
 
   if (!s.running && !s.entries.length) return null;
   return (
     <div style={{ marginTop: 14 }}>
+      {/* The count includes what is on screen but still being cleaned, so it
+          moves when you speak rather than when Haiku catches up. */}
       <SectionHead label="LIVE TRANSCRIPT"
-        right={s.tidyPending > 0 ? "CLEANING…"
-          : `${s.transcript ? s.transcript.trim().split(/\s+/).length : 0} WORDS`} />
+        right={`${`${s.transcript} ${s.rawPending}`.trim().split(/\s+/).filter(Boolean).length} WORDS${
+          s.tidyPending > 0 ? " · CLEANING" : ""}`} />
       <button className="mono" onClick={() => setPickLang(!pickLang)}
         title="Auto-detected spoken language and the language the transcript is written in — click to change the output"
         style={{ background: "var(--paper-000)", border: "1px solid var(--paper-200)",
@@ -300,21 +302,23 @@ function LiveTranscript() {
       )}
       <Card style={{ padding: "12px 14px" }}>
         <div ref={boxRef} style={{ maxHeight: 240, overflowY: "auto" }}>
-          {!s.entries.length && (
+          {!s.entries.length && !s.rawPending && (
             <span className="muted" style={{ fontSize: "13px", fontStyle: "italic" }}>
-              The cleaned-up transcript appears here as speech comes in.
+              {s.running ? "Listening — the first words appear in a few seconds."
+                : "The transcript appears here as speech comes in."}
             </span>
           )}
-          {s.entries.length > 0 && (
+          {/* Settled text, then whatever has been heard but not yet cleaned —
+              greyed, because it is about to be replaced by a tidier version. */}
+          {(s.entries.length > 0 || s.rawPending) && (
             <p style={{ fontSize: "12.5px", lineHeight: 1.55, margin: "0 0 6px" }}>
               {s.entries.slice(-80).map((en) => en.text).join(" ")}
+              {s.rawPending && (
+                <span style={{ color: "var(--stone-400)" }}>
+                  {s.entries.length ? " " : ""}{s.rawPending}
+                </span>
+              )}
             </p>
-          )}
-          {s.tidyPending > 0 && (
-            <span className="mono" style={{ fontSize: 10, color: "var(--teal-600)",
-                                            letterSpacing: ".08em" }}>
-              CLEANING THE LAST CHUNK…
-            </span>
           )}
         </div>
       </Card>
