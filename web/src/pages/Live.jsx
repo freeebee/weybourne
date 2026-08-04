@@ -48,7 +48,6 @@ function CalendarPick() {
   const pick = async (ev) => {
     setPicked(`${fmtDate(ev.start)} ${fmtTime(ev.start)} · ${ev.subject}`);
     setOpen(false);
-    // Only "who" is filled from the calendar — the goal box is yours.
     live.set({ who: ev.counterparty_name || ev.subject });
     // Fuzzy-resolve to the manager thread (prep questions, Notion links).
     const hit = await live.resolveManager(ev.counterparty_name);
@@ -213,9 +212,6 @@ function TranscriptLibrary() {
                 {t.has_note && <span style={{ color: "var(--teal-700)" }}> · NOTE DRAFTED</span>}
                 {t.unfinished && <span style={{ color: "var(--caution-600)" }}> · UNFINISHED</span>}
               </span>
-              {t.goal && (
-                <div className="muted" style={{ fontSize: "12.5px", marginTop: 2 }}>{t.goal}</div>
-              )}
             </div>
             <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <Button variant="ghost" onClick={() => live.loadFromLibrary(t.id)}>Reopen</Button>
@@ -428,7 +424,7 @@ export default function Live() {
               <Button onClick={live.start}>Start listening</Button>
             </>}>
         {s.who ? `With ${s.who}. ` : ""}
-        {s.goal || `Transcribes the meeting continuously and drafts the Weybourne note at the end. Live question suggestions are optional — recaps land every ${s.cadence} seconds either way.`}
+        {`Transcribes the meeting continuously and drafts the Weybourne note at the end. Live question suggestions are optional — recaps land every ${s.cadence} seconds either way.`}
         {!s.running && s.librarySaved && s.transcript ? " Transcript saved to the library." : ""}
       </PageHeader>
 
@@ -449,11 +445,6 @@ export default function Live() {
               <input value={s.who} onChange={(e) => live.set({ who: e.target.value })}
                 onBlur={() => { if (s.who && !s.manager) live.resolveManager(s.who); }}
                 placeholder="Axiom Asia, Fund VII" style={inputStyle} />
-            </Field>
-            <Field label="WHAT YOU WANT OUT OF IT" style={{ flex: "2 1 300px" }}
-              hint="Steers the AI: suggested questions, recaps and the final note all weigh what you say here.">
-              <input value={s.goal} onChange={(e) => live.set({ goal: e.target.value })}
-                placeholder="e.g. re-up decision — test the capacity story" style={inputStyle} />
             </Field>
             <Field label="MEETING TYPE" style={{ flex: "1 1 260px" }}
               hint={s.source === "system"
@@ -695,13 +686,6 @@ export default function Live() {
                   placeholder="or type who you're meeting" style={inputStyle} />
               </div>
             </details>
-          )}
-          {s.running && (
-            <Field label="WHAT YOU WANT OUT OF IT" style={{ marginBottom: 12 }}
-              hint="Editable mid-meeting — steers the reads and the final note.">
-              <input value={s.goal} onChange={(e) => live.set({ goal: e.target.value })}
-                placeholder="e.g. re-up decision — test the capacity story" style={inputStyle} />
-            </Field>
           )}
           {s.running && (
             <Card style={{ marginBottom: 16 }}>
