@@ -20,6 +20,9 @@ data/preps/
 # Local Notion snapshot holds real workspace records - never commit it.
 data/notion_cache.json
 
+# Shared web-research dossiers name real counterparties - never commit them.
+data/research/
+
 # Front-end build artefacts
 web/node_modules/
 web/dist/

@@ -44,6 +44,16 @@ FAST_MODEL = os.environ.get("CLAUDE_FAST_MODEL", "claude-haiku-4-5-20251001")
 # between Haiku's speed and Opus's depth and fits both constraints.
 LIVE_MODEL = os.environ.get("CLAUDE_LIVE_MODEL", "claude-sonnet-5")
 
+# Shared web-research pass (src/features/web_research.py). Gathering facts and
+# citing them is not the reasoning model's work — the screen and the briefing
+# do the reasoning downstream from what this returns.
+RESEARCH_MODEL = os.environ.get("CLAUDE_RESEARCH_MODEL", LIVE_MODEL)
+
+# How long a gathered dossier stays usable. Long enough that preparing the
+# screen and the briefing days apart costs one set of searches; short enough
+# that a fundraise or a departure does not go unnoticed.
+RESEARCH_TTL_DAYS = float(os.environ.get("RESEARCH_TTL_DAYS", "14"))
+
 # --------------------------------------------------------------------------- #
 # Model backend
 # --------------------------------------------------------------------------- #

@@ -48,6 +48,12 @@ from src.features.draft_reply import generate_draft_options
 from src.features.inbox_triage import triage_email
 from src.features.meeting_prep import build_context, counterparty_from_event
 from src.features.preferences import screen_opportunity
+from src.features.web_research import (
+    age_days,
+    dossier_sources,
+    dossier_text,
+    get_dossier,
+)
 from src.features.stt import transcribe_wav
 from src.features.transcription import (
     TranscriptBuffer,
@@ -984,8 +990,13 @@ class ScreenIn(BaseModel):
 @app.post("/api/screen")
 def screen(body: ScreenIn):
     entity = ExtractedEntity.model_validate(body.entity)
+    # Reuse-only: if a prep already researched this manager the screen reads it
+    # for free, but triage does not wait on a search it did not ask for.
+    dossier, _ = get_dossier(_client(), entity.fund_name or entity.company_name,
+                             entity.company_name or "", gather=False)
     result: PreferenceScreen = _run(screen_opportunity, _client(), entity,
-                                    body.key_facts, _notion)
+                                    body.key_facts, _notion,
+                                    extra_context=dossier_text(dossier) if dossier else "")
     return result.model_dump()
 
 
@@ -1104,6 +1115,28 @@ def calendar(days: int = 21, back: int = 0):
     return {"events": out}
 
 
+def _attach_research(ctx: PrepContext, name: str, company: str = "") -> str:
+    """Hang the shared web dossier on a prep context.
+
+    One gather per firm, reused by every consumer: the screen, the quick prep
+    and the full briefing all read the same searches, whether they run together
+    or weeks apart. Returns a line describing what happened, for the job log.
+    """
+    dossier, origin = get_dossier(_client(), name, company)
+    if not dossier:
+        return ("research could not be gathered — the synthesis calls will "
+                "search for themselves" if origin == "failed"
+                else "no counterparty to research")
+    ctx.web_context = dossier_text(dossier)
+    ctx.sources.extend(dossier_sources(dossier))
+    n = len(dossier.get("sources") or [])
+    if origin == "cache":
+        days = int(age_days(dossier))
+        return (f"reused the research gathered {'today' if days < 1 else f'{days} day(s) ago'}"
+                f" — {n} source(s), no new searches")
+    return f"searched the web — {n} source(s), shared with every pass on this firm"
+
+
 class PrepIn(BaseModel):
     name: str
     email: str = ""
@@ -1121,6 +1154,7 @@ def prep(body: PrepIn):
         _notion, counterparty_name=body.name, counterparty_email=body.email,
         company_name=body.company, event=event, research=None,
     )
+    _attach_research(ctx, body.name, body.company)
     if body.depth == "full":
         data, html_out = _run(build_briefing, _client(), ctx)
         return {"kind": "briefing", "entity": data.get("entity"), "html": html_out}
@@ -1298,6 +1332,14 @@ async def start_prep_job(
         notion_note = "live Notion" if _notion.live else "sample data — not your live Notion"
         deck_note = (f"deck read ({len(ctx.document_text):,} chars)"
                      if ctx.document_text else "no deck attached")
+        # One research pass, before the fork — so the screen and the briefing
+        # read the same facts, and so running one of them later reuses rather
+        # than repeats the searches.
+        job["stages"].append({"label": "Background research",
+                              "detail": "checking for research already gathered "
+                                        "on this firm"})
+        _checkpoint(job)
+        job["stages"][-1]["detail"] = _attach_research(ctx, name, company)
         job["stages"].append({"label": "Context gathered",
                               "detail": f"{len(ctx.sources)} source(s) against {notion_note} · {deck_note}"})
 
@@ -1311,11 +1353,12 @@ async def start_prep_job(
                 summary=(ctx.document_text[:600] or ctx.meeting_subject or name),
             )
             # The screen reads the SAME gathered context as the briefing — the
-            # deck in full and our own records. Screening a criterion against a
-            # 600-character summary cannot produce a cited finding, only a
-            # guess dressed as one.
+            # deck in full, our own records and the shared web research.
+            # Screening a criterion against a 600-character summary cannot
+            # produce a cited finding, only a guess dressed as one.
             extra = "\n\n".join(x for x in (
                 f"OUR RECORDS:\n{ctx.notion_context}" if ctx.notion_context else "",
+                f"INDEPENDENT WEB RESEARCH:\n{ctx.web_context}" if ctx.web_context else "",
                 f"MATERIALS SUPPLIED:\n{ctx.document_text}" if ctx.document_text else "",
             ) if x)
             return screen_opportunity(client, entity, [], _notion,

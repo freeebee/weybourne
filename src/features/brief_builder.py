@@ -20,6 +20,7 @@ from pathlib import Path
 
 from src.config import REASONING_MODEL
 from src.features.meeting_prep import PrepContext
+from src.features.web_research import research_block
 
 KIT_PATH = Path(__file__).resolve().parent / "templates" / "weybourne-brief-kit.html"
 
@@ -215,10 +216,11 @@ def synthesize_briefing(client, ctx: PrepContext) -> dict:
         f"Counterparty: {ctx.counterparty_name} <{ctx.counterparty_email}>\n"
         f"Company: {ctx.company_name or '(unknown)'}\n\n"
         f"OUR NOTION RECORDS\n{ctx.notion_context}\n\n"
-        # Nothing is pre-gathered: this call holds the search tools, so say so
-        # plainly. "(none gathered)" read as "the web was unavailable to you",
-        # and briefings came back apologising for not verifying anything.
-        f"BACKGROUND RESEARCH\n{ctx.web_context or 'Nothing has been pre-gathered for you. You have the WebSearch and WebFetch tools in this session: run the searches yourself now, before writing, and cite what you find.'}\n\n"
+        # Either a shared dossier is attached (searches done — don't repeat
+        # them) or nothing is, in which case this call holds the tools and must
+        # search. "(none gathered)" used to read as "the web was unavailable to
+        # you", and briefings came back apologising for not verifying anything.
+        f"BACKGROUND RESEARCH\n{research_block(ctx.web_context)}\n\n"
         f"ATTACHED DOCUMENT (deck)\n{ctx.document_text or '(none)'}\n\n"
         f"KNOWN SOURCE LIST\n" + "\n".join(f"- {s}" for s in ctx.sources)
     )

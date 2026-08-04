@@ -43,6 +43,16 @@ class TestQuickPrep:
     def test_the_prompt_forbids_claiming_the_web_was_unavailable(self):
         assert "Never write that web verification was" in PREP_SYSTEM_PROMPT
 
+    def test_shared_research_is_not_searched_again(self):
+        """The dossier is the searches; repeating them is what we removed."""
+        ctx = _ctx()
+        ctx.web_context = "[Web research on Northlight, gathered just now.]"
+        client = FakeClient(PREP_PAYLOAD)
+        synthesize_prep(client, ctx)
+        user = client.calls[0]["messages"][0]["content"]
+        assert "gathered just now" in user
+        assert "do not repeat them" in user
+
 
 class TestFullBriefing:
     PAYLOAD = {"entity": "Northlight", "is_manager": True,

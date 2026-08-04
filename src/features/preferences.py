@@ -117,8 +117,12 @@ Rules of the house (from the preference framework):
 Evidence discipline, which matters more than any judgement here:
 - A preference the materials simply do not address is "unevidenced" — NEVER "fit" and never \
 "not-fit". Absence of evidence is not evidence. Say what would settle it.
-- Cite the source of every finding (page, section, or the email). If you cannot cite it, the \
-verdict is unevidenced.
+- Cite the source of every finding (page, section, the email, or the attached web research). \
+If you cannot cite it, the verdict is unevidenced.
+- Where web research is attached it was gathered independently of the manager: treat it as \
+citable evidence, and prefer it to the manager's own framing where the two conflict. You hold \
+no search tools yourself — what the research does not cover stays unevidenced rather than \
+being guessed at.
 - Every assessment is a complete sentence that stands alone, beginning "A fit because…", \
 "Not a fit because…", "Unevidenced because…" or "A fit only if…".
 - Figures carry their units and are quoted precisely as the materials state them.

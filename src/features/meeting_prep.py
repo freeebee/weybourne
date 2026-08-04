@@ -28,6 +28,7 @@ from typing import Callable, Optional
 from src.config import REASONING_MODEL
 from src.connectors.notion_client import NotionConnector
 from src.features.dedupe import normalize_name
+from src.features.web_research import research_block
 from src.schemas import CalendarEvent, MeetingPrep
 
 INTERNAL_DOMAIN = "weybourneholdings.com"
@@ -226,7 +227,8 @@ def build_context(
         query = f"{company or counterparty_name} investment manager background"
         try:
             ctx.web_context = research(query)
-            ctx.sources.append(f"Web research: {query}")
+            if ctx.web_context:   # never log a search that returned nothing
+                ctx.sources.append(f"Web research: {query}")
         except Exception as e:  # noqa: BLE001
             ctx.web_context = f"(research unavailable: {e})"
 
@@ -245,7 +247,7 @@ def synthesize_prep(client, ctx: PrepContext) -> MeetingPrep:
         f"Counterparty: {ctx.counterparty_name} <{ctx.counterparty_email}>\n"
         f"Company: {ctx.company_name or '(unknown)'}\n\n"
         f"OUR NOTION RECORDS\n{ctx.notion_context}\n\n"
-        f"BACKGROUND RESEARCH\n{ctx.web_context or 'Nothing has been pre-gathered for you. You have the WebSearch and WebFetch tools in this session: check the counterparty and anything the records assert before writing.'}\n\n"
+        f"BACKGROUND RESEARCH\n{research_block(ctx.web_context)}\n\n"
         f"ATTACHED DOCUMENT\n{ctx.document_text or '(none)'}"
     )
     kwargs = dict(

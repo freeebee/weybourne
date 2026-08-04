@@ -14,6 +14,7 @@ def _extra(ctx: PrepContext) -> str:
     """The context assembly used by the prep job's run_screen()."""
     return "\n\n".join(x for x in (
         f"OUR RECORDS:\n{ctx.notion_context}" if ctx.notion_context else "",
+        f"INDEPENDENT WEB RESEARCH:\n{ctx.web_context}" if ctx.web_context else "",
         f"MATERIALS SUPPLIED:\n{ctx.document_text}" if ctx.document_text else "",
     ) if x)
 
@@ -31,6 +32,12 @@ class TestScreenContext:
         ctx = PrepContext(counterparty_name="Northlight",
                           notion_context="Fund: Northlight III — status 'Passed'")
         assert "status 'Passed'" in _extra(ctx)
+
+    def test_the_shared_research_reaches_the_screen(self):
+        """The screen has no search tools; the dossier is its only outside view."""
+        ctx = PrepContext(counterparty_name="Northlight",
+                          web_context="Fund III first close $600m, 22 May 2026")
+        assert "first close $600m" in _extra(ctx)
 
     def test_nothing_gathered_means_no_empty_headings(self):
         assert _extra(PrepContext(counterparty_name="Northlight")) == ""
