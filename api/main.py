@@ -1310,7 +1310,16 @@ async def start_prep_job(
                 contact_email=email,
                 summary=(ctx.document_text[:600] or ctx.meeting_subject or name),
             )
-            return screen_opportunity(client, entity, [], _notion).model_dump()
+            # The screen reads the SAME gathered context as the briefing — the
+            # deck in full and our own records. Screening a criterion against a
+            # 600-character summary cannot produce a cited finding, only a
+            # guess dressed as one.
+            extra = "\n\n".join(x for x in (
+                f"OUR RECORDS:\n{ctx.notion_context}" if ctx.notion_context else "",
+                f"MATERIALS SUPPLIED:\n{ctx.document_text}" if ctx.document_text else "",
+            ) if x)
+            return screen_opportunity(client, entity, [], _notion,
+                                      extra_context=extra).model_dump()
 
         def run_brief():
             data = synthesize_briefing(client, ctx)
