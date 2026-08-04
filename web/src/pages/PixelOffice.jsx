@@ -379,30 +379,35 @@ function OfficeStation({ station, active, selected, onSelect }) {
 
 /* -- mascot ---------------------------------------------------------------- */
 
-/* Felix keeps the existing two-frame sprite: mascot-felix-hero and
-   mascot-felix-strike, flipped by px-swapA/B. See the note at the foot of
-   this file for the sprite states the reference character would need. */
+/* One two-frame pair per activity, all drawn on the same grid with the feet
+   on the same row (tools/gen_felix_sprites.py), so a swap never makes him
+   hop. Idle is a single frame — the CSS bob is his breathing. */
+const FRAMES = {
+  walk: ["felix-walk-a", "felix-walk-b", ".34s"],
+  fix: ["felix-fix-a", "felix-fix-b", ".52s"],
+  type: ["felix-type-a", "felix-type-b", ".22s"],
+};
+
 function FelixMascot({ scene, x }) {
   const walking = scene.activity === "walk";
-  const working = scene.activity === "fix" || scene.activity === "type";
-  const fast = scene.activity === "type";
+  const pair = FRAMES[scene.activity];
   return (
     <div className={"px-felix" + (scene.power ? " powered" : "")}
       style={{ transform: `translate3d(${Math.round(x)}px, 0, 0)` }}>
       <div className={"px-felix-body" + (walking ? " walking" : "")}>
-        {working ? (
+        {pair ? (
           <>
             <div className="px-frame"
-                 style={{ animation: `px-swapA ${fast ? ".24s" : ".52s"} steps(1) infinite` }}>
-              <Mascot state="felix-hero" width={MASCOT_H} />
+                 style={{ animation: `px-swapA ${pair[2]} steps(1) infinite` }}>
+              <Mascot state={pair[0]} width={MASCOT_H} />
             </div>
             <div className="px-frame"
-                 style={{ animation: `px-swapB ${fast ? ".24s" : ".52s"} steps(1) infinite` }}>
-              <Mascot state="felix-strike" width={MASCOT_H} />
+                 style={{ animation: `px-swapB ${pair[2]} steps(1) infinite` }}>
+              <Mascot state={pair[1]} width={MASCOT_H} />
             </div>
           </>
         ) : (
-          <Mascot state="felix-hero" width={MASCOT_H} />
+          <Mascot state="felix-idle" width={MASCOT_H} />
         )}
       </div>
       {scene.labels.map((l, i) => (
@@ -577,24 +582,14 @@ export function StationStrip({ scene, onSelect }) {
 export { StatusConsole, CleanupHud, OfficeStation, FelixMascot };
 
 /* ---------------------------------------------------------------------------
-   OUTSTANDING ARTWORK
+   THE SPRITE
 
-   Felix currently runs on the existing two-frame sprite pair
-   (mascot-felix-hero / mascot-felix-strike). To match the character in the
-   reference — brown hair, dark-rimmed glasses, cobalt overalls over a blue
-   shirt, brass-buckled tool belt, wrench in the right hand — the following
-   states are needed as separate SVGs in web/public/mascot/, at the same
-   viewBox and baseline as the current pair:
+   Felix's seven frames — idle, walk-a/b, fix-a/b, type-a/b — are drawn by
+   tools/gen_felix_sprites.py onto a shared 36x44 grid and written out as SVG.
+   The body is defined once and only the limbs vary per frame, so his head and
+   feet cannot drift between frames; edit the poses there and re-run it rather
+   than hand-editing the SVGs.
 
-     mascot-felix-idle.svg    standing, wrench down, slight breathing bob
-     mascot-felix-walk-a.svg  left leg forward
-     mascot-felix-walk-b.svg  right leg forward
-     mascot-felix-fix-a.svg   wrench raised
-     mascot-felix-fix-b.svg   wrench struck
-     mascot-felix-type-a.svg  seated/leaning, hands up
-     mascot-felix-type-b.svg  seated/leaning, hands down
-
-   The still figure in the reference PNG must not be stretched into these —
-   each needs drawing at the same pixel grid. Until they exist the current
-   pair is used, which is why walking is a bob rather than a stride.
+   The original mascot-felix-hero / mascot-felix-strike pair is left in place:
+   the splash still uses it.
 --------------------------------------------------------------------------- */
