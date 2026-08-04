@@ -19,13 +19,17 @@ function CalendarPick() {
   const wrapRef = React.useRef(null);
   const todayRef = React.useRef(null);
 
-  React.useEffect(() => {
+  // Fetched on mount AND refreshed each time the panel opens, so the list
+  // never serves a stale snapshot from page-load time.
+  const fetchEvents = React.useCallback(() => {
     get("/api/calendar?days=7&back=30")
       .then((d) => setEvents(d.events || [])).catch(() => {});
   }, []);
+  React.useEffect(fetchEvents, [fetchEvents]);
 
   React.useEffect(() => {
     if (!open) return;
+    fetchEvents();
     const close = (e) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
     };

@@ -81,17 +81,21 @@
   animation-delay: calc(2350ms * var(--wb-speed)); }
 
 /* ---- 3. mascot + greeting ---- */
-.wb-mascot-block { display: flex; flex-direction: column; align-items: center; gap: 4px;
+.wb-mascot-block { display: flex; flex-direction: column; align-items: center; gap: 8px;
   align-self: center; }
-.wb-mascot { width: 176px; height: 147px; overflow: visible; position: relative;
+/* Sized to the FULL 240-unit drawing (desk included), so the artwork always
+   ends above the greeting — no overlap when the desk appears. */
+.wb-mascot { width: 176px; height: 176px; overflow: visible; position: relative;
+  display: block;
   animation: wb-rise calc(700ms * var(--wb-speed)) cubic-bezier(.2,.7,.2,1) both;
   animation-delay: calc(2400ms * var(--wb-speed)); }
-.wb-mascot::before { content: ""; position: absolute; inset: 8% 3% 4%;
+.wb-mascot::before { content: ""; position: absolute; inset: 6% 8% 22%;
   border: 1px solid rgba(36,150,146,.18); border-radius: 50%;
   animation: wb-halo 4s ease-in-out infinite; }
 .wb-greeting { font-size: 13.5px; color: rgba(247,243,234,.72); letter-spacing: .01em;
   animation: wb-rise calc(620ms * var(--wb-speed)) cubic-bezier(.2,.7,.2,1) both;
   animation-delay: calc(2700ms * var(--wb-speed)); }
+.wb-activated .wb-greeting { color: #84C7C2; }
 
 /* ---- 4. signals: label + line + detail, sliding in then converging ---- */
 .wb-signals { display: flex; flex-direction: column; gap: 20px; min-width: 300px; }
@@ -203,12 +207,46 @@
 @keyframes m-tapA { 0%, 100% { transform: translateY(0); }    50% { transform: translateY(-4px); } }
 @keyframes m-tapB { 0%, 100% { transform: translateY(-4px); } 50% { transform: translateY(0); } }
 
-/* crossfading poses: waving melts into working-at-the-laptop instead of a
-   hard swap (the desk used to just pop into existence) */
-.wb-pose { position: absolute; inset: 0; transition: opacity .7s ease; }
-.wb-pose-work { opacity: 0; }
-.wb-activated .wb-pose-wave { opacity: 0; }
-.wb-activated .wb-pose-work { opacity: 1; }
+/* ---- CHAO's pose change: one drawing, real motion --------------------- */
+/* Idle: happy face, left arm resting, right arm waving overhead.
+   Activated: desk + laptop rise in, the waving arm SWINGS DOWN onto the
+   keyboard (the typing arm picks the motion up mid-arc), the face
+   refocuses, and after landing both hands hammer away (m-tapA/B). */
+.wbc-head { transition: opacity .45s ease .3s; }
+.wbc-head-focus { opacity: 0; }
+.wb-activated .wbc-head-happy { opacity: 0; }
+.wb-activated .wbc-head-focus { opacity: 1; }
+.wbc-body { animation: m-bob 2.6s ease-in-out infinite; }
+
+.wbc-deskpart { opacity: 0; transform: translateY(14px);
+  transition: opacity .6s ease .05s, transform .6s cubic-bezier(.2,.7,.2,1) .05s; }
+.wb-activated .wbc-deskpart { opacity: 1; transform: none; }
+
+/* right arm — the star of the move: rocking wave, then a 115° swing down */
+.wbc-armR-idle { transform-box: fill-box; transform-origin: 10% 100%;
+  animation: m-wave .7s ease-in-out infinite;
+  transition: transform .75s cubic-bezier(.5,0,.6,1), opacity .3s ease .45s; }
+.wb-activated .wbc-armR-idle { animation: none;
+  transform: rotate(115deg); opacity: 0; }
+.wbc-armR-type { transform-box: fill-box; transform-origin: 90% 0%;
+  transform: rotate(-75deg); opacity: 0;
+  transition: transform .75s cubic-bezier(.3,.7,.3,1), opacity .3s ease .25s; }
+.wb-activated .wbc-armR-type { transform: rotate(0deg); opacity: 1;
+  animation: m-tapB .34s ease-in-out 1s infinite; }
+
+/* left arm — a shorter lift from his side onto the keys */
+.wbc-armL-idle { transform-box: fill-box; transform-origin: 100% 0%;
+  transition: transform .6s cubic-bezier(.4,0,.6,1), opacity .3s ease .3s; }
+.wb-activated .wbc-armL-idle { transform: rotate(-18deg); opacity: 0; }
+.wbc-armL-type { transform-box: fill-box; transform-origin: 0% 0%;
+  transform: rotate(22deg); opacity: 0;
+  transition: transform .6s cubic-bezier(.3,.7,.3,1) .15s, opacity .3s ease .3s; }
+.wb-activated .wbc-armL-type { transform: rotate(0deg); opacity: 1;
+  animation: m-tapA .34s ease-in-out 1s infinite; }
+
+/* the little greeting sparks leave as soon as the wave ends */
+.wbc-sparks { transition: opacity .25s ease; }
+.wb-activated .wbc-sparks { opacity: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .wb-splash-root * { animation-duration: 1ms !important; animation-delay: 0ms !important; }
