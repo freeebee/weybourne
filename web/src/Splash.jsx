@@ -16,20 +16,27 @@ const SIGNALS = [
 ];
 
 export default function Splash({ children, speed = 1, onDone }) {
-  const [entered, setEntered] = React.useState(false);
+  // idle → the timeline plays and waits on ENTER APP.
+  // hold → pressed: CHAO sits down and types while the desk "connects".
+  // leave → the teal line sweeps and the veil dissolves into the live app.
+  const [phase, setPhase] = React.useState("idle");
 
   React.useEffect(() => {
     sessionStorage.setItem("wb-splash-seen", "1");
   }, []);
 
   const enter = () => {
-    if (entered) return;
-    setEntered(true);
-    if (onDone) setTimeout(onDone, 950 * speed);   // after the veil dissolve
+    if (phase !== "idle") return;
+    setPhase("hold");
+    setTimeout(() => setPhase("leave"), 2600 * speed);
+    if (onDone) setTimeout(onDone, 3700 * speed);   // after the veil dissolve
   };
 
+  const entered = phase !== "idle";
   return (
-    <div className={"wb-splash-root" + (entered ? " wb-entered" : "")}
+    <div className={"wb-splash-root"
+                    + (entered ? " wb-activated" : "")
+                    + (phase === "leave" ? " wb-entered" : "")}
          style={{ "--wb-speed": speed }}>
       <div className="wb-app">{children}</div>
 
@@ -76,7 +83,9 @@ export default function Splash({ children, speed = 1, onDone }) {
                     aria-label="CHAO, the Weybourne assistant">
                 <Mascot state={entered ? "working" : "waving"} width={176} />
               </span>
-              <span className="wb-greeting">CHAO at your service</span>
+              <span className="wb-greeting">
+                {entered ? "CHAO is wiring up your desk…" : "CHAO at your service"}
+              </span>
             </div>
             <div className="wb-signals">
               {SIGNALS.map(([label, detail], i) => (

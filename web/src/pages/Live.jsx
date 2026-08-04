@@ -824,8 +824,6 @@ export default function Live() {
           )}
         </Card>
       )}
-      {s.busy === "note" && !s.noteDraftText &&
-        <Mascot state="notes" width={64} text="Drafting the note from the full transcript…" />}
     </div>
   );
 }

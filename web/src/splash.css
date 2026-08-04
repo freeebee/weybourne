@@ -10,8 +10,8 @@
 
 /* ---- veil (the splash layer itself) ---- */
 .wb-veil { position: absolute; inset: 0; background: #0F2E42; overflow: hidden; }
-.wb-entered .wb-veil { animation: wb-veil 680ms cubic-bezier(.4,0,.2,1) both;
-  animation-delay: calc(300ms * var(--wb-speed)); }
+.wb-entered .wb-veil { animation: wb-veil 950ms cubic-bezier(.4,0,.2,1) both;
+  animation-delay: calc(220ms * var(--wb-speed)); }
 .wb-veil-glow { position: absolute; inset: 0; pointer-events: none;
   background: radial-gradient(95% 90% at 68% 42%, rgba(36,150,146,.15), rgba(15,46,66,0) 58%); }
 
@@ -136,13 +136,21 @@
   background: linear-gradient(90deg, transparent, rgba(247,243,234,.13), transparent);
   animation: wb-sheen 3.2s ease-in-out infinite;
   animation-delay: calc(4400ms * var(--wb-speed)); }
-/* activation ring on press */
+/* activation on press: the button fills, the ring fires, and the splash
+   HOLDS while CHAO switches to the laptop and types — the veil only leaves
+   in the wb-entered phase a couple of seconds later. */
 .wb-enter-ring { position: absolute; inset: -1px; border: 1px solid #249692;
   border-radius: 3px; opacity: 0; pointer-events: none; }
-.wb-entered .wb-enter { background: #249692; border-color: #249692;
-  animation: none; }
-.wb-entered .wb-enter-ring { animation: wb-ring 520ms ease-out both; }
-.wb-entered .wb-sheen { animation: none; }
+.wb-activated .wb-enter { background: #249692; border-color: #249692;
+  cursor: default; animation: none; }
+.wb-activated .wb-enter-ring { animation: wb-ring 520ms ease-out both; }
+.wb-activated .wb-sheen { animation: none; }
+.wb-activated .wb-greeting { color: #84C7C2; }
+.wb-activated .wb-mascot::before { border-color: rgba(36,150,146,.4);
+  animation: wb-halo 1.2s ease-in-out infinite; }
+/* while CHAO types, the signal diamonds pulse like traffic lights coming on */
+.wb-activated .wb-diamond { animation: wb-diamond-pulse 1.1s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 220ms); background: #249692; }
 
 /* ---- 6. activation: teal line sweeps, veil dissolves, app rises ---- */
 .wb-centerline { position: absolute; left: 0; right: 0; top: 50%; height: 1px; z-index: 3;
@@ -151,8 +159,8 @@
 .wb-entered .wb-centerline { animation: wb-centerline 640ms cubic-bezier(.4,0,.2,1) both; }
 
 .wb-app { opacity: 0; }
-.wb-entered .wb-app { animation: wb-app calc(720ms * var(--wb-speed)) cubic-bezier(.2,.7,.2,1) both;
-  animation-delay: calc(380ms * var(--wb-speed)); }
+.wb-entered .wb-app { animation: wb-app calc(950ms * var(--wb-speed)) cubic-bezier(.2,.7,.2,1) both;
+  animation-delay: calc(320ms * var(--wb-speed)); }
 
 /* ---- keyframes ---- */
 @keyframes wb-fly {
@@ -180,6 +188,8 @@
 @keyframes wb-sheen { 0% { left: -55%; } 55%, 100% { left: 120%; } }
 @keyframes wb-ring { from { opacity: 1; transform: scale(1); }
   to { opacity: 0; transform: scale(1.35); } }
+@keyframes wb-diamond-pulse { 0%, 100% { box-shadow: 0 0 0 rgba(36,150,146,0); }
+  50% { box-shadow: 0 0 12px rgba(36,150,146,.7); } }
 @keyframes wb-centerline { 0% { opacity: .72; transform: scaleX(0); }
   55% { opacity: .72; transform: scaleX(1); } 100% { opacity: 0; transform: scaleX(1); } }
 @keyframes wb-veil { from { opacity: 1; } to { opacity: 0; visibility: hidden; } }

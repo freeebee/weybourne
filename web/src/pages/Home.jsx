@@ -65,6 +65,13 @@ export default function Home() {
           <Mascot state="waving" width={88} />
           <Button onClick={() => nav("/triage")}>Triage the inbox</Button>
           <Button variant="ghost" onClick={() => nav("/prep")}>Prepare a meeting</Button>
+          <button className="mono" title="Watch the opening animation again"
+            onClick={() => window.dispatchEvent(new Event("wb-replay-splash"))}
+            style={{ background: "none", border: "none", cursor: "pointer",
+                     padding: "2px 0", fontSize: 10, letterSpacing: ".14em",
+                     color: "var(--stone-400)" }}>
+            REPLAY OPENING
+          </button>
         </div>
       </div>
 

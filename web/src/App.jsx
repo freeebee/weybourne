@@ -118,8 +118,15 @@ function useWarmWhatsNew() {
 export default function App() {
   useWarmWhatsNew();
   // Opening animation — once per session; afterwards the shell renders bare.
+  // The homepage's "Replay opening" button fires wb-replay-splash to bring
+  // it back on demand.
   const [booted, setBooted] = React.useState(
     () => !!sessionStorage.getItem("wb-splash-seen"));
+  React.useEffect(() => {
+    const replay = () => setBooted(false);
+    window.addEventListener("wb-replay-splash", replay);
+    return () => window.removeEventListener("wb-replay-splash", replay);
+  }, []);
   const shell = <AppShell />;
   if (!booted) return <Splash onDone={() => setBooted(true)}>{shell}</Splash>;
   return shell;
