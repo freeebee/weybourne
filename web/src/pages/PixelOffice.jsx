@@ -506,8 +506,10 @@ export default function PixelOfficeScene({ scene, stats, onSelect }) {
   }, []);
 
   const station = STATION_BY_ID[scene.zone] || STATIONS[0];
-  // Felix stands to the right of whatever he is working on, clear of the art.
-  const felixX = Math.round(station.x + (ART[station.id].w / 2) + 18);
+  // Felix works ON the station, so he stands close enough that his raised
+  // wrench lands inside it. Clear of the furniture he looked like a bystander
+  // watching it shake by itself.
+  const felixX = Math.round(station.x + (ART[station.id].w / 2) - 40);
 
   return (
     <div className="px-office" ref={wrapRef}

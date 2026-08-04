@@ -2073,16 +2073,27 @@ def felix_review(change_id: str, body: FelixReviewIn):
     change = felix_store.find_change(change_id)
     if change is None:
         raise HTTPException(status_code=404, detail="No such change")
+    # A merge is one action recorded as several rows: the merge itself, a
+    # transfer per property moved, and the archive of the loser. Deciding the
+    # merge decides all of them — otherwise the archive row sits in the queue
+    # asking for approval of something already done.
+    MERGE_FAMILY = ("merge", "merge_transfer", "archive")
+
     def _supersede_siblings():
         """The same finding often appears twice across runs (a dry-run row
         plus the applied one, or a re-detected duplicate). Deciding one
         decides them all — the twins are marked Superseded, not left queued."""
+        family = change.change_type in MERGE_FAMILY
         for other in felix_store.list_all_changes(review="Awaiting Review",
                                                   limit=5000):
-            if (other.change_id != change_id
-                    and other.record_id == change.record_id
+            if other.change_id == change_id:
+                continue
+            twin = (other.record_id == change.record_id
                     and other.change_type == change.change_type
-                    and other.property_changed == change.property_changed):
+                    and other.property_changed == change.property_changed)
+            same_merge = (family and other.run_id == change.run_id
+                          and other.change_type in MERGE_FAMILY)
+            if twin or same_merge:
                 felix_store.update_change(other.change_id,
                                           {"review_status": "Superseded"})
 

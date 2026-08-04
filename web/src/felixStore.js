@@ -76,10 +76,12 @@ export async function refreshStatus() {
 
 export async function fetchChanges(filter) {
   if (filter) S.changesFilter = filter;
-  // "easy" is a client-side view over the awaiting queue (high-confidence
-  // mechanical fixes) — the API only knows review statuses.
+  // "easy" and "done" are client-side views (high-confidence mechanical
+  // fixes; anything already written to Notion) — the API only knows review
+  // statuses, so both ask for the queue and narrow it here.
   const apiFilter = { ...S.changesFilter };
   if (apiFilter.review === "easy") apiFilter.review = "Awaiting Review";
+  if (apiFilter.review === "done") delete apiFilter.review;
   const q = new URLSearchParams(
     Object.entries(apiFilter).filter(([, v]) => v));
   try {

@@ -17,6 +17,7 @@ Nothing is sent. Drafts are created in Outlook for review
 from __future__ import annotations
 
 import json
+import re
 
 from src.config import REASONING_MODEL
 from src.schemas import (
@@ -60,6 +61,9 @@ Weybourne, a family office investing in funds across private and public markets.
 House style: direct, efficient, to the point, courteous and professional. British English. \
 No effusive praise, no filler, no hard sell. Short paragraphs. Sign off as the user (leave \
 the signature as just their first name).
+
+NEVER use an em dash (—) or an en dash (–) anywhere in a subject or body. Use a full stop, \
+a comma, a colon, or split the sentence. Hyphens in compound words are fine.
 
 Produce a set of ALTERNATIVE replies the user can choose between — not a sequence. Include:
 - Two or three distinct PASS options, each giving a DIFFERENT genuine rationale drawn from \
@@ -151,6 +155,32 @@ def _fallback_options(
     return options
 
 
+_DASHES = str.maketrans({"—": ",", "–": ",", "−": "-"})
+
+
+def _dedash(text: str) -> str:
+    text = text.translate(_DASHES)
+    text = re.sub(r"\s+,", ",", text)
+    text = re.sub(r",{2,}", ",", text)
+    return re.sub(r",(\s*[.,;:])", r"\1", text)
+
+
+def strip_dashes(options: list[DraftReplyOption]) -> list[DraftReplyOption]:
+    """Take the dashes out of every draft, whatever the model did.
+
+    Asking in the prompt is not enough for text that goes out over the user's
+    name, so each option is cleaned on the way through: an em or en dash
+    becomes a comma and the punctuation it collides with is tidied. Hyphens in
+    compound words are left alone. The deterministic fallback drafts go
+    through the same cleaner rather than being trusted.
+    """
+    for o in options:
+        o.subject = _dedash(o.subject)
+        o.body = _dedash(o.body)
+        o.label = _dedash(o.label)
+    return options
+
+
 def generate_draft_options(
     client,
     email: EmailMessage,
@@ -167,7 +197,7 @@ def generate_draft_options(
     """
     slots = slots or []
     if client is None:
-        return _fallback_options(entity, screen, slots)
+        return strip_dashes(_fallback_options(entity, screen, slots))
 
     slot_block = (
         "\n".join(f"- {s.label()}" for s in slots[:4])
@@ -199,4 +229,5 @@ def generate_draft_options(
     )
     raw = next((b.text for b in response.content if getattr(b, "type", None) == "text"), "")
     parsed = json.loads(raw)
-    return [DraftReplyOption.model_validate(o) for o in parsed.get("options", [])]
+    return strip_dashes([DraftReplyOption.model_validate(o)
+                         for o in parsed.get("options", [])])

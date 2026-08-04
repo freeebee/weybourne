@@ -421,8 +421,14 @@ function ReviewTable({ s }) {
     </select>
   );
   const all = s.changes.filter((c) => !c.parent_change_id);
+  // Something already written to Notion is not waiting on your okay, whatever
+  // its review flag says — it belongs under "Already fixed", where it can
+  // still be undone. Leaving applied merges in this lane made the queue read
+  // as work outstanding when the work was done.
   const rows = f.review === "easy" ? all.filter(isEasyFix)
-    : f.review === "Awaiting Review" ? all.filter((c) => !isEasyFix(c))
+    : f.review === "Awaiting Review"
+      ? all.filter((c) => !isEasyFix(c) && c.execution_status !== "Applied")
+    : f.review === "done" ? all.filter((c) => c.execution_status === "Applied")
     : all;
   const fixAll = async () => {
     const list = [...rows];
@@ -439,6 +445,7 @@ function ReviewTable({ s }) {
       <div className="row" style={{ marginBottom: 10, flexWrap: "wrap" }}>
         {sel("review", [["Awaiting Review", "Needs your okay"],
                         ["easy", "Easy fixes"],
+                        ["done", "Already fixed"],
                         ["Approved", "Approved"], ["Dismissed", "Discarded"],
                         ["Undo Requested", "Undo requested"]])}
         {sel("db", [["", "All databases"], ["contacts", "Contacts"],
@@ -555,8 +562,20 @@ function ChangeRow({ c, s }) {
   return (
           <Card style={{ padding: "13px 16px", marginBottom: 8 }}>
             <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
+              {/* The field is part of the identity of the row: one contact
+                  can have a Title proposal approved and a Description
+                  proposal still open, and without this they looked like the
+                  same suggestion coming back. */}
               <b style={{ fontSize: "14px" }}>
                 {c.record_name || "(unnamed record)"}
+                {c.property_changed && !c.property_changed.startsWith("(") && (
+                  <span className="mono" style={{ fontSize: 10, marginLeft: 8,
+                        letterSpacing: ".08em", color: "var(--teal-700)",
+                        background: "var(--teal-100)", padding: "2px 6px",
+                        borderRadius: 3 }}>
+                    {c.property_changed.toUpperCase()}
+                  </span>
+                )}
                 <span className="mono" style={{ fontSize: 10, marginLeft: 8,
                       letterSpacing: ".1em", color: "var(--stone-400)" }}>
                   {c.database.toUpperCase()} · {fmtDT(c.timestamp)}

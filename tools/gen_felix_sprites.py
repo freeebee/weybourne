@@ -103,15 +103,18 @@ class Grid:
 def head(g: Grid, mouth: str = "flat"):
     """Head, hair and glasses. Identical in every frame: a head that shifts
     between frames is the thing the eye notices first."""
-    g.row(3, [(13, 10, "d")])
-    g.row(4, [(12, 12, "h"), (14, 5, "H")])
-    g.row(5, [(12, 12, "h"), (13, 3, "H"), (20, 2, "H")])
-    g.row(6, [(12, 12, "h"), (16, 4, "H")])
-    g.row(7, [(12, 12, "h")])
+    # A fuller mop: the reference head is wide and the hair has volume above
+    # the brow, not a flat cap sitting on it.
+    g.row(2, [(13, 11, "d")])
+    g.row(3, [(12, 13, "h"), (14, 6, "H")])
+    g.row(4, [(11, 15, "h"), (13, 4, "H"), (21, 3, "H")])
+    g.row(5, [(11, 15, "h"), (12, 3, "H"), (20, 3, "H")])
+    g.row(6, [(11, 15, "h"), (16, 5, "H")])
+    g.row(7, [(11, 15, "h")])
     # Forehead. Without these two rows the hair meets the rims and the whole
     # face reads as a bandit mask.
-    g.row(8, [(12, 1, "h"), (13, 10, "s"), (23, 1, "h")])
-    g.row(9, [(12, 1, "h"), (13, 10, "s"), (23, 1, "h")])
+    g.row(8, [(11, 1, "h"), (12, 12, "s"), (24, 1, "h")])
+    g.row(9, [(11, 1, "h"), (12, 12, "s"), (24, 1, "h")])
     # Spectacles: two rimmed lenses with a bridge, skin showing all round —
     # not a band across the face.
     g.row(10, [(12, 1, "h"), (13, 4, "g"), (17, 2, "s"), (19, 4, "g"), (23, 1, "h")])
@@ -121,32 +124,32 @@ def head(g: Grid, mouth: str = "flat"):
                (17, 2, "s"), (19, 1, "g"), (20, 1, "g"), (21, 1, "w"), (22, 1, "g"),
                (23, 1, "h")])
     g.row(13, [(12, 1, "h"), (13, 4, "g"), (17, 2, "s"), (19, 4, "g"), (23, 1, "h")])
-    g.row(14, [(12, 1, "h"), (13, 10, "s"), (23, 1, "h")])
-    g.row(15, [(13, 10, "s"), (17, 2, "S")])          # nose
+    g.row(14, [(11, 1, "h"), (12, 12, "s"), (24, 1, "h")])
+    g.row(15, [(12, 12, "s"), (17, 2, "S")])          # nose
     if mouth == "open":
-        g.row(16, [(13, 10, "s"), (16, 4, "K")])
-        g.row(17, [(14, 8, "s"), (16, 4, "m")])
+        g.row(16, [(12, 12, "s"), (16, 4, "K")])
+        g.row(17, [(13, 10, "s"), (16, 4, "m")])
     elif mouth == "grin":
-        g.row(16, [(13, 10, "s"), (16, 4, "m")])
-        g.row(17, [(14, 8, "s")])
+        g.row(16, [(12, 12, "s"), (16, 4, "m")])
+        g.row(17, [(13, 10, "s")])
     else:
-        g.row(16, [(13, 10, "s"), (16, 4, "b")])
+        g.row(16, [(12, 12, "s"), (16, 4, "b")])
         g.row(17, [(14, 8, "s")])
 
 
 def torso(g: Grid):
     """Shirt, bib, straps, belt — the part that never moves."""
     g.row(18, [(15, 6, "S")])                                   # neck
-    g.rect(12, 19, 12, 2, "t")                                  # shoulders
-    g.rect(11, 21, 14, 2, "t")
+    g.rect(11, 19, 14, 2, "t")                                  # shoulders
+    g.rect(10, 21, 16, 2, "t")
     g.rect(13, 21, 2, 2, "o")                                   # straps
     g.rect(21, 21, 2, 2, "o")
-    g.rect(12, 23, 12, 6, "o")                                  # bib
-    g.rect(12, 23, 2, 6, "O")
-    g.rect(22, 23, 2, 6, "O")
-    g.row(29, [(11, 14, "L")])                                  # belt
+    g.rect(11, 23, 14, 6, "o")                                  # bib
+    g.rect(11, 23, 2, 6, "O")
+    g.rect(23, 23, 2, 6, "O")
+    g.row(29, [(10, 16, "L")])                                  # belt
     g.row(29, [(17, 2, "B")])                                   # buckle
-    g.rect(12, 30, 12, 1, "o")
+    g.rect(11, 30, 14, 1, "o")
 
 
 def legs(g: Grid, pose: str):
