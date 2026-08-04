@@ -1860,6 +1860,9 @@ class FelixRunIn(BaseModel):
     dry_run: Optional[bool] = None      # None → dry unless live mode is enabled
     max_writes: Optional[int] = None
     databases: Optional[list[str]] = None
+    # Ordinary runs never search the web; the user asks for that separately
+    # once they have seen what could not be settled from the notes.
+    web_research: bool = False
 
 
 @app.post("/api/jobs/felix")
@@ -1877,7 +1880,7 @@ def start_felix_job(body: Optional[FelixRunIn] = None):
                for j in _JOBS.values()):
             raise HTTPException(status_code=409,
                                 detail="A Felix run is already in progress")
-    opts = FelixRunOptions(dry_run=dry)
+    opts = FelixRunOptions(dry_run=dry, web_research=bool(body.web_research))
     if body.max_writes:
         opts.max_writes = max(1, min(200, body.max_writes))
     if body.databases:
@@ -2116,7 +2119,29 @@ def felix_status():
             "auto_run_enabled": bool(cfg.get("auto_run_enabled")),
             "auto_run_hour": cfg.get("auto_run_hour", 7),
             "running": running,
+            "pending_research": felix_pending(),
             "stats": felix_store.stats()}
+
+
+@app.get("/api/felix/pending")
+def felix_pending():
+    """What the last run could not settle from the notes, grouped so the user
+    can see what a web search would actually be spent on."""
+    data = felix_store.load_pending_research()
+    items = data.get("items", [])
+    groups: dict = {}
+    for it in items:
+        g = groups.setdefault(it.get("kind", "other"),
+                              {"kind": it.get("kind", "other"), "count": 0,
+                               "records": []})
+        g["count"] += 1
+        if len(g["records"]) < 12:
+            g["records"].append({"name": it.get("record_name", ""),
+                                 "field": it.get("field", ""),
+                                 "url": it.get("record_url", ""),
+                                 "detail": it.get("detail", "")})
+    return {"at": data.get("at", ""), "total": len(items),
+            "groups": sorted(groups.values(), key=lambda g: -g["count"])}
 
 
 class FelixConfigIn(BaseModel):

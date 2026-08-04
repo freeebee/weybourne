@@ -110,6 +110,13 @@ def _merge_detail(survivor: dict, loser: dict, transfers: dict,
 def _prop_payload(ptype: str, value: str) -> dict:
     if ptype == "select":
         return {"select": {"name": value}}
+    if ptype == "multi_select":
+        # Asset Class and Geographic Focus are multi-selects; sending a
+        # single-select payload to one is rejected outright by Notion.
+        vals = value if isinstance(value, list) else [value]
+        return {"multi_select": [{"name": str(v)} for v in vals if str(v).strip()]}
+    if ptype == "status":
+        return {"status": {"name": value}}
     if ptype == "phone_number":
         return {"phone_number": value}
     if ptype == "url":
@@ -511,7 +518,26 @@ def felix_run(job: dict, notion, client, options: RunOptions,
         elif verdict["verdict"] == "deferred":
             counts["deferred"] += 1
 
-    research_budget = options.max_research if client is not None else 0
+    # An ordinary run spends nothing on the web: it lists what it could not
+    # settle and waits to be asked.
+    pending: list[dict] = []
+
+    def defer_to_web(kind: str, card: dict, field: str = "",
+                     detail: str = "") -> None:
+        pending.append({"kind": kind, "database": card.get("db", ""),
+                        "record_id": card.get("id", ""),
+                        "record_name": card.get("name", ""),
+                        "record_url": card.get("url", ""),
+                        "field": field, "detail": detail})
+
+    research_budget = (options.max_research
+                       if client is not None and options.web_research else 0)
+    if to_research and not options.web_research:
+        for p, verdict in to_research:
+            defer_to_web("duplicate", p["a"], "(possible duplicate)",
+                         f"may duplicate '{p['b']['name']}' — "
+                         f"{verdict['reason'][:200]}")
+        to_research = []
     if to_research and research_budget > 0:
         _stage(job, "Researching online",
                f"{min(len(to_research), research_budget)} look-alike pair(s)")
@@ -664,7 +690,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
     # Asset class / geography gaps on funds → web lookup. Values are validated
     # against the live select options in code; each lands as a Proposed change
     # the user approves.
-    if research_budget > 0 and "funds" in cards_by_db:
+    if "funds" in cards_by_db:
         fund_opts = options_by_db.get("funds", {})
         research_props = [pr for pr in ("Asset Class", "Geographic Focus")
                           if fund_opts.get(pr)]
@@ -675,6 +701,11 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                       for pr in miss["missing"] if pr in research_props]
             if wanted:
                 targets.append((miss["card"], wanted))
+        if not options.web_research:
+            for card, wanted in targets:
+                for w in wanted:
+                    defer_to_web("fund_tags", card, w["property"])
+            targets = []
         if targets:
             _stage(job, "Researching fund classifications",
                    f"{min(len(targets), research_budget)} fund(s)")
@@ -693,8 +724,12 @@ def felix_run(job: dict, notion, client, options: RunOptions,
             except Exception:  # noqa: BLE001
                 found = []
             for pr in found:
+                # These are multi-selects in the live workspace; the payload
+                # type comes from the record itself rather than an assumption.
+                ptype = (card["raw"].get(pr["property"], {}) or {}).get(
+                    "type", "multi_select")
                 record_proposal(
-                    card, pr["property"], pr["value"], "select",
+                    card, pr["property"], pr["value"], ptype,
                     reason=f"researched online: {pr['explanation'][:200]}",
                     source=f"web — {pr['source'][:180]}")
 
@@ -732,32 +767,52 @@ def felix_run(job: dict, notion, client, options: RunOptions,
     companies = cards_by_db.get("companies", [])
     contacts = cards_by_db.get("contacts", [])
 
-    if research_budget > 0 and client is not None:
-        _stage(job, "Filling gaps", "contacts, funds and notes")
+    if client is not None:
+        _stage(job, "Filling gaps",
+               "from meeting notes" + (" and the web" if options.web_research
+                                       else ""))
         checkpoint()
 
     # -- contacts: employer, title, description, LinkedIn photo -------------- #
     contact_props = set(schemas.get("contacts", set()))
+    emp_prop = detect.match_prop(contact_props, "Employed By")
     for miss in detect.find_missing_props(contacts, "contacts", contact_props):
-        if research_budget <= 0:
+        if client is None:
             break
         card = miss["card"]
         wanted = []
-        if "Employed By" in miss["missing"]:
+        if emp_prop and emp_prop in miss["missing"]:
             wanted.append("employer")
-        for prop, key in (("Title", "title"), ("Job Title", "title"),
-                          ("Description", "description"),
-                          ("Weybourne Comments", "description")):
-            if prop in miss["missing"] and key not in wanted:
+        for label, key in (("Title", "title"), ("Description", "description")):
+            prop = detect.match_prop(contact_props, label)
+            if prop and prop in miss["missing"] and key not in wanted:
                 wanted.append(key)
         if not wanted:
             continue
-        research_budget -= 1
+        notes_text = _notes_text_for(card["id"])
+        # Without the user's go-ahead there is no web search. A contact with
+        # linked notes can still be settled from them; one with nothing to
+        # read goes straight on the list.
+        if not options.web_research and not notes_text.strip():
+            for w in wanted:
+                defer_to_web("employer" if w == "employer" else "contact_field",
+                             card, emp_prop if w == "employer" else w)
+            continue
+        if options.web_research and research_budget <= 0:
+            break
+        if options.web_research:
+            research_budget -= 1
         checkpoint()
         try:
-            found = enrich.research_contact(client, card,
-                                            _notes_text_for(card["id"]), wanted)
+            found = enrich.research_contact(client, card, notes_text, wanted,
+                                            use_web=options.web_research)
         except Exception:  # noqa: BLE001
+            continue
+        if not options.web_research and found.get("confidence") == "low":
+            # The notes did not settle it — offer it up for searching.
+            for w in wanted:
+                defer_to_web("employer" if w == "employer" else "contact_field",
+                             card, emp_prop if w == "employer" else w)
             continue
         if found.get("confidence") == "low":
             continue
@@ -766,15 +821,15 @@ def felix_run(job: dict, notion, client, options: RunOptions,
         src = f"{where} — {found.get('evidence', '')[:300]}"
 
         employer = (found.get("employer") or "").strip()
-        if employer and "Employed By" in miss["missing"]:
+        if employer and emp_prop and emp_prop in miss["missing"]:
             hit = enrich.resolve_name(employer, companies)
             if hit["match"]:
                 _relation_proposal(
-                    card, "Employed By", hit["match"],
+                    card, emp_prop, hit["match"],
                     f"identified as working for {employer}", src)
             elif hit["near"]:
                 record_recommendation(
-                    card, "Employed By",
+                    card, emp_prop,
                     f"identified as working for '{employer}', which is close "
                     f"to the existing company '{hit['near']['name']}' "
                     f"(similarity {hit['score']}) but not the same name — "
@@ -784,16 +839,17 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                 # No such company on record: create it, then link. Only on a
                 # solid identification, and only once the name has been
                 # checked against every existing company above.
-                record_create_company(card, "Employed By", employer,
+                record_create_company(card, emp_prop, employer,
                                       reason=f"'{card['name']}' works for "
                                              f"{employer}, which is not yet in "
                                              "Companies",
                                       source=src)
-        for prop, key in (("Title", "title"), ("Job Title", "title"),
-                          ("Description", "description"),
-                          ("Weybourne Comments", "description")):
+        elif emp_prop and emp_prop in miss["missing"] and not options.web_research:
+            defer_to_web("employer", card, emp_prop)
+        for label, key in (("Title", "title"), ("Description", "description")):
+            prop = detect.match_prop(contact_props, label)
             value = (found.get(key) or "").strip()
-            if value and prop in miss["missing"] and prop in contact_props:
+            if value and prop and prop in miss["missing"]:
                 record_proposal(card, prop, value, "rich_text",
                                 reason=f"{where}: {found.get('evidence', '')[:200]}",
                                 source=src)
@@ -803,25 +859,33 @@ def felix_run(job: dict, notion, client, options: RunOptions,
 
     # -- funds: which manager runs this fund --------------------------------- #
     fund_props = set(schemas.get("funds", set()))
-    co_prop = next((p for p in ("Company", "Company Name", "Manager")
-                    if p in fund_props), "")
+    co_prop = detect.match_prop(fund_props, "Company", "Manager")
     if co_prop and co_prop in {p for (d, p) in relation_map if d == "funds"}:
         for miss in detect.find_missing_props(cards_by_db.get("funds", []),
                                               "funds", fund_props):
-            if research_budget <= 0:
+            if client is None:
                 break
             card = miss["card"]
             if co_prop not in miss["missing"]:
                 continue
-            research_budget -= 1
+            notes_text = _notes_text_for(card["id"])
+            if not options.web_research and not notes_text.strip():
+                defer_to_web("fund_company", card, co_prop)
+                continue
+            if options.web_research and research_budget <= 0:
+                break
+            if options.web_research:
+                research_budget -= 1
             checkpoint()
             try:
                 found = enrich.research_fund_company(
-                    client, card, _notes_text_for(card["id"]))
+                    client, card, notes_text, use_web=options.web_research)
             except Exception:  # noqa: BLE001
                 continue
             name = (found.get("company") or "").strip()
             if not name or found.get("confidence") == "low":
+                if not options.web_research:
+                    defer_to_web("fund_company", card, co_prop)
                 continue
             src = f"research — {found.get('evidence', '')[:300]}"
             hit = enrich.resolve_name(name, companies)
@@ -908,6 +972,12 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                     "the note names " + ", ".join(unmatched)
                     + " as present, but none match a contact record — add them "
                       "as contacts first", source=src)
+
+    # What the notes could not settle. Written whole each run, so the list the
+    # user sees always reflects this scan — a gap filled since simply drops
+    # off it. A web-research run clears it as it goes.
+    store.save_pending_research(pending, base)
+    counts["needs_web"] = len(pending)
 
     # ---- Phase 5: plan + order --------------------------------------------- #
     order = {"fix_formatting": 0, "fix_icon": 1, "fill_missing": 2,

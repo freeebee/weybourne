@@ -310,6 +310,7 @@ function RunPanel({ s }) {
           )}
         </div>
       )}
+      <PendingResearch s={s} />
       {s.lastResult && (
         <div style={{ marginTop: 12, borderTop: "1px solid var(--paper-200)",
                       paddingTop: 10, display: "flex", gap: 16, flexWrap: "wrap" }}>
@@ -324,6 +325,90 @@ function RunPanel({ s }) {
         </div>
       )}
     </Card>
+  );
+}
+
+/* What the last run could not settle from the meeting notes. Web searches
+   cost real time and tokens, so they are never spent automatically — this
+   says exactly what would be looked up, and waits to be asked. */
+const PENDING_LABEL = {
+  employer: ["contact", "no employer, and the notes do not say who they work for"],
+  contact_field: ["contact", "missing details the notes do not cover"],
+  fund_company: ["fund", "no manager linked, and the notes do not name one"],
+  fund_tags: ["fund", "missing asset class or geography"],
+  duplicate: ["possible duplicate", "needs checking against the record online"],
+};
+
+function PendingResearch({ s }) {
+  const p = s.status?.pending_research;
+  const [open, setOpen] = React.useState(false);
+  if (!p || !p.total) return null;
+  const searching = s.busy === "search" || s.runJob?.status === "running";
+  return (
+    <div style={{ marginTop: 12, borderTop: "1px solid var(--paper-200)",
+                  paddingTop: 11 }}>
+      <div className="spread" style={{ gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <span className="microlabel" style={{ color: "var(--caution-600)" }}>
+            {p.total} THING{p.total === 1 ? "" : "S"} THE NOTES COULD NOT SETTLE
+          </span>
+          <div style={{ fontSize: "13px", marginTop: 4 }}>
+            {p.groups.map((g, i) => {
+              const [noun] = PENDING_LABEL[g.kind] || [g.kind];
+              return (
+                <span key={g.kind}>
+                  {i > 0 ? " · " : ""}
+                  <b>{g.count}</b> {noun}{g.count === 1 ? "" : "s"}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+        <div className="row" style={{ gap: 8 }}>
+          <Button variant="ghost" onClick={() => setOpen(!open)}>
+            {open ? "Hide the list" : "See the list"}
+          </Button>
+          <Button variant="dark" busy={searching}
+            onClick={() => fx.startRun({ webResearch: true })}>
+            {searching ? "Searching…" : "Search the web for these"}
+          </Button>
+        </div>
+      </div>
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          {p.groups.map((g) => {
+            const [noun, why] = PENDING_LABEL[g.kind] || [g.kind, ""];
+            return (
+              <div key={g.kind} style={{ marginBottom: 9 }}>
+                <div className="mono" style={{ fontSize: 9.5, letterSpacing: ".1em",
+                      color: "var(--stone-500)" }}>
+                  {noun.toUpperCase()}S — {why}
+                </div>
+                {g.records.map((r, i) => (
+                  <div key={i} style={{ fontSize: "12.5px", padding: "2px 0" }}>
+                    {r.url
+                      ? <a href={r.url} target="_blank" rel="noreferrer"
+                           style={{ color: "var(--teal-700)" }}>{r.name}</a>
+                      : r.name}
+                    {r.field && (
+                      <span className="muted"> — {r.field}</span>
+                    )}
+                    {r.detail && (
+                      <span className="muted"> — {r.detail}</span>
+                    )}
+                  </div>
+                ))}
+                {g.count > g.records.length && (
+                  <div className="muted" style={{ fontSize: "12px" }}>
+                    …and {g.count - g.records.length} more
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

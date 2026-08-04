@@ -194,6 +194,29 @@ def load_snapshot(change_id: str, base: Optional[Path] = None) -> Optional[dict]
 # by confident web research — future runs neither re-flag it nor spend another
 # web search on it.
 
+# -- pending web research ---------------------------------------------------- #
+# What an ordinary run could not settle from the notes. Written whole each run
+# so it always reflects the latest scan rather than accumulating stale asks.
+
+def save_pending_research(items: list, base: Optional[Path] = None) -> None:
+    root = base or FELIX_DIR
+    root.mkdir(parents=True, exist_ok=True)
+    payload = [i if isinstance(i, dict) else i.model_dump() for i in items]
+    (root / "pending_research.json").write_text(
+        json.dumps({"at": datetime.now().isoformat(timespec="seconds"),
+                    "items": payload}, indent=1), encoding="utf-8")
+
+
+def load_pending_research(base: Optional[Path] = None) -> dict:
+    path = (base or FELIX_DIR) / "pending_research.json"
+    if not path.exists():
+        return {"at": "", "items": []}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {"at": "", "items": []}
+
+
 def pair_key(a: str, b: str) -> str:
     return "|".join(sorted((a or "", b or "")))
 

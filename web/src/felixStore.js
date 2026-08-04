@@ -98,11 +98,13 @@ export function restore() {
 
 // ---- runs ----------------------------------------------------------------- //
 
-export async function startRun({ dryRun } = {}) {
-  S.busy = "start"; S.error = null; emit();
+export async function startRun({ dryRun, webResearch } = {}) {
+  S.busy = webResearch ? "search" : "start"; S.error = null; emit();
   try {
-    const job = await post("/api/jobs/felix",
-                           dryRun === undefined ? {} : { dry_run: dryRun });
+    const body = {};
+    if (dryRun !== undefined) body.dry_run = dryRun;
+    if (webResearch) body.web_research = true;
+    const job = await post("/api/jobs/felix", body);
     attach(job.id);
     powerUp();
     lastEventAt = Date.now();

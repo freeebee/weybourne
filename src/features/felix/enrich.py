@@ -108,12 +108,20 @@ reasonable doubt, not that you found something plausible.
 - Name your sources in evidence."""
 
 
+_NO_WEB = ("\n\nFOR THIS CALL: do NOT search the web. Use only the supplied "
+           "workspace evidence. If it does not establish an answer, return "
+           "empty fields with confidence \"low\" — saying so is the useful "
+           "answer, and the user will decide whether to spend a search on it.")
+
+
 def research_contact(client, card: dict, notes_text: str = "",
-                     wanted: list[str] | None = None) -> dict:
+                     wanted: list[str] | None = None,
+                     use_web: bool = True) -> dict:
     """Identify a contact and propose the missing fields.
 
     ``notes_text`` is the text of meeting notes they are linked to — the
-    evidence that takes priority over the web.
+    evidence that takes priority over the web. With ``use_web`` False the
+    call is confined to that evidence and no search tools are offered.
     """
     wanted = wanted or ["employer", "title", "description"]
     plain = card.get("plain", {})
@@ -128,11 +136,14 @@ def research_contact(client, card: dict, notes_text: str = "",
         "WORKSPACE EVIDENCE (meeting notes this contact is linked to)\n"
         f"{notes_text[:6000] or '(none — this contact appears in no notes)'}"
     )
+    kwargs = ({"extra_allowed_tools": ["WebSearch", "WebFetch"]}
+              if use_web else {})
     response = client.messages.create(
-        model=ENRICH_MODEL, max_tokens=1200, system=_CONTACT_SYSTEM,
+        model=ENRICH_MODEL, max_tokens=1200,
+        system=_CONTACT_SYSTEM + ("" if use_web else _NO_WEB),
         output_config={"format": {"type": "json_schema", "schema": _CONTACT_SCHEMA}},
-        extra_allowed_tools=["WebSearch", "WebFetch"],
         messages=[{"role": "user", "content": user}],
+        **kwargs,
     )
     raw = next((b.text for b in response.content
                 if getattr(b, "type", None) == "text"), "{}")
@@ -166,9 +177,10 @@ assuming: "Growth Fund IV" tells you nothing. If you cannot establish the \
 manager, return an empty company with confidence "low". Name your source."""
 
 
-def research_fund_company(client, card: dict, notes_text: str = "") -> dict:
+def research_fund_company(client, card: dict, notes_text: str = "",
+                          use_web: bool = True) -> dict:
     """Identify the manager behind a fund. Returns {company, confidence,
-    evidence}."""
+    evidence}. With ``use_web`` False, the notes alone must settle it."""
     plain = card.get("plain", {})
     known = "; ".join(f"{k}: {str(v)[:80]}" for k, v in plain.items()
                       if v and not isinstance(v, list))
@@ -178,11 +190,14 @@ def research_fund_company(client, card: dict, notes_text: str = "") -> dict:
         "WORKSPACE EVIDENCE (linked meeting notes)\n"
         f"{notes_text[:6000] or '(none)'}"
     )
+    kwargs = ({"extra_allowed_tools": ["WebSearch", "WebFetch"]}
+              if use_web else {})
     response = client.messages.create(
-        model=ENRICH_MODEL, max_tokens=800, system=_FUND_CO_SYSTEM,
+        model=ENRICH_MODEL, max_tokens=800,
+        system=_FUND_CO_SYSTEM + ("" if use_web else _NO_WEB),
         output_config={"format": {"type": "json_schema", "schema": _FUND_CO_SCHEMA}},
-        extra_allowed_tools=["WebSearch", "WebFetch"],
         messages=[{"role": "user", "content": user}],
+        **kwargs,
     )
     raw = next((b.text for b in response.content
                 if getattr(b, "type", None) == "text"), "{}")

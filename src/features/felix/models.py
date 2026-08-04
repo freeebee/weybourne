@@ -14,6 +14,11 @@ class RunOptions(BaseModel):
     max_llm_calls: int = int(os.environ.get("FELIX_MAX_LLM_CALLS", "30"))
     # Web-search escalations per run (unsure duplicates + fund field lookups).
     max_research: int = int(os.environ.get("FELIX_MAX_RESEARCH", "10"))
+    # Web searches cost real time and tokens, so an ordinary run never makes
+    # one: it does the deterministic fixes and everything the meeting notes
+    # can settle, then LISTS what is still unresolved. The user reads that
+    # list and asks for the searching separately.
+    web_research: bool = False
     quiet_minutes: int = int(os.environ.get("FELIX_QUIET_MINUTES", "10"))
     databases: list[str] = Field(
         default_factory=lambda: ["contacts", "companies", "funds", "notes"])
@@ -67,3 +72,16 @@ class RunRecord(BaseModel):
     counts: dict = Field(default_factory=dict)
     deferred: int = 0
     error: str = ""
+
+
+class PendingResearch(BaseModel):
+    """One gap the notes could not close — waiting on the user's say-so
+    before any web search is spent on it."""
+    kind: str                        # employer / fund_company / fund_tags /
+                                     # duplicate
+    database: str = ""
+    record_id: str = ""
+    record_name: str = ""
+    record_url: str = ""
+    field: str = ""                  # the property still empty
+    detail: str = ""                 # e.g. the other name in a duplicate pair

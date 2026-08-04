@@ -23,15 +23,39 @@ GENERIC_DOMAINS = {
     "protonmail.com", "msn.com", "qq.com", "163.com", "126.com",
 }
 
-# Spec's fill-priority lists; the run filters these against the LIVE schema so
-# a renamed property is skipped, never guessed at.
+# Fill-priority lists, matching the Error Tracking page's definitions. Real
+# property names carry emoji ("🏢 Employed By"), so these are matched through
+# ``match_prop`` rather than compared literally — and anything the live schema
+# does not have is skipped, never guessed at.
 PRIORITY_PROPS = {
-    "contacts": ["Employed By", "Type", "Weybourne Comments"],
+    "contacts": ["Employed By", "Type", "Title", "Description"],
     "companies": ["Description", "City", "Country"],
-    "funds": ["Company Name", "Asset Class", "Geographic Focus", "Status",
-              "Strategy Description", "Responsible Person"],
-    "notes": ["Note Type", "Date"],
+    "funds": ["Company", "Asset Class", "Geographic Focus", "Status",
+              "Quality", "Weybourne Comments", "Strategy Description"],
+    "notes": ["Note Type", "Attendees", "Thoughts / Considerations", "Date"],
 }
+
+
+def _prop_key(name: str) -> str:
+    """A property name reduced to its comparable core: no emoji, no
+    punctuation, no case. '🏢 Employed By' and 'employed by' both become
+    'employedby'."""
+    return "".join(ch for ch in (name or "").lower() if ch.isalnum())
+
+
+def match_prop(schema_props, *candidates: str) -> str:
+    """The real schema property matching any of ``candidates``.
+
+    Notion property names in this workspace carry emoji prefixes, so a literal
+    comparison silently matches nothing — which reads as "no gaps found"
+    rather than as a bug. Returns "" when none matches.
+    """
+    by_key = {_prop_key(p): p for p in schema_props}
+    for cand in candidates:
+        hit = by_key.get(_prop_key(cand))
+        if hit:
+            return hit
+    return ""
 
 
 def card_from_page(page: dict, db: str) -> dict:
@@ -189,7 +213,10 @@ def plan_merge_transfers(survivor: dict, loser: dict) -> dict:
 
 def find_missing_props(cards: list[dict], db: str,
                        schema_props: set[str]) -> list[dict]:
-    wanted = [p for p in PRIORITY_PROPS.get(db, []) if p in schema_props]
+    # Resolved against the live schema, so the emoji-prefixed real names
+    # ("🏢 Employed By") are found rather than silently missed.
+    wanted = [m for m in (match_prop(schema_props, p)
+                          for p in PRIORITY_PROPS.get(db, [])) if m]
     out = []
     for c in cards:
         if c["archived"]:
