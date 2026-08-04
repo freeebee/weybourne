@@ -1119,7 +1119,7 @@ def prep(body: PrepIn):
     event = CalendarEvent.model_validate(body.event) if body.event else None
     ctx: PrepContext = build_context(
         _notion, counterparty_name=body.name, counterparty_email=body.email,
-        company_name=body.company, event=event, research=lambda q: "",
+        company_name=body.company, event=event, research=None,
     )
     if body.depth == "full":
         data, html_out = _run(build_briefing, _client(), ctx)
@@ -1290,7 +1290,10 @@ async def start_prep_job(
         ctx = build_context(
             _notion, counterparty_name=name, counterparty_email=email,
             company_name=company, event=ev, pdf_path=pdf_path,
-            research=lambda q: "",
+            # No pre-gathering step: the synthesis call has WebSearch itself and
+        # does the research inline. A stub that returns "" used to log a
+        # "Web research:" source for a search that never happened.
+        research=None,
         )
         notion_note = "live Notion" if _notion.live else "sample data — not your live Notion"
         deck_note = (f"deck read ({len(ctx.document_text):,} chars)"

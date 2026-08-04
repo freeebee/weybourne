@@ -73,6 +73,10 @@ interests") unless there is a specific, differentiated mechanism behind them.
 - If our own records are thin or absent, say so plainly rather than padding.
 - Diligence questions must be specific to this manager and test the real engine and risks — \
 not generic questionnaire items.
+- You have WebSearch and WebFetch in this session: use them to check the counterparty and \
+anything our records assert but do not evidence. Never write that web verification was \
+unavailable — run the search. If a search genuinely finds nothing, say what you looked for \
+and that nothing came back.
 - Be concise and concrete. British English."""
 
 
@@ -241,16 +245,24 @@ def synthesize_prep(client, ctx: PrepContext) -> MeetingPrep:
         f"Counterparty: {ctx.counterparty_name} <{ctx.counterparty_email}>\n"
         f"Company: {ctx.company_name or '(unknown)'}\n\n"
         f"OUR NOTION RECORDS\n{ctx.notion_context}\n\n"
-        f"BACKGROUND RESEARCH\n{ctx.web_context or '(none gathered)'}\n\n"
+        f"BACKGROUND RESEARCH\n{ctx.web_context or 'Nothing has been pre-gathered for you. You have the WebSearch and WebFetch tools in this session: check the counterparty and anything the records assert before writing.'}\n\n"
         f"ATTACHED DOCUMENT\n{ctx.document_text or '(none)'}"
     )
-    response = client.messages.create(
+    kwargs = dict(
         model=REASONING_MODEL,
         max_tokens=4000,
         system=PREP_SYSTEM_PROMPT,
         output_config={"format": {"type": "json_schema", "schema": PREP_SCHEMA}},
         messages=[{"role": "user", "content": user}],
     )
+    try:
+        # The quick brief verifies too — a prep that only restates our own
+        # records cannot tell you what has changed since we wrote them.
+        response = client.messages.create(
+            **kwargs, extra_allowed_tools=["WebSearch", "WebFetch"])
+    except TypeError:
+        # API-backend clients don't take the kwarg — same call without it.
+        response = client.messages.create(**kwargs)
     raw = next((b.text for b in response.content if getattr(b, "type", None) == "text"), "")
     parsed = json.loads(raw)
     prep = MeetingPrep.model_validate(parsed)

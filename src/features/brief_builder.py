@@ -169,6 +169,10 @@ which entity a finding refers to.
 signals) and read it lightly against the deck's narrative.
 - Cite searched facts in the sources list as kind "External" with enough detail to find them \
 again. Never invent a search result.
+- The tools ARE available to you in this session. Never write that web verification was \
+unavailable, that you could not access the internet, or that research could not be performed: \
+run the searches. If a specific search genuinely returns nothing useful, say what you looked \
+for and what was not found — that is a finding, not an apology for the tooling.
 
 CLASSIFICATION:
 - A fund manager gets the full briefing including deals. A non-manager relationship (a \
@@ -211,7 +215,10 @@ def synthesize_briefing(client, ctx: PrepContext) -> dict:
         f"Counterparty: {ctx.counterparty_name} <{ctx.counterparty_email}>\n"
         f"Company: {ctx.company_name or '(unknown)'}\n\n"
         f"OUR NOTION RECORDS\n{ctx.notion_context}\n\n"
-        f"BACKGROUND RESEARCH\n{ctx.web_context or '(none gathered)'}\n\n"
+        # Nothing is pre-gathered: this call holds the search tools, so say so
+        # plainly. "(none gathered)" read as "the web was unavailable to you",
+        # and briefings came back apologising for not verifying anything.
+        f"BACKGROUND RESEARCH\n{ctx.web_context or 'Nothing has been pre-gathered for you. You have the WebSearch and WebFetch tools in this session: run the searches yourself now, before writing, and cite what you find.'}\n\n"
         f"ATTACHED DOCUMENT (deck)\n{ctx.document_text or '(none)'}\n\n"
         f"KNOWN SOURCE LIST\n" + "\n".join(f"- {s}" for s in ctx.sources)
     )
