@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { get } from "../api.js";
+import { get, getRetry } from "../api.js";
 import * as liveStore from "../liveStore.js";
 import { Banner, Button, Card, Chip, ErrorNote, Mascot, SectionHead, fmtDate, fmtTime } from "../ui.jsx";
 import * as uiStore from "../uiStore.js";
@@ -56,7 +56,7 @@ export default function Home() {
   const [jobs, setJobs] = React.useState([]);
 
   React.useEffect(() => {
-    get("/api/calendar?days=7").then((d) => setEvents(d.events)).catch(() => {});
+    getRetry("/api/calendar?days=7").then((d) => setEvents(d.events)).catch(() => {});
     get("/api/jobs").then(({ jobs: js }) =>
       setJobs(js.filter((j) => j.status === "done").slice(0, 5))).catch(() => {});
     // A refresh started on another visit (or before a reload) keeps its

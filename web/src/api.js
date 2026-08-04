@@ -14,6 +14,23 @@ async function handle(res) {
 
 export const get = (url) => fetch(url).then(handle);
 
+/* GET that rides out a backend restart: the dev server reloads itself for a
+   few seconds after every code change, and a page mounted in that window
+   would otherwise fetch-fail silently and render empty lists. Network-level
+   failures and 5xx retry with a pause; real 4xx errors throw immediately. */
+export async function getRetry(url, tries = 4, delayMs = 1500) {
+  for (let i = 0; ; i++) {
+    try {
+      const res = await fetch(url);
+      if (res.status >= 500 && i < tries - 1) throw new Error(`HTTP ${res.status}`);
+      return await handle(res);
+    } catch (e) {
+      if (i >= tries - 1) throw e;
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+}
+
 export const del = (url) => fetch(url, { method: "DELETE" }).then(handle);
 
 export const post = (url, body) =>

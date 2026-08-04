@@ -1,6 +1,6 @@
 /* Live meeting — thin view over liveStore; redesign per handoff. */
 import React from "react";
-import { del, get } from "../api.js";
+import { del, get, getRetry } from "../api.js";
 import * as live from "../liveStore.js";
 import {
   Banner, Button, Card, ErrorNote, Field, Mascot, PageHeader, SearchSelect,
@@ -22,7 +22,7 @@ function CalendarPick() {
   // Fetched on mount AND refreshed each time the panel opens, so the list
   // never serves a stale snapshot from page-load time.
   const fetchEvents = React.useCallback(() => {
-    get("/api/calendar?days=7&back=30")
+    getRetry("/api/calendar?days=7&back=30")
       .then((d) => setEvents(d.events || [])).catch(() => {});
   }, []);
   React.useEffect(fetchEvents, [fetchEvents]);

@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { get } from "../api.js";
+import { get, getRetry } from "../api.js";
 import * as live from "../liveStore.js";
 import {
   Banner, Button, Card, ErrorNote, Field, FilePick, Mascot, PageHeader,
@@ -27,12 +27,14 @@ export default function Prep() {
   const pollRef = React.useRef(null);
   const doneSeen = React.useRef(new Set());
 
+  // Retrying fetches: mounting this page during a backend reload (a few
+  // seconds after any code change) must not blank the calendar and library.
   const refreshLibrary = React.useCallback(() => {
-    get("/api/preps").then((d) => setLibrary(d.preps)).catch(() => {});
+    getRetry("/api/preps").then((d) => setLibrary(d.preps)).catch(() => {});
   }, []);
 
   React.useEffect(() => {
-    get("/api/calendar").then((d) => setEvents(d.events)).catch(() => {});
+    getRetry("/api/calendar").then((d) => setEvents(d.events)).catch(() => {});
     refreshLibrary();
   }, [refreshLibrary]);
 
