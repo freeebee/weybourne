@@ -9,6 +9,7 @@ const FRESH_LOCK_MS = 2000;     // a just-generated question can't be deleted ye
 
 export const S = {
   running: false, who: "", goal: "", source: "system", deviceId: "",
+  systemLost: false,   // the share ended mid-meeting; the mic carries on
   questions: true,   // live question suggestions — toggleable; recaps always run
   manager: null,     // the loaded manager thread (entity, Notion links, history)
   cadence: 30,       // seconds between reads — 30 / 45 / 60, user-selectable
@@ -30,6 +31,10 @@ let listeners = new Set();
 let micStream = null, displayStream = null, audioCtx = null, analyser = null,
     micAnalyser = null, sysAnalyser = null,
     recorder = null, chunkTimer = null, countdown = null, raf = 0, canvas = null;
+// The recorder runs off `mixedDest`, never off a device stream directly. That
+// is what lets a source be swapped mid-meeting: rewire the graph feeding the
+// destination and the recording carries on without a gap.
+let mixedDest = null, micSrcNode = null, sysSrcNode = null;
 let lastMicAt = 0, lastSysAt = 0, chunkNo = 0;
 let langStreak = { lang: "", n: 0 };   // consecutive confident detections
 
@@ -210,6 +215,95 @@ export async function performRead() {
 
 // ---- audio pipeline ------------------------------------------------------- //
 
+/* The microphones the browser can see. Labels are only populated once audio
+   permission has been granted, which is true from the moment recording starts —
+   before that the list is real but unnamed, so we say so rather than showing
+   a row of blanks. */
+export async function listMics() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices.filter((d) => d.kind === "audioinput")
+      .map((d, i) => ({ id: d.deviceId, label: d.label || `Microphone ${i + 1}` }));
+  } catch { return []; }
+}
+
+/* Point the microphone leg of the graph at `deviceId`, replacing whatever was
+   there. Safe to call mid-meeting: the old node is only dropped once the new
+   one is live, so a failed switch leaves the existing audio untouched. */
+async function attachMic(deviceId) {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+  });
+  const src = audioCtx.createMediaStreamSource(stream);
+  micAnalyser = audioCtx.createAnalyser(); micAnalyser.fftSize = 1024;
+  src.connect(mixedDest); src.connect(analyser); src.connect(micAnalyser);
+
+  micSrcNode?.disconnect();
+  micStream?.getTracks().forEach((t) => t.stop());
+  micSrcNode = src; micStream = stream;
+}
+
+/* Same for the shared tab/screen audio. Throws with the usual advice when the
+   share came back without an audio track, having left the old one running. */
+async function attachSystem() {
+  const display = await navigator.mediaDevices.getDisplayMedia({
+    video: true,
+    audio: { echoCancellation: false, noiseSuppression: false },
+  });
+  const audioTracks = display.getAudioTracks();
+  if (!audioTracks.length) {
+    display.getTracks().forEach((t) => t.stop());
+    throw new Error('no audio in the share — pick a tab or screen AND tick "Also share audio" in the picker');
+  }
+  const src = audioCtx.createMediaStreamSource(new MediaStream(audioTracks));
+  sysAnalyser = audioCtx.createAnalyser(); sysAnalyser.fftSize = 1024;
+  src.connect(mixedDest); src.connect(analyser); src.connect(sysAnalyser);
+
+  sysSrcNode?.disconnect();
+  displayStream?.getTracks().forEach((t) => t.stop());
+  sysSrcNode = src; displayStream = display;
+  S.systemLost = false;
+
+  // Ending the share no longer ends the meeting. The mic is still recording,
+  // and losing the room audio is exactly the fault you would want to fix by
+  // re-sharing rather than by starting again.
+  audioTracks[0].addEventListener("ended", () => {
+    if (displayStream === display && S.running) {
+      S.systemLost = true; S.hearSystem = false; emit();
+    }
+  });
+}
+
+/* Swap the microphone without interrupting the recording. Before the meeting
+   starts this only remembers the choice. */
+export async function switchMic(deviceId) {
+  S.deviceId = deviceId;
+  if (!S.running || !audioCtx) { emit(); return; }
+  S.busy = "switching microphone"; emit();
+  try {
+    await attachMic(deviceId);
+    S.error = null;
+  } catch (e) {
+    S.error = `Could not switch microphone: ${e.message}`;
+  }
+  S.busy = ""; emit();
+}
+
+/* Re-open the screen/tab picker mid-meeting: the fix for shared the wrong tab,
+   forgot to tick the audio box, or the share dropped. */
+export async function reshareSystem() {
+  if (!S.running || !audioCtx) return;
+  S.busy = "re-sharing audio"; emit();
+  try {
+    await attachSystem();
+    S.source = "system";
+    S.error = null;
+  } catch (e) {
+    S.error = e.message;
+  }
+  S.busy = ""; emit();
+}
+
 export async function start() {
   S.error = null; S.note = null;
   chunkNo = 0; langStreak = { lang: "", n: 0 };
@@ -217,36 +311,22 @@ export async function start() {
   emit();
   try {
     audioCtx = new AudioContext();
-    const mixed = audioCtx.createMediaStreamDestination();
+    mixedDest = audioCtx.createMediaStreamDestination();
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 1024; analyser.smoothingTimeConstant = 0.75;
 
-    micStream = await navigator.mediaDevices.getUserMedia({
-      audio: S.deviceId ? { deviceId: { exact: S.deviceId } } : true,
-    });
-    const micSrc = audioCtx.createMediaStreamSource(micStream);
-    micAnalyser = audioCtx.createAnalyser(); micAnalyser.fftSize = 1024;
-    micSrc.connect(mixed); micSrc.connect(analyser); micSrc.connect(micAnalyser);
+    await attachMic(S.deviceId);
 
     if (S.source === "system") {
-      const display = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: { echoCancellation: false, noiseSuppression: false },
-      });
-      displayStream = display;
-      const audioTracks = display.getAudioTracks();
-      if (!audioTracks.length) {
-        display.getTracks().forEach((t) => t.stop());
-        micStream.getTracks().forEach((t) => t.stop());
-        throw new Error('no audio in the share — pick a tab or screen AND tick "Also share audio" in the picker');
+      try {
+        await attachSystem();
+      } catch (e) {
+        micStream?.getTracks().forEach((t) => t.stop());
+        throw e;
       }
-      const sysSrc = audioCtx.createMediaStreamSource(new MediaStream(audioTracks));
-      sysAnalyser = audioCtx.createAnalyser(); sysAnalyser.fftSize = 1024;
-      sysSrc.connect(mixed); sysSrc.connect(analyser); sysSrc.connect(sysAnalyser);
-      audioTracks[0].addEventListener("ended", () => stop());
     }
 
-    const stream = mixed.stream;
+    const stream = mixedDest.stream;
     S.running = true; S.lastReadAt = Date.now();
     S.startedAt = S.startedAt || Date.now();
     emit();
@@ -326,7 +406,8 @@ export function stop() {
   displayStream?.getTracks().forEach((t) => t.stop()); displayStream = null;
   audioCtx?.close().catch(() => {}); audioCtx = null; analyser = null;
   micAnalyser = null; sysAnalyser = null;
-  S.hearMic = false; S.hearSystem = false;
+  mixedDest = null; micSrcNode = null; sysSrcNode = null;
+  S.hearMic = false; S.hearSystem = false; S.systemLost = false;
   emit();
   // File the session in the transcript library. The last audio chunk may still
   // be transcribing, so give it a moment to land before the final write.

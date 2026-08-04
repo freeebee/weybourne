@@ -213,8 +213,9 @@ function TranscriptLibrary() {
                 {t.unfinished && <span style={{ color: "var(--caution-600)" }}> · UNFINISHED</span>}
               </span>
             </div>
+            {/* Pressing × is a decision between two things: delete or don't.
+                Reopen steps aside until that's answered. */}
             <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <Button variant="ghost" onClick={() => live.loadFromLibrary(t.id)}>Reopen</Button>
               {confirmDel === t.id ? (
                 <>
                   <Button variant="ghost" onClick={() => remove(t.id)}>
@@ -223,11 +224,14 @@ function TranscriptLibrary() {
                   <Button variant="ghost" onClick={() => setConfirmDel("")}>Keep</Button>
                 </>
               ) : (
-                <button onClick={() => setConfirmDel(t.id)} title="Delete transcript"
-                  style={{ background: "none", border: "none", cursor: "pointer",
-                           color: "var(--stone-400)", fontSize: 16, lineHeight: 1 }}>
-                  ×
-                </button>
+                <>
+                  <Button variant="ghost" onClick={() => live.loadFromLibrary(t.id)}>Reopen</Button>
+                  <button onClick={() => setConfirmDel(t.id)} title="Delete transcript"
+                    style={{ background: "none", border: "none", cursor: "pointer",
+                             color: "var(--stone-400)", fontSize: 16, lineHeight: 1 }}>
+                    ×
+                  </button>
+                </>
               )}
             </span>
           </div>
@@ -360,9 +364,14 @@ export default function Live() {
     }
   }, [s.batches.length]);
 
+  // Re-enumerate when recording starts (labels only appear once permission is
+  // granted) and whenever a headset is plugged in or pulled out mid-meeting.
   React.useEffect(() => {
-    navigator.mediaDevices?.enumerateDevices?.().then((ds) =>
+    const refresh = () => navigator.mediaDevices?.enumerateDevices?.().then((ds) =>
       setDevices(ds.filter((d) => d.kind === "audioinput")));
+    refresh();
+    navigator.mediaDevices?.addEventListener?.("devicechange", refresh);
+    return () => navigator.mediaDevices?.removeEventListener?.("devicechange", refresh);
   }, [s.running]);
 
   // Options for the note-save pickers: the Notes DB's select options plus page
@@ -409,12 +418,7 @@ export default function Live() {
                 onClick={() => { setPanesMin(true); live.draftNote(); }}>Write the note</Button>
             </>
           : <>
-              {(s.transcript || s.note) && (
-                <Button variant="ghost" onClick={live.newSession}
-                  title="File this session away and go back to the start screen">
-                  Back to start
-                </Button>
-              )}
+              {/* Closing the transcript now sits on the transcript itself. */}
               {s.transcript && (
                 <Button variant="dark" busy={s.busy === "note"}
                   onClick={() => { setPanesMin(true); live.draftNote(); }}>
@@ -711,10 +715,63 @@ export default function Live() {
                   )}
                 </div>
               </div>
+
+              {/* Audio is fixable without losing the meeting: the recorder runs
+                  off a mixer, so a source can be swapped underneath it. */}
+              {s.systemLost && (
+                <div style={{ marginTop: 12, padding: "8px 12px", fontSize: "13px",
+                              background: "var(--caution-100)", borderRadius: 4,
+                              color: "var(--caution-600)" }}>
+                  The screen share ended. Still recording your microphone —
+                  re-share to pick the call audio back up.
+                </div>
+              )}
+              <details style={{ marginTop: 12 }}>
+                <summary className="microlabel" style={{ cursor: "pointer",
+                         listStyle: "none", padding: "4px 0" }}>
+                  AUDIO
+                  <span style={{ color: "var(--teal-700)", marginLeft: 8 }}>FIX</span>
+                </summary>
+                <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                  <select value={s.deviceId} disabled={!!s.busy}
+                    onChange={(e) => live.switchMic(e.target.value)} style={inputStyle}>
+                    <option value="">System default microphone</option>
+                    {devices.map((d, i) => (
+                      <option key={d.deviceId} value={d.deviceId}>
+                        {d.label || `Microphone ${i + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                  <Button variant="ghost" busy={s.busy === "re-sharing audio"}
+                    onClick={live.reshareSystem}>
+                    {s.source === "system" ? "Re-share call audio" : "Add call audio"}
+                  </Button>
+                  <span className="muted" style={{ fontSize: "12.5px" }}>
+                    Switching either one keeps the recording and the transcript
+                    running — nothing restarts.
+                  </span>
+                </div>
+              </details>
             </Card>
           )}
 
-          <SectionHead label="WHAT WAS SAID" right={`${words.toLocaleString()} WORDS`} />
+          {/* Closing belongs over the transcript it closes, not up in the page
+              actions where it read as leaving the app. */}
+          <SectionHead label="WHAT WAS SAID" right={
+            <span style={{ display: "inline-flex", gap: 12, alignItems: "center" }}>
+              <span>{words.toLocaleString()} WORDS</span>
+              {!s.running && (s.transcript || s.note) && (
+                <button onClick={live.newSession}
+                  title="File this session away and go back to the start screen"
+                  style={{ background: "var(--paper-050)", cursor: "pointer",
+                           border: "1px solid var(--paper-200)", borderRadius: 4,
+                           padding: "3px 9px", color: "var(--teal-700)",
+                           font: "500 10px/1.4 var(--mono)", letterSpacing: ".1em" }}>
+                  CLOSE TRANSCRIPT
+                </button>
+              )}
+            </span>
+          } />
           <Card style={{ padding: "14px 16px" }}>
             <div ref={transcriptBoxRef} style={{ maxHeight: 420, overflowY: "auto" }}
               onScroll={() => {
