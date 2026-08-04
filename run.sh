@@ -15,9 +15,14 @@ VENV=.venv
 REQ_COPY="$VENV/.deps-requirements.txt"
 SETUP_ONLY=0
 DEV=0
+# This machine only by default: the app has no login, so anything that can
+# reach it can read your mail and notes. --lan opts into the network.
+LAN=0
+HOST=127.0.0.1
 for arg in "$@"; do
   [ "$arg" = "--setup-only" ] && SETUP_ONLY=1
   [ "$arg" = "--dev" ] && DEV=1
+  [ "$arg" = "--lan" ] && { LAN=1; HOST=0.0.0.0; }
 done
 
 # -- 1. Python environment --------------------------------------------------- #
@@ -63,5 +68,11 @@ command -v claude >/dev/null 2>&1 || echo "Note: Claude Code not installed — A
 
 # -- 5. Launch --------------------------------------------------------------- #
 echo "Starting the app at http://localhost:8000 (Ctrl+C to stop)"
-echo "On your phone (same Wi-Fi): http://<this-machine's-IP>:8000, then Add to Home Screen."
-exec "$PY" -m uvicorn api.main:app --host 0.0.0.0 --port 8000
+if [ "$LAN" = 1 ]; then
+  echo "NETWORK MODE: reachable by other devices on this Wi-Fi, and the app has"
+  echo "no login. Only do this on a network you trust."
+  echo "On your phone: http://<this-machine's-IP>:8000, then Add to Home Screen."
+else
+  echo "This machine only. For phone access on the same Wi-Fi: ./run.sh --lan"
+fi
+exec "$PY" -m uvicorn api.main:app --host "$HOST" --port 8000

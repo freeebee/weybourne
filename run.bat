@@ -5,6 +5,12 @@ REM
 REM   run.bat                launch the app (or just double-click it)
 REM   run.bat --setup-only   prepare the environment but don't launch
 REM   run.bat --dev          also start the Vite dev server (hot reload, :5173)
+REM   run.bat --lan          also serve to other devices on this network
+REM
+REM By default the app listens ONLY on this machine (127.0.0.1). It has no
+REM login, so anyone who can reach it can read your mail, notes and Notion
+REM records - which is why reaching it from elsewhere is opt-in. Use --lan
+REM deliberately, on a network you trust, when you want the phone.
 REM
 REM Safe to run as often as you like: the virtual environment, dependencies and
 REM front-end build are only created/refreshed when missing or out of date.
@@ -18,14 +24,19 @@ set "VENV=.venv"
 set "REQ_COPY=%VENV%\.deps-requirements.txt"
 set "SETUP_ONLY=0"
 set "DEV=0"
+set "LAN=0"
+set "HOST=127.0.0.1"
 
 :parse_args
 if "%~1"=="" goto args_done
 if "%~1"=="--setup-only" set "SETUP_ONLY=1"
 if "%~1"=="--dev" set "DEV=1"
+if "%~1"=="--lan" set "LAN=1"
 shift
 goto parse_args
 :args_done
+
+if "%LAN%"=="1" set "HOST=0.0.0.0"
 
 REM -- 1. Find a suitable Python and build the environment -------------------- #
 if not exist "%VENV%\Scripts\python.exe" (
@@ -156,9 +167,16 @@ echo.
 echo Starting the app - your browser will open automatically at
 echo http://localhost:8000
 echo.
-echo On your phone (same Wi-Fi): open http://THIS-PC-IP:8000 and use the
-echo browser's "Add to Home Screen" to install it. Your addresses:
-ipconfig | findstr /c:"IPv4"
+if "%LAN%"=="1" (
+    echo NETWORK MODE: other devices on this Wi-Fi can reach this app, and it
+    echo has no login. Only use this on a network you trust.
+    echo On your phone: open http://THIS-PC-IP:8000 and use the browser's
+    echo "Add to Home Screen" to install it. Your addresses:
+    ipconfig | findstr /c:"IPv4"
+) else (
+    echo This machine only. To use it from your phone on the same Wi-Fi,
+    echo start it with:  run.bat --lan
+)
 echo.
 echo Keep this window open while you use the app. Press Ctrl+C to stop.
 echo.
@@ -172,7 +190,7 @@ REM --reload watches ONLY the code directories: backend updates apply
 REM themselves without anyone killing this window. data/ is deliberately not
 REM watched - the app writes there constantly (autosaves, caches) and each
 REM write would otherwise bounce the server mid-meeting.
-"%PY%" -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir api --reload-dir src
+"%PY%" -m uvicorn api.main:app --host %HOST% --port 8000 --reload --reload-dir api --reload-dir src
 
 echo.
 echo The app has stopped.

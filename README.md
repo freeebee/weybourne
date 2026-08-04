@@ -35,6 +35,14 @@ skips straight to launching (dependencies are only reinstalled when
 `--setup-only` prepares the environment without launching; `--dev` also starts
 the Vite dev server (hot reload on :5173) for front-end work.
 
+The app listens on **this machine only** (`127.0.0.1`). It has no login of its
+own, so anything that can reach it can read your mail, meeting notes and Notion
+records — and write to Notion through Felix. `--lan` opts into serving the rest
+of the network (for the phone: open `http://THIS-PC-IP:8000` and "Add to Home
+Screen"); use it deliberately, on a network you trust. Note that live microphone
+capture will not work over a plain-HTTP LAN address — browsers only grant it on
+HTTPS or localhost — so the note taker stays a desktop feature either way.
+
 <details>
 <summary>Prefer to do it by hand?</summary>
 
