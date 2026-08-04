@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from concurrent.futures import ThreadPoolExecutor
 
-from src.config import FAST_MODEL
+from src.config import FAST_MODEL, LIVE_MODEL
 
 DUP_BATCH = 20
 FILL_BATCH = 10
@@ -177,7 +177,10 @@ def evaluate_missing_info(client, tasks: list[dict],
                 f"({t['card']['db']}), missing property '{t['property']}'{opts}\n"
                 f"EVIDENCE:\n{t['evidence'][:4000]}")
         response = client.messages.create(
-            model=FAST_MODEL, max_tokens=2500, system=_FILL_SYSTEM,
+            # Sonnet: reading evidence out of meeting notes and deciding
+            # whether it actually supports a value is a judgement call, and a
+            # wrong fill is written into the workspace.
+            model=LIVE_MODEL, max_tokens=2500, system=_FILL_SYSTEM,
             output_config={"format": {"type": "json_schema", "schema": _FILL_SCHEMA}},
             messages=[{"role": "user", "content":
                        "Propose values where the evidence supports them:\n\n"

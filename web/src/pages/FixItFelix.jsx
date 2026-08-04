@@ -342,6 +342,10 @@ function describeChange(c) {
     ? "Approve files it as reviewed (it is already done). Discard undoes it in Notion."
     : c.change_type === "merge"
       ? "Approve merges the pair in Notion right now: data moves to the kept copy, links repoint, the duplicate is archived (undoable in one click). Discard files them as not duplicates — nothing changes."
+      : c.change_type === "create_company"
+      ? `Approve creates ${q(c.new_value)} in Companies and links this record to it, right now. The name is re-checked against every existing company first. Discard drops it.`
+      : c.change_type === "add_photo"
+      ? "Approve puts the photo into this contact's Notion page, right now. Discard drops it."
       : isDistinct
         ? "Approve accepts the research: the two records stay separate and the pair is never flagged again. Discard just files this row away."
         : isDupRec
@@ -364,6 +368,17 @@ function describeChange(c) {
       case "fix_icon":
         return { problem: "The page had no icon.",
                  fix: `${done ? "Added" : "Will add"} the standard ${q(c.new_value)} icon.` };
+      case "create_company":
+        return { problem: `${c.property_changed} was empty, and the company it should point to is not in the workspace yet.`,
+                 fix: done
+                   ? `Created ${q(c.new_value)} in Companies and linked it.`
+                   : `Will create ${q(c.new_value)} in Companies and link it here. The name is checked against every existing company again first, so it cannot make a second copy.`,
+                 source: c.source };
+      case "add_photo":
+        return { problem: "The contact page has no photo.",
+                 fix: done ? "Added their profile photo to the page."
+                           : "Will add their profile photo to the top of the page body.",
+                 source: c.source };
       case "merge":
         return { problem: "This record exists twice — a duplicate.",
                  fix: done

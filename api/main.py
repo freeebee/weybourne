@@ -2009,8 +2009,22 @@ def felix_review(change_id: str, body: FelixReviewIn):
         is_dup_rec = (change.change_type == "recommendation"
                       and "duplicate" in change.property_changed
                       and "DISTINCT" not in (change.reason or ""))
-        if (change.execution_status in ("Proposed", "Planned (dry-run)",
-                                        "Recommended")
+        if snap and snap.get("kind") == "create_company":
+            from src.features.felix import run as felix_runmod
+            out = felix_runmod.create_company_and_link(_notion, snap, change)
+            result["execution_status"] = out.get("status", "")
+            if out.get("note"):
+                result["note"] = out["note"]
+            if out.get("status") == "Applied":
+                _notion.invalidate_cache()
+        elif snap and snap.get("kind") == "add_photo":
+            from src.features.felix import run as felix_runmod
+            out = felix_runmod.add_photo_to_page(_notion, snap, change)
+            result["execution_status"] = out.get("status", "")
+            if out.get("note"):
+                result["note"] = out["note"]
+        elif (change.execution_status in ("Proposed", "Planned (dry-run)",
+                                          "Recommended")
                 and snap and snap.get("planned")):
             from src.features.felix import execute as felix_execute
             updated = felix_execute.apply_change(

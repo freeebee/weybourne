@@ -15,13 +15,27 @@ from typing import Optional
 
 from src import config
 from src.connectors.notion_client import NotionPartialResult
-from src.features.felix import adjudicate, detect, execute, research, store, undo
+from src.features.felix import (
+    adjudicate,
+    detect,
+    enrich,
+    execute,
+    research,
+    store,
+    undo,
+)
 from src.features.felix.models import ChangeRecord, RunOptions, RunRecord
 
 # Scan-property allowlist where computed properties 500 inside Notion.
 _FUNDS_SCAN_PROPS = ["Fund Name", "Name", "Asset Class", "Geographic Focus",
                      "Strategy Description", "Status", "Company Name",
                      "Responsible Person", "Company", "Representatives"]
+
+# Duplicate detection covers the entity databases only. Meeting notes
+# legitimately repeat their titles ("Call with X" every quarter), so name
+# similarity there is meaningless: it produced one enormous comparison bucket
+# that swamped the adjudicator and starved real contact duplicates.
+DEDUPE_DBS = ("contacts", "companies", "funds")
 
 _DB_IDS = {
     "contacts": lambda: config.NOTION_CONTACTS_DB,
@@ -31,6 +45,8 @@ _DB_IDS = {
 }
 
 _EVENT_TEXT = {
+    "create_company": "company added",
+    "add_photo": "photo added",
     "fix_formatting": "tidied",
     "fix_icon": "icon polished",
     "fix_relation": "relation repaired",
@@ -189,6 +205,83 @@ def felix_run(job: dict, notion, client, options: RunOptions,
         _emit(job, rec)
         counts["proposed"] = counts.get("proposed", 0) + 1
 
+    def record_proposal_payload(db_card: dict, prop: str, shown: str,
+                                payload: dict, reason: str, source: str = "",
+                                previous: str = "", new_ids=None,
+                                prev_ids=None) -> None:
+        """Same contract as record_proposal for changes whose payload is built
+        by the caller — relations, where the ids matter and a formatted value
+        would lose them."""
+        nonlocal seq
+        cid = store.change_id_for(run_id, seq)
+        seq += 1
+        rec = ChangeRecord(
+            change_id=cid, run_id=run_id, timestamp=_now(),
+            database=db_card["db"], record_name=db_card["name"],
+            record_id=db_card["id"], record_url=db_card["url"],
+            change_type="fill_missing", property_changed=prop,
+            previous_value=str(previous)[:1900], new_value=str(shown)[:1900],
+            previous_relation_ids=prev_ids or [], new_relation_ids=new_ids or [],
+            source=source, reason=reason,
+            confidence="Medium", execution_status="Proposed")
+        store.save_snapshot(cid, {
+            "kind": "proposal", "record_id": db_card["id"],
+            "database": db_card["db"], "planned": payload,
+            "expect_prop": prop,
+            "scanned_plain": db_card["plain"].get(prop),
+            "scanned_raw": db_card["raw"]}, base)
+        store.append_change(rec, base)
+        _emit(job, rec)
+        counts["proposed"] = counts.get("proposed", 0) + 1
+
+    def record_create_company(db_card: dict, prop: str, company: str,
+                              reason: str, source: str = "") -> None:
+        """Approving this creates the company AND links it. Held as its own
+        snapshot kind because it is a two-step write, not a property edit."""
+        nonlocal seq
+        cid = store.change_id_for(run_id, seq)
+        seq += 1
+        rec = ChangeRecord(
+            change_id=cid, run_id=run_id, timestamp=_now(),
+            database=db_card["db"], record_name=db_card["name"],
+            record_id=db_card["id"], record_url=db_card["url"],
+            change_type="create_company", property_changed=prop,
+            previous_value="", new_value=company[:1900],
+            source=source, reason=reason,
+            confidence="Medium", execution_status="Proposed")
+        store.save_snapshot(cid, {
+            "kind": "create_company", "record_id": db_card["id"],
+            "database": db_card["db"], "company_name": company,
+            "link_property": prop,
+            "existing_ids": db_card["relations"].get(prop, [])}, base)
+        store.append_change(rec, base)
+        _emit(job, rec)
+        counts["proposed"] = counts.get("proposed", 0) + 1
+
+    def record_photo(db_card: dict, photo_url: str, profile_url: str,
+                     source: str) -> None:
+        """A profile photo to drop into the contact's page body on approval."""
+        nonlocal seq
+        cid = store.change_id_for(run_id, seq)
+        seq += 1
+        rec = ChangeRecord(
+            change_id=cid, run_id=run_id, timestamp=_now(),
+            database=db_card["db"], record_name=db_card["name"],
+            record_id=db_card["id"], record_url=db_card["url"],
+            change_type="add_photo", property_changed="(page body)",
+            previous_value="", new_value=photo_url[:1900],
+            source=source,
+            reason="profile photo found with the LinkedIn profile"
+                   + (f" ({profile_url[:120]})" if profile_url else ""),
+            confidence="Medium", execution_status="Proposed")
+        store.save_snapshot(cid, {
+            "kind": "add_photo", "record_id": db_card["id"],
+            "database": db_card["db"], "photo_url": photo_url,
+            "profile_url": profile_url}, base)
+        store.append_change(rec, base)
+        _emit(job, rec)
+        counts["proposed"] = counts.get("proposed", 0) + 1
+
     # ---- Phase 0: preflight ------------------------------------------------ #
     _stage(job, "Preflight", "confirming live database schemas")
     checkpoint()
@@ -267,10 +360,12 @@ def felix_run(job: dict, notion, client, options: RunOptions,
     # history is not the copy to archive, and it tells the reviewer at a
     # glance which of the two the workspace actually uses.
     notes_by_id: dict = {}
+    notes_by_target: dict = {}
     for note in cards_by_db.get("notes", []):
         for ids in note["relations"].values():
             for i in ids:
                 notes_by_id.setdefault(i, []).append(note["name"])
+                notes_by_target.setdefault(i, []).append(note)
     job["partial"] = job.get("partial") or {}
     job["partial"]["scanned"] = {k: len(v) for k, v in cards_by_db.items()}
 
@@ -374,6 +469,8 @@ def felix_run(job: dict, notion, client, options: RunOptions,
 
     # Exact duplicates — High merges.
     for key, cards in cards_by_db.items():
+        if key not in DEDUPE_DBS:
+            continue
         for group in detect.find_exact_duplicate_groups(cards):
             survivor, losers = detect.choose_survivor(group["cards"])
             for loser in losers:
@@ -390,6 +487,8 @@ def felix_run(job: dict, notion, client, options: RunOptions,
     # ---- Phase 4: LLM adjudication ----------------------------------------- #
     fuzzy_all = []
     for key, cards in cards_by_db.items():
+        if key not in DEDUPE_DBS:
+            continue
         for p in detect.find_fuzzy_duplicate_pairs(cards):
             if _pair_resolved(p["a"], p["b"]):
                 continue                # decided in an earlier run — stay quiet
@@ -598,6 +697,217 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                     card, pr["property"], pr["value"], "select",
                     reason=f"researched online: {pr['explanation'][:200]}",
                     source=f"web — {pr['source'][:180]}")
+
+    # ---- Phase 4c: enrichment — the gaps rules cannot close ----------------- #
+    # Notes and attachments first, the web second. Relations are proposed by
+    # NAME and resolved against the real scan here; the model never supplies a
+    # page id, and a name that matches nothing is either created (companies,
+    # when the identification is solid) or left for the reviewer.
+    def _notes_text_for(card_id: str, limit: int = 3) -> str:
+        parts = []
+        for n in notes_by_target.get(card_id, [])[:limit]:
+            body = ""
+            if live:
+                try:
+                    body = notion.get_page_text(n["id"], max_depth=1)[:2500]
+                except Exception:  # noqa: BLE001
+                    body = ""
+            parts.append(f"Note \"{n['name']}\":\n{body}")
+        return "\n\n".join(parts)
+
+    def _relation_proposal(card, prop, target, reason, source):
+        """Link an existing record — the payload keeps the relations already
+        there and adds this one."""
+        existing = card["relations"].get(prop, [])
+        if target["id"] in existing:
+            return
+        new_ids = existing + [target["id"]]
+        record_proposal_payload(
+            card, prop, target["name"],
+            {"properties": {prop: {"relation": [{"id": i} for i in new_ids]}}},
+            reason=reason, source=source,
+            previous=", ".join(names_by_id.get(i, "") for i in existing),
+            new_ids=new_ids, prev_ids=existing)
+
+    companies = cards_by_db.get("companies", [])
+    contacts = cards_by_db.get("contacts", [])
+
+    if research_budget > 0 and client is not None:
+        _stage(job, "Filling gaps", "contacts, funds and notes")
+        checkpoint()
+
+    # -- contacts: employer, title, description, LinkedIn photo -------------- #
+    contact_props = set(schemas.get("contacts", set()))
+    for miss in detect.find_missing_props(contacts, "contacts", contact_props):
+        if research_budget <= 0:
+            break
+        card = miss["card"]
+        wanted = []
+        if "Employed By" in miss["missing"]:
+            wanted.append("employer")
+        for prop, key in (("Title", "title"), ("Job Title", "title"),
+                          ("Description", "description"),
+                          ("Weybourne Comments", "description")):
+            if prop in miss["missing"] and key not in wanted:
+                wanted.append(key)
+        if not wanted:
+            continue
+        research_budget -= 1
+        checkpoint()
+        try:
+            found = enrich.research_contact(client, card,
+                                            _notes_text_for(card["id"]), wanted)
+        except Exception:  # noqa: BLE001
+            continue
+        if found.get("confidence") == "low":
+            continue
+        where = ("linked meeting notes" if not found.get("used_web")
+                 else "web research")
+        src = f"{where} — {found.get('evidence', '')[:300]}"
+
+        employer = (found.get("employer") or "").strip()
+        if employer and "Employed By" in miss["missing"]:
+            hit = enrich.resolve_name(employer, companies)
+            if hit["match"]:
+                _relation_proposal(
+                    card, "Employed By", hit["match"],
+                    f"identified as working for {employer}", src)
+            elif hit["near"]:
+                record_recommendation(
+                    card, "Employed By",
+                    f"identified as working for '{employer}', which is close "
+                    f"to the existing company '{hit['near']['name']}' "
+                    f"(similarity {hit['score']}) but not the same name — "
+                    "confirm which before linking",
+                    source=src)
+            elif found.get("confidence") == "high":
+                # No such company on record: create it, then link. Only on a
+                # solid identification, and only once the name has been
+                # checked against every existing company above.
+                record_create_company(card, "Employed By", employer,
+                                      reason=f"'{card['name']}' works for "
+                                             f"{employer}, which is not yet in "
+                                             "Companies",
+                                      source=src)
+        for prop, key in (("Title", "title"), ("Job Title", "title"),
+                          ("Description", "description"),
+                          ("Weybourne Comments", "description")):
+            value = (found.get(key) or "").strip()
+            if value and prop in miss["missing"] and prop in contact_props:
+                record_proposal(card, prop, value, "rich_text",
+                                reason=f"{where}: {found.get('evidence', '')[:200]}",
+                                source=src)
+        photo = (found.get("photo_url") or "").strip()
+        if photo.startswith("http") and found.get("confidence") == "high":
+            record_photo(card, photo, found.get("linkedin_url", ""), src)
+
+    # -- funds: which manager runs this fund --------------------------------- #
+    fund_props = set(schemas.get("funds", set()))
+    co_prop = next((p for p in ("Company", "Company Name", "Manager")
+                    if p in fund_props), "")
+    if co_prop and co_prop in {p for (d, p) in relation_map if d == "funds"}:
+        for miss in detect.find_missing_props(cards_by_db.get("funds", []),
+                                              "funds", fund_props):
+            if research_budget <= 0:
+                break
+            card = miss["card"]
+            if co_prop not in miss["missing"]:
+                continue
+            research_budget -= 1
+            checkpoint()
+            try:
+                found = enrich.research_fund_company(
+                    client, card, _notes_text_for(card["id"]))
+            except Exception:  # noqa: BLE001
+                continue
+            name = (found.get("company") or "").strip()
+            if not name or found.get("confidence") == "low":
+                continue
+            src = f"research — {found.get('evidence', '')[:300]}"
+            hit = enrich.resolve_name(name, companies)
+            if hit["match"]:
+                _relation_proposal(card, co_prop, hit["match"],
+                                   f"{card['name']} is managed by {name}", src)
+            elif hit["near"]:
+                record_recommendation(
+                    card, co_prop,
+                    f"managed by '{name}', close to the existing company "
+                    f"'{hit['near']['name']}' (similarity {hit['score']}) — "
+                    "confirm which before linking", source=src)
+            elif found.get("confidence") == "high":
+                record_create_company(
+                    card, co_prop, name,
+                    reason=f"'{card['name']}' is managed by {name}, which is "
+                           "not yet in Companies", source=src)
+
+    # -- notes: who was actually there, and what kind of meeting it was ------ #
+    note_props = set(schemas.get("notes", set()))
+    att_prop = next((p for p in ("Attendees", "Participants", "People")
+                     if p in note_props), "")
+    type_opts = options_by_db.get("notes", {}).get("Note Type") or []
+    for miss in detect.find_missing_props(cards_by_db.get("notes", []),
+                                          "notes", note_props):
+        if research_budget <= 0:
+            break
+        card = miss["card"]
+        want_att = bool(att_prop) and att_prop in miss["missing"]
+        want_type = "Note Type" in miss["missing"] and bool(type_opts)
+        if not (want_att or want_type):
+            continue
+        body = ""
+        if live:
+            try:
+                body = notion.get_page_text(card["id"], max_depth=1)[:8000]
+            except Exception:  # noqa: BLE001
+                body = ""
+        if not body.strip():
+            continue
+        research_budget -= 1
+        checkpoint()
+        try:
+            found = enrich.infer_note_fields(client, card, body, type_opts,
+                                             want_att, want_type)
+        except Exception:  # noqa: BLE001
+            continue
+        if found.get("confidence") == "low":
+            continue
+        src = f"the note's own text — \"{found.get('evidence', '')[:220]}\""
+        if want_type and found.get("note_type"):
+            record_proposal(card, "Note Type", found["note_type"], "select",
+                            reason="inferred from what the meeting actually was",
+                            source=src)
+        if want_att and found.get("attendees"):
+            matched, unmatched = [], []
+            for person in found["attendees"][:12]:
+                hit = enrich.resolve_name(person, contacts)
+                (matched.append(hit["match"]) if hit["match"]
+                 else unmatched.append(person))
+            seen_ids, targets = set(), []
+            for m in matched:
+                if m["id"] not in seen_ids:
+                    seen_ids.add(m["id"]); targets.append(m)
+            if targets:
+                existing = card["relations"].get(att_prop, [])
+                new_ids = existing + [t["id"] for t in targets
+                                      if t["id"] not in existing]
+                if new_ids != existing:
+                    record_proposal_payload(
+                        card, att_prop,
+                        ", ".join(t["name"] for t in targets),
+                        {"properties": {att_prop: {
+                            "relation": [{"id": i} for i in new_ids]}}},
+                        reason="named in the note as present"
+                               + (f"; no contact record for {', '.join(unmatched)}"
+                                  if unmatched else ""),
+                        source=src,
+                        previous=", ".join(names_by_id.get(i, "") for i in existing),
+                        new_ids=new_ids, prev_ids=existing)
+            elif unmatched:
+                record_recommendation(
+                    card, att_prop,
+                    "the note names " + ", ".join(unmatched)
+                    + " as present, but none match a contact record — add them "
+                      "as contacts first", source=src)
 
     # ---- Phase 5: plan + order --------------------------------------------- #
     order = {"fix_formatting": 0, "fix_icon": 1, "fill_missing": 2,
@@ -924,3 +1234,97 @@ def merge_pair_now(notion, pair: list, db: str, source: str, reason: str,
     store.resolve_pair(survivor["id"], loser["id"], "user-approved-merge", base)
     return {"status": parent.execution_status, "survivor": survivor["name"],
             "loser": loser["name"], "changes": len(records)}
+
+
+def create_company_and_link(notion, snapshot: dict, change,
+                            base: Optional[Path] = None,
+                            db_id: Optional[str] = None) -> dict:
+    """Approve-time: create the company, then link the record to it.
+
+    The name is checked against Companies one more time before creating —
+    the scan that proposed this may be minutes or days old, and creating a
+    second copy of a company is exactly the mess Felix exists to prevent.
+    """
+    name = (snapshot.get("company_name") or "").strip()
+    prop = snapshot.get("link_property") or ""
+    if not name or not prop:
+        return {"status": "Failed", "note": "the proposal is missing its "
+                                            "company name or link property"}
+    db_id = db_id or config.NOTION_COMPANIES_DB
+    if not db_id:
+        return {"status": "Failed", "note": "no Companies database configured"}
+
+    # Re-check for an existing company, including any created since the scan.
+    try:
+        rows = notion.query_database_raw(db_id)
+    except Exception as e:  # noqa: BLE001
+        return {"status": "Failed", "note": f"could not read Companies: {e}"}
+    existing = [detect.card_from_page(p, "companies") for p in rows]
+    hit = enrich.resolve_name(name, existing)
+    created = False
+    if hit["match"]:
+        company_id = hit["match"]["id"]
+        company_name = hit["match"]["name"]
+    elif hit["near"]:
+        return {"status": "Skipped",
+                "note": f"'{name}' now looks like the existing company "
+                        f"'{hit['near']['name']}' — link it by hand rather "
+                        "than risk a duplicate"}
+    else:
+        try:
+            page = notion.create_page(db_id, {"Name": {"title": [
+                {"text": {"content": name[:1900]}}]}})
+        except Exception as e:  # noqa: BLE001
+            return {"status": "Failed", "note": f"could not create it: {e}"}
+        company_id = page.get("id", "")
+        company_name = name
+        created = True
+        if not company_id:
+            return {"status": "Failed", "note": "Notion returned no page id"}
+
+    ids = list(snapshot.get("existing_ids") or [])
+    if company_id not in ids:
+        ids.append(company_id)
+    try:
+        notion.update_page(snapshot["record_id"], properties={
+            prop: {"relation": [{"id": i} for i in ids]}})
+    except Exception as e:  # noqa: BLE001
+        return {"status": "Failed",
+                "note": (f"created '{company_name}' but could not link it: {e}"
+                         if created else f"could not link it: {e}")}
+    change.execution_status = "Applied"
+    change.new_value = company_name[:1900]
+    change.new_relation_ids = ids
+    store.append_change(change, base)
+    return {"status": "Applied", "company": company_name, "created": created,
+            "note": (f"created '{company_name}' and linked it"
+                     if created else f"linked the existing '{company_name}'")}
+
+
+def add_photo_to_page(notion, snapshot: dict, change,
+                      base: Optional[Path] = None) -> dict:
+    """Approve-time: put the profile photo in the contact's page body.
+
+    Notion fetches external image URLs itself, so a dead or blocked link
+    fails here rather than silently leaving a broken block.
+    """
+    url = (snapshot.get("photo_url") or "").strip()
+    if not url.startswith("http"):
+        return {"status": "Failed", "note": "no usable photo URL"}
+    children = [{"object": "block", "type": "image",
+                 "image": {"type": "external", "external": {"url": url}}}]
+    profile = (snapshot.get("profile_url") or "").strip()
+    if profile.startswith("http"):
+        children.append({
+            "object": "block", "type": "paragraph",
+            "paragraph": {"rich_text": [
+                {"type": "text",
+                 "text": {"content": "LinkedIn profile", "link": {"url": profile}}}]}})
+    try:
+        notion.append_blocks(snapshot["record_id"], children)
+    except Exception as e:  # noqa: BLE001
+        return {"status": "Failed",
+                "note": f"Notion would not accept the image: {e}"}
+    change.execution_status = "Applied"
+    store.append_change(change, base)
+    return {"status": "Applied", "note": "photo added to the page"}
