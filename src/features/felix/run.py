@@ -413,7 +413,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
         if research_budget <= 0:
             record_recommendation(
                 p["a"], "(possible duplicate)",
-                f"may duplicate '{p['b']['name']}' — {verdict['reason'][:180]} "
+                f"may duplicate '{p['b']['name']}' — {verdict['reason'][:600]} "
                 "(queued for web research on a later run)",
                 source=f"name similarity {p['score']}", detail=pair_detail)
             continue
@@ -434,23 +434,23 @@ def felix_run(job: dict, notion, client, options: RunOptions,
             merges.append({
                 "db": p["db"], "survivor": surv, "loser": losers[0],
                 "confidence": "Medium",
-                "source": f"online research — {r.get('evidence', '')[:200]}",
+                "source": f"online research — {r.get('evidence', '')[:400]}",
                 "reason": "researched online: same entity — "
-                          f"{r.get('explanation', '')[:200]}"})
+                          f"{r.get('explanation', '')[:500]}"})
         elif r.get("verdict") == "distinct":
             store.resolve_pair(p["a"]["id"], p["b"]["id"],
                                "research-distinct", base)
             record_recommendation(
                 p["a"], "(possible duplicate)",
                 f"researched online: DISTINCT from '{p['b']['name']}' — "
-                f"{r.get('explanation', '')[:220]}",
-                source=f"web research — {r.get('evidence', '')[:180]}",
+                f"{r.get('explanation', '')[:600]}",
+                source=f"web research — {r.get('evidence', '')[:400]}",
                 detail=pair_detail)
         else:
             record_recommendation(
                 p["a"], "(possible duplicate)",
                 f"may duplicate '{p['b']['name']}' — online research was "
-                f"inconclusive: {r.get('explanation', '')[:180]}",
+                f"inconclusive: {r.get('explanation', '')[:600]}",
                 source=f"name similarity {p['score']}", detail=pair_detail)
 
     # Evidence-based fills for missing text/select properties.
@@ -778,3 +778,109 @@ def _mock_workspace() -> dict:
                                           "LP - Institutional / SFO"]}},
     }
     return _MOCK
+
+
+# --------------------------------------------------------------------------- #
+# Approve-time merge — approving a duplicate finding IS the merge instruction.
+# --------------------------------------------------------------------------- #
+
+def merge_pair_now(notion, pair: list, db: str, source: str, reason: str,
+                   survivor_id: str = "", base: Optional[Path] = None) -> dict:
+    """Merge a reviewed duplicate pair on the spot.
+
+    Both records are fetched fresh, the richer one survives (or the recorded
+    survivor when one was already chosen), the loser's data transfers over,
+    inbound relations are found by targeted contains-queries — no full rescan —
+    and repointed, and the loser is archived. Same reversible machinery as a
+    live run: full snapshot, undo works.
+    """
+    try:
+        pages = [notion.get_page(pid) for pid in pair]
+    except Exception as e:  # noqa: BLE001
+        return {"status": "Failed",
+                "note": f"could not read the two records: {e}"}
+    cards = [detect.card_from_page(p, db) for p in pages]
+    if any(c["archived"] for c in cards):
+        return {"status": "Skipped",
+                "note": "one of the pair is already archived — nothing left "
+                        "to merge"}
+    if survivor_id:
+        if cards[1]["id"] == survivor_id:
+            cards.reverse()
+    else:
+        surv, losers = detect.choose_survivor(cards)
+        cards = [surv, losers[0]]
+    survivor, loser = cards
+    transfers = detect.plan_merge_transfers(survivor, loser)
+
+    # Inbound relations: query only the relation properties that can point at
+    # this database, filtered to pages containing the loser.
+    def _norm(s: str) -> str:
+        return (s or "").replace("-", "").lower()
+
+    db_ids = {k: (f() or "") for k, f in _DB_IDS.items()}
+    prop_ids: dict = {}
+    inbound: dict = {}
+    if getattr(notion, "live", False) and db_ids.get(db):
+        for key, did in db_ids.items():
+            if not did:
+                continue
+            try:
+                schema = notion.retrieve_database(did)
+            except Exception:  # noqa: BLE001
+                continue
+            for name, p in (schema.get("properties") or {}).items():
+                prop_ids[(key, name)] = p.get("id", "")
+                if p.get("type") != "relation":
+                    continue
+                target = (p.get("relation") or {}).get("database_id", "")
+                if _norm(target) != _norm(db_ids[db]):
+                    continue
+                try:
+                    rows = notion.query_database_raw(did, filter_payload={
+                        "property": name,
+                        "relation": {"contains": loser["id"]}})
+                except Exception:  # noqa: BLE001
+                    rows = []
+                for row in rows:
+                    c = detect.card_from_page(row, key)
+                    if c["id"] != loser["id"]:
+                        inbound[c["id"]] = c
+    # The survivor repointing at itself would be nonsense; a stale relation to
+    # the archived loser on the survivor is caught as dangling by the next run.
+    inbound.pop(survivor["id"], None)
+
+    # Names for the side-by-side detail (best-effort, capped).
+    names_by_id: dict = {}
+    rel_ids: list = []
+    for c in (survivor, loser):
+        for ids in c["relations"].values():
+            for i in ids:
+                if i not in rel_ids:
+                    rel_ids.append(i)
+    for i in rel_ids[:12]:
+        try:
+            names_by_id[i] = detect.card_from_page(notion.get_page(i), "")["name"]
+        except Exception:  # noqa: BLE001
+            pass
+
+    run_id = store.new_run_id()
+    run = RunRecord(run_id=run_id, started=_now(), dry_run=False,
+                    databases=[db])
+    store.save_run(run, base)
+    records, _seq = execute.execute_merge(
+        notion, run_id, 1, survivor, loser, transfers,
+        list(inbound.values()), prop_ids, "High", source, reason,
+        dry_run=False, quiet_minutes=0, base=base,
+        detail=_merge_detail(survivor, loser, transfers, names_by_id))
+    parent = records[0]
+    run.finished = _now()
+    run.status = "completed" if parent.execution_status == "Applied" else "failed"
+    run.counts = {
+        "applied": sum(1 for r in records if r.execution_status == "Applied"),
+        "failed": sum(1 for r in records if r.execution_status == "Failed"),
+        "merges": 1 if parent.execution_status == "Applied" else 0}
+    store.save_run(run, base)
+    store.resolve_pair(survivor["id"], loser["id"], "user-approved-merge", base)
+    return {"status": parent.execution_status, "survivor": survivor["name"],
+            "loser": loser["name"], "changes": len(records)}

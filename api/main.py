@@ -1996,6 +1996,16 @@ def felix_review(change_id: str, body: FelixReviewIn):
         # live_enabled (which governs autonomous writes only).
         result = {"change_id": change_id, "review_status": "Approved"}
         snap = felix_store.load_snapshot(change_id)
+        try:
+            _pair = (json.loads(change.detail or "{}")).get("pair") or []
+        except Exception:  # noqa: BLE001
+            _pair = []
+        # A duplicate finding where the evidence points AT a duplicate —
+        # approving it means "merge them". A researched-DISTINCT row is the
+        # opposite claim, so approving that only files the pair as settled.
+        is_dup_rec = (change.change_type == "recommendation"
+                      and "duplicate" in change.property_changed
+                      and "DISTINCT" not in (change.reason or ""))
         if (change.execution_status in ("Proposed", "Planned (dry-run)",
                                         "Recommended")
                 and snap and snap.get("planned")):
@@ -2013,9 +2023,32 @@ def felix_review(change_id: str, body: FelixReviewIn):
                 result["note"] = ("not written: " +
                                   (updated.undo_result or "the record moved on "
                                    "since the scan"))
+        elif (len(_pair) == 2
+              and (is_dup_rec or (change.change_type == "merge"
+                                  and change.execution_status != "Applied"))):
+            # Approve EXECUTES the merge: fetch fresh, keep the richer record
+            # (or the planned survivor), transfer, repoint, archive.
+            from src.features.felix import run as felix_runmod
+            out = felix_runmod.merge_pair_now(
+                _notion, _pair, change.database,
+                source="approved in review — " + (change.source or "")[:150],
+                reason=(change.reason or "")[:300],
+                survivor_id=_pair[0] if change.change_type == "merge" else "")
+            result["execution_status"] = out.get("status", "")
+            if out.get("status") == "Applied":
+                _notion.invalidate_cache()
+                result["note"] = (f"merged: kept '{out.get('survivor')}', "
+                                  f"archived '{out.get('loser')}'")
+            elif out.get("note"):
+                result["note"] = out["note"]
+        elif (change.change_type == "recommendation"
+              and "duplicate" in change.property_changed):
+            result["note"] = ("noted as distinct — this pair will not be "
+                              "flagged again")
         elif change.change_type in ("merge", "merge_transfer", "archive"):
-            result["note"] = ("merges are multi-step: enable live runs and "
-                              "run Felix to consolidate the duplicates")
+            result["note"] = ("already applied" if change.execution_status
+                              == "Applied" else "approve the parent merge row "
+                              "to consolidate the pair")
         elif change.execution_status in ("Proposed", "Planned (dry-run)"):
             result["note"] = ("this row predates apply-on-approve and has no "
                               "stored payload — re-run Felix to regenerate it")

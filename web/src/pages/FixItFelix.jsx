@@ -335,13 +335,20 @@ function describeChange(c) {
   const done = c.execution_status === "Applied";
   // What pressing Approve will actually DO — stated on every row so there is
   // never any guessing.
+  const isDupRec = c.change_type === "recommendation"
+    && (c.property_changed || "").includes("duplicate");
+  const isDistinct = isDupRec && (c.reason || "").includes("DISTINCT");
   const approve = done
     ? "Approve files it as reviewed (it is already done). Discard undoes it in Notion."
     : c.change_type === "merge"
-      ? "Approve records your OK; the merge itself runs on the next live Felix run. Discard drops it."
-      : c.new_value && c.property_changed && c.execution_status !== "Recommended"
-        ? `Approve writes ${c.property_changed} = ${q(c.new_value)} to this record in Notion, right now. Discard drops it.`
-        : "Approve only files this away as seen — nothing is written to Notion. Discard drops it.";
+      ? "Approve merges the pair in Notion right now: data moves to the kept copy, links repoint, the duplicate is archived (undoable in one click). Discard files them as not duplicates — nothing changes."
+      : isDistinct
+        ? "Approve accepts the research: the two records stay separate and the pair is never flagged again. Discard just files this row away."
+        : isDupRec
+          ? "Approve merges the pair in Notion right now: the richer record is kept, the other's data moves over, links repoint, and the duplicate is archived (undoable). Discard files them as NOT duplicates — never flagged again, nothing written."
+          : c.new_value && c.property_changed && c.execution_status !== "Recommended"
+            ? `Approve writes ${c.property_changed} = ${q(c.new_value)} to this record in Notion, right now. Discard drops it.`
+            : "Approve only files this away as seen — nothing is written to Notion. Discard drops it.";
   const base = (() => {
     switch (c.change_type) {
       case "fix_formatting":
