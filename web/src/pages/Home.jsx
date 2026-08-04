@@ -53,10 +53,17 @@ export default function Home() {
   React.useSyncExternalStore(uiStore.subscribe, uiStore.getVersion);
   React.useSyncExternalStore(liveStore.subscribe, liveStore.getVersion);
   const [events, setEvents] = React.useState([]);
+  // The calendar lands well after the page has faded in. Until it does, the
+  // rail holds its space silently rather than showing "Nothing scheduled" and
+  // then snapping a white card over it.
+  const [calLoaded, setCalLoaded] = React.useState(false);
   const [jobs, setJobs] = React.useState([]);
 
   React.useEffect(() => {
-    getRetry("/api/calendar?days=7").then((d) => setEvents(d.events)).catch(() => {});
+    getRetry("/api/calendar?days=7")
+      .then((d) => setEvents(d.events))
+      .catch(() => {})
+      .finally(() => setCalLoaded(true));
     get("/api/jobs").then(({ jobs: js }) =>
       setJobs(js.filter((j) => j.status === "done").slice(0, 5))).catch(() => {});
     // A refresh started on another visit (or before a reload) keeps its
@@ -162,8 +169,10 @@ export default function Home() {
                         display: "flex", flexDirection: "column", gap: 30 }}>
           <section>
             <SectionHead label="TODAY" />
-            {next ? (
-              <>
+            {!calLoaded ? (
+              <div style={{ minHeight: 128 }} aria-hidden />
+            ) : next ? (
+              <div className="fade-soft">
                 <Card accent="teal" style={{ padding: "17px 17px 15px" }}>
                   <div className="spread">
                     <span className="mono" style={{ fontSize: 12 }}>{fmtTime(next.start)}</span>
@@ -189,8 +198,8 @@ export default function Home() {
                     <span style={{ fontSize: "13.5px", color: "var(--stone-600)" }}>{e.subject}</span>
                   </div>
                 ))}
-              </>
-            ) : <p className="muted small">Nothing scheduled.</p>}
+              </div>
+            ) : <p className="muted small fade-soft">Nothing scheduled.</p>}
           </section>
 
           <section>

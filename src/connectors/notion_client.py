@@ -131,6 +131,12 @@ class NotionConnector:
     def __init__(self):
         self.live = config.notion_configured()
         self._list_cache: dict = {}
+        self._load_locks: dict = {}
+        self._locks_guard = threading.Lock()
+
+    def _key_lock(self, key: str) -> threading.Lock:
+        with self._locks_guard:
+            return self._load_locks.setdefault(key, threading.Lock())
 
     def _cached(self, key: str, loader):
         import time
@@ -138,9 +144,16 @@ class NotionConnector:
         hit = self._list_cache.get(key)
         if hit and time.time() - hit[0] < self._LIST_CACHE_TTL:
             return hit[1]
-        value = loader()
-        self._list_cache[key] = (time.time(), value)
-        return value
+        # Single-flight. A cold contacts pull runs to minutes; without this,
+        # two requests arriving together each start their own, and the shared
+        # request throttle makes the pair take twice as long as one would.
+        with self._key_lock(key):
+            hit = self._list_cache.get(key)
+            if hit and time.time() - hit[0] < self._LIST_CACHE_TTL:
+                return hit[1]
+            value = loader()
+            self._list_cache[key] = (time.time(), value)
+            return value
 
     # -- persistent snapshot + delta sync --------------------------------- #
 
@@ -622,21 +635,38 @@ class NotionConnector:
 
     # -- cache control ----------------------------------------------------- #
 
-    def invalidate_cache(self, keys: Optional[list] = None) -> None:
-        """Drop list caches (memory + disk snapshot) for the given collection
-        keys ('contacts', 'companies', 'funds'), or all of them.
+    def invalidate_cache(self, keys: Optional[list] = None,
+                         archived_ids: Optional[list] = None) -> None:
+        """Make the next read of these collections see what just changed.
 
-        Required after any run that archives pages: delta sync cannot see
-        archives, so without this the app's lists would resurrect archived
-        records for up to 7 days."""
+        Dropping the in-memory cache is enough for edits and new pages: the
+        next read runs a delta sync, which fetches everything touched since
+        the last one in a request or two.
+
+        The disk snapshot is deliberately KEPT. Deleting it forces a full
+        re-pull of ~27,000 rows across the three databases — roughly eight
+        minutes — during which triage and meeting prep simply hang. Every
+        applied Felix change used to trigger exactly that.
+
+        Archives are the one thing a delta sync cannot see, so a caller that
+        archived a page passes its id in ``archived_ids`` and that row is
+        dropped from the snapshot directly.
+        """
         keys = keys or ["contacts", "companies", "funds"]
         for k in keys:
             self._list_cache.pop(k, None)
+        gone = {i for i in (archived_ids or []) if i}
+        if not gone:
+            return
         store = self._disk_load()
         changed = False
         for k in keys:
-            if k in store:
-                store.pop(k)
+            entry = store.get(k)
+            if not entry:
+                continue
+            kept = [r for r in entry.get("records", []) if r.get("id") not in gone]
+            if len(kept) != len(entry.get("records", [])):
+                entry["records"] = kept
                 changed = True
         if changed:
             self._disk_save(store)

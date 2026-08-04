@@ -388,12 +388,50 @@ const FRAMES = {
   type: ["felix-type-a", "felix-type-b", ".22s"],
 };
 
+/* Pixel fire for the power-up. Half-widths per row from the tip down, drawn
+   on the same crisp grid as the sprites; two frames flickered by the px-swap
+   pair so the flame licks rather than tweens. */
+const FLAME_A = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 11, 11,
+                 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11];
+const FLAME_B = [1, 1, 2, 4, 5, 5, 7, 9, 9, 10, 11, 11, 10, 11, 11,
+                 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11];
+const FLAME_BANDS = [[0, "#E25822"], [3, "#F59E0B"], [6, "#FDE68A"]];
+
+function FlameFrame({ halves }) {
+  return (
+    <svg className="px-flame" viewBox="0 0 22 28" preserveAspectRatio="none"
+         shapeRendering="crispEdges" aria-hidden="true">
+      {FLAME_BANDS.map(([inset, fill]) =>
+        halves.map((h, y) => {
+          const half = h - inset;
+          if (half <= 0) return null;
+          return <rect key={`${inset}-${y}`} x={11 - half} y={y}
+                       width={half * 2} height={1} fill={fill} />;
+        }))}
+    </svg>
+  );
+}
+
 function FelixMascot({ scene, x }) {
   const walking = scene.activity === "walk";
   const pair = FRAMES[scene.activity];
   return (
     <div className={"px-felix" + (scene.power ? " powered" : "")}
-      style={{ transform: `translate3d(${Math.round(x)}px, 0, 0)` }}>
+      style={{ transform: `translate3d(${Math.round(x)}px, 0, 0)`,
+               // Powered up he sprints between stations; idling, he ambles.
+               transitionDuration: scene.power ? ".6s" : "1.5s" }}>
+      {scene.power && (
+        <div className="px-flames" aria-hidden="true">
+          <div className="px-frame"
+               style={{ animation: "px-swapA .18s steps(1) infinite" }}>
+            <FlameFrame halves={FLAME_A} />
+          </div>
+          <div className="px-frame"
+               style={{ animation: "px-swapB .18s steps(1) infinite" }}>
+            <FlameFrame halves={FLAME_B} />
+          </div>
+        </div>
+      )}
       <div className={"px-felix-body" + (walking ? " walking" : "")}>
         {pair ? (
           <>

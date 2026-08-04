@@ -268,11 +268,11 @@ def resolve_pair(a: str, b: str, decision: str,
 
 # -- config ----------------------------------------------------------------- #
 
+# Felix runs live and on demand. There is no dry-run mode to enable and no
+# daily schedule: a run stops at ten findings, and clearing them starts the
+# next one.
 _DEFAULT_CONFIG = {
-    "live_enabled": False,           # dry-run until the user flips this in the UI
-    "auto_run_enabled": True,
-    "auto_run_hour": 7,              # local time
-    "last_auto_run_date": "",
+    "live_enabled": True,
 }
 
 

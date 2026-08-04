@@ -48,11 +48,13 @@ def test_snapshots_roundtrip(tmp_path):
 
 
 def test_config_defaults_and_merge(tmp_path):
+    """Felix runs live and on demand — there is no dry-run mode to enable and
+    no daily schedule to configure."""
     cfg = store.load_config(base=tmp_path)
-    assert cfg["live_enabled"] is False          # dry-run until flipped
-    store.save_config({"live_enabled": True}, base=tmp_path)
-    cfg = store.load_config(base=tmp_path)
-    assert cfg["live_enabled"] is True and cfg["auto_run_hour"] == 7
+    assert cfg["live_enabled"] is True
+    assert "auto_run_enabled" not in cfg and "auto_run_hour" not in cfg
+    store.save_config({"live_enabled": False}, base=tmp_path)
+    assert store.load_config(base=tmp_path)["live_enabled"] is False
 
 
 def test_stats_aggregates(tmp_path):

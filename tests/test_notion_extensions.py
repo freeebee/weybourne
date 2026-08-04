@@ -73,12 +73,69 @@ class TestStrictQuery:
         assert "only 1 rows" in str(e)
 
 
-def test_invalidate_cache_drops_memory_and_disk(tmp_path, monkeypatch):
+class TestInvalidateCache:
+    """The snapshot is 27,000 rows across three databases and takes minutes to
+    rebuild. Invalidation drops the in-memory copy — enough for the next delta
+    sync to pick up edits — and keeps the snapshot itself."""
+
+    def _conn(self, tmp_path, monkeypatch, records=None):
+        n = nc.NotionConnector()
+        monkeypatch.setattr(nc.NotionConnector, "_DISK_PATH", tmp_path / "cache.json")
+        n._disk_save({"contacts": {"records": records or [{"id": "a"}, {"id": "b"}]},
+                      "funds": {"records": []}, "page_text": {}})
+        n._list_cache["contacts"] = (0, [])
+        return n
+
+    def test_the_memory_cache_is_dropped(self, tmp_path, monkeypatch):
+        n = self._conn(tmp_path, monkeypatch)
+        n.invalidate_cache(["contacts"])
+        assert "contacts" not in n._list_cache
+
+    def test_the_snapshot_survives(self, tmp_path, monkeypatch):
+        """Deleting it forced a full workspace re-pull, which stalled triage
+        and meeting prep for minutes after every applied change."""
+        n = self._conn(tmp_path, monkeypatch)
+        n.invalidate_cache(["contacts"])
+        store = n._disk_load()
+        assert [r["id"] for r in store["contacts"]["records"]] == ["a", "b"]
+
+    def test_an_archived_id_is_removed_from_the_snapshot(self, tmp_path, monkeypatch):
+        """The one thing a delta sync cannot see."""
+        n = self._conn(tmp_path, monkeypatch)
+        n.invalidate_cache(archived_ids=["a"])
+        store = n._disk_load()
+        assert [r["id"] for r in store["contacts"]["records"]] == ["b"]
+
+    def test_an_unknown_archived_id_changes_nothing(self, tmp_path, monkeypatch):
+        n = self._conn(tmp_path, monkeypatch)
+        n.invalidate_cache(archived_ids=["zz", None, ""])
+        assert len(n._disk_load()["contacts"]["records"]) == 2
+
+    def test_other_collections_are_untouched(self, tmp_path, monkeypatch):
+        n = self._conn(tmp_path, monkeypatch)
+        n.invalidate_cache(["contacts"], archived_ids=["a"])
+        assert "funds" in n._disk_load() and "page_text" in n._disk_load()
+
+
+def test_a_collection_is_loaded_once_under_concurrent_readers(tmp_path, monkeypatch):
+    """Two requests arriving together must not each start a minutes-long pull."""
+    import threading
+
     n = nc.NotionConnector()
     monkeypatch.setattr(nc.NotionConnector, "_DISK_PATH", tmp_path / "cache.json")
-    n._disk_save({"contacts": {"records": []}, "funds": {"records": []}, "page_text": {}})
-    n._list_cache["contacts"] = (0, [])
-    n.invalidate_cache(["contacts"])
-    assert "contacts" not in n._list_cache
-    store = n._disk_load()
-    assert "contacts" not in store and "funds" in store
+    calls = []
+    start = threading.Event()
+
+    def loader():
+        calls.append(1)
+        start.wait(timeout=2)
+        return ["row"]
+
+    threads = [threading.Thread(target=lambda: n._cached("contacts", loader))
+               for _ in range(4)]
+    for t in threads:
+        t.start()
+    start.set()
+    for t in threads:
+        t.join(timeout=5)
+    assert len(calls) == 1

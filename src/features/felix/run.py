@@ -161,8 +161,28 @@ def _emit(job: dict, change: ChangeRecord) -> None:
     counts[change.execution_status] = counts.get(change.execution_status, 0) + 1
 
 
+class _FindingsFull(Exception):
+    """Enough findings are waiting on the user — the run stops where it is.
+
+    Carries the finished run summary so the caller returns a normal result
+    rather than an error: stopping at the cap is a completed run, not a fault.
+    """
+
+    def __init__(self, result: dict):
+        super().__init__("finding cap reached")
+        self.result = result
+
+
 def felix_run(job: dict, notion, client, options: RunOptions,
               checkpoint=lambda: None, base: Optional[Path] = None) -> dict:
+    try:
+        return _felix_run(job, notion, client, options, checkpoint, base)
+    except _FindingsFull as full:
+        return full.result
+
+
+def _felix_run(job: dict, notion, client, options: RunOptions,
+               checkpoint=lambda: None, base: Optional[Path] = None) -> dict:
     run_id = store.new_run_id()
     run = RunRecord(run_id=run_id, started=_now(), dry_run=options.dry_run,
                     databases=options.databases)
@@ -175,6 +195,8 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                     "formatting_fixed": 0, "icons_added": 0,
                     "high": 0, "medium": 0, "deferred": 0, "undone": 0}
 
+    findings = 0
+
     def _finish(status: str, error: str = "") -> dict:
         run.finished = _now()
         run.status = status
@@ -182,7 +204,20 @@ def felix_run(job: dict, notion, client, options: RunOptions,
         run.error = error
         store.save_run(run, base)
         return {"run_id": run_id, "counts": counts, "dry_run": options.dry_run,
-                "status": status, "error": error}
+                "status": status, "error": error,
+                "stopped_at_cap": counts.get("stopped_at_cap", 0)}
+
+    def _note_finding() -> None:
+        """Every row that needs the user's say-so counts towards the cap.
+
+        Felix works until ten are waiting and then stops. A run that keeps
+        going past that just buries the queue; clearing it starts him again.
+        """
+        nonlocal findings
+        findings += 1
+        if options.max_findings and findings >= options.max_findings:
+            counts["stopped_at_cap"] = findings
+            raise _FindingsFull(_finish("done"))
 
     def record_recommendation(db_card: dict, prop: str, reason: str,
                               source: str = "", new_value: str = "",
@@ -201,6 +236,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
         store.append_change(rec, base)
         _emit(job, rec)
         counts["recommendations"] += 1
+        _note_finding()
 
     # Rows this run replaces. A finding re-detected on a later run used to be
     # appended alongside the old one, so the queue kept showing the FIRST
@@ -253,6 +289,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
         store.append_change(rec, base)
         _emit(job, rec)
         counts["proposed"] = counts.get("proposed", 0) + 1
+        _note_finding()
 
     def record_proposal_payload(db_card: dict, prop: str, shown: str,
                                 payload: dict, reason: str, source: str = "",
@@ -282,6 +319,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
         store.append_change(rec, base)
         _emit(job, rec)
         counts["proposed"] = counts.get("proposed", 0) + 1
+        _note_finding()
 
     def record_create_company(db_card: dict, prop: str, company: str,
                               reason: str, source: str = "") -> None:
@@ -306,6 +344,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
         store.append_change(rec, base)
         _emit(job, rec)
         counts["proposed"] = counts.get("proposed", 0) + 1
+        _note_finding()
 
     def record_photo(db_card: dict, photo_url: str, profile_url: str,
                      source: str) -> None:
@@ -330,6 +369,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
         store.append_change(rec, base)
         _emit(job, rec)
         counts["proposed"] = counts.get("proposed", 0) + 1
+        _note_finding()
 
     # ---- Phase 0: preflight ------------------------------------------------ #
     _stage(job, "Preflight", "confirming live database schemas")
@@ -1093,6 +1133,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
         elif st == "Skipped":
             counts["skipped"] += 1
 
+    archived_ids: list[str] = []
     for m in merges:
         checkpoint()
         transfers = detect.plan_merge_transfers(m["survivor"], m["loser"])
@@ -1110,6 +1151,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
             counts["applied"] += 1
             counts["merges"] += 1
             counts["high" if parent.confidence == "High" else "medium"] += 1
+            archived_ids.append(m["loser"]["id"])
         elif parent.execution_status == "Planned (dry-run)":
             counts["planned"] += 1
             counts["merges"] += 1
@@ -1118,7 +1160,10 @@ def felix_run(job: dict, notion, client, options: RunOptions,
 
     # ---- Phase 7: summarise ------------------------------------------------- #
     if not options.dry_run and (counts["applied"] or counts["undone"]):
-        notion.invalidate_cache()
+        # Ids of pages this run archived: a delta sync cannot see an archive,
+        # so they are dropped from the snapshot by name rather than by
+        # throwing the whole snapshot away and re-pulling the workspace.
+        notion.invalidate_cache(archived_ids=archived_ids)
     _stage(job, "Done", f"{counts['applied'] or counts['planned']} change(s) "
                         f"{'planned' if options.dry_run else 'applied'}, "
                         f"{counts['recommendations']} recommendation(s)")
@@ -1365,7 +1410,8 @@ def merge_pair_now(notion, pair: list, db: str, source: str, reason: str,
     store.save_run(run, base)
     store.resolve_pair(survivor["id"], loser["id"], "user-approved-merge", base)
     return {"status": parent.execution_status, "survivor": survivor["name"],
-            "loser": loser["name"], "changes": len(records)}
+            "loser": loser["name"], "loser_id": loser["id"],
+            "changes": len(records)}
 
 
 def create_company_and_link(notion, snapshot: dict, change,

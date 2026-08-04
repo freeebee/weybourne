@@ -15,7 +15,7 @@ function RunPanel({ s }) {
   const job = s.runJob;
   const running = job?.status === "running";
   const cfg = s.status || {};
-  const [confirmLive, setConfirmLive] = React.useState(false);
+  const cap = cfg.max_findings || 10;
   if (running) {
     const left = Math.max(0, (job.eta || 0) - (job.elapsed || 0));
     return (
@@ -25,7 +25,7 @@ function RunPanel({ s }) {
             RUNNING · {job.label?.toUpperCase()} · {job.elapsed}S ELAPSED ·
             {left > 0 ? ` ~${left}S LEFT` : " OVERRUNNING"}
           </span>
-          <Button variant="ghost" onClick={fx.cancelRun}>Cancel</Button>
+          <Button variant="ghost" onClick={fx.cancelRun}>Stop Felix</Button>
         </div>
         {(job.stages || []).slice(-4).map((st, i, arr) => (
           <div key={i} style={{ fontSize: "13px", marginTop: 5 }}>
@@ -46,46 +46,13 @@ function RunPanel({ s }) {
           <Button busy={s.busy === "start"} onClick={() => fx.startRun({})}>
             Run Felix
           </Button>
-          <Chip tone={cfg.live_enabled ? "positive" : "teal"}>
-            {cfg.live_enabled ? "LIVE MODE" : "DRY RUN MODE"}
-          </Chip>
           {!cfg.live && <Chip tone="neutral">NOTION: DEMO DATA</Chip>}
         </div>
-        <label className="mono" style={{ fontSize: 10.5, letterSpacing: ".1em",
-                display: "flex", gap: 7, alignItems: "center",
+        <span className="mono" style={{ fontSize: 10.5, letterSpacing: ".1em",
                 color: "var(--stone-500)" }}>
-          <input type="checkbox" checked={!!cfg.auto_run_enabled}
-            onChange={(e) => fx.setConfig({ auto_run_enabled: e.target.checked })} />
-          DAILY AUTO-RUN
-          <select value={cfg.auto_run_hour ?? 7} style={{ ...inputStyle, padding: "3px 6px", width: "auto" }}
-            onChange={(e) => fx.setConfig({ auto_run_hour: +e.target.value })}>
-            {Array.from({ length: 24 }, (_, h) => (
-              <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
-            ))}
-          </select>
-        </label>
+          STOPS AT {cap} FOR APPROVAL · RESTARTS WHEN THE QUEUE IS CLEAR
+        </span>
       </div>
-      {!cfg.live_enabled && (s.stats?.runs || 0) > 0 && (
-        <div style={{ marginTop: 12, borderTop: "1px solid var(--paper-200)",
-                      paddingTop: 10 }}>
-          {confirmLive ? (
-            <div className="row">
-              <span style={{ fontSize: "13px" }}>
-                Felix will make real, reversible edits to your Notion workspace
-                automatically. Sure?
-              </span>
-              <Button variant="dark" onClick={() => {
-                fx.setConfig({ live_enabled: true }); setConfirmLive(false);
-              }}>Enable live runs</Button>
-              <Button variant="ghost" onClick={() => setConfirmLive(false)}>Not yet</Button>
-            </div>
-          ) : (
-            <Button variant="ghost" onClick={() => setConfirmLive(true)}>
-              Enable live runs (reviewed the dry run)
-            </Button>
-          )}
-        </div>
-      )}
       <PendingResearch s={s} />
       {s.lastResult && (
         <div style={{ marginTop: 12, borderTop: "1px solid var(--paper-200)",
@@ -559,6 +526,8 @@ function ChangeRow({ c, s }) {
   // A distinct verdict is not a merge proposal, so there is nothing to pick.
   const canPick = isDup && awaiting && !applied
     && !(c.reason || "").includes("DISTINCT");
+  // Either decision locks the row, but only the pressed button spins.
+  const rowBusy = (s.busy || "").startsWith(`review-${c.change_id}-`);
   return (
           <Card style={{ padding: "13px 16px", marginBottom: 8 }}>
             <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
@@ -621,13 +590,17 @@ function ChangeRow({ c, s }) {
             <div className="row" style={{ marginTop: 9, alignItems: "center" }}>
               {awaiting ? (
                 <>
-                  <Button variant="dark" busy={s.busy === `review-${c.change_id}`}
+                  <Button variant="dark"
+                    busy={s.busy === `review-${c.change_id}-approve`}
+                    disabled={rowBusy}
                     onClick={() => fx.review(c.change_id, "approve", keepId, edit)}>
                     {edit ? "Approve your version"
                       : canPick && keepId ? "Approve — keep the chosen copy"
                       : "Approve"}
                   </Button>
-                  <Button variant="ghost" busy={s.busy === `review-${c.change_id}`}
+                  <Button variant="ghost"
+                    busy={s.busy === `review-${c.change_id}-${applied ? "undo" : "dismiss"}`}
+                    disabled={rowBusy}
                     onClick={() => fx.review(c.change_id,
                                              applied ? "undo" : "dismiss")}>
                     Discard{applied ? " (undo it)" : ""}

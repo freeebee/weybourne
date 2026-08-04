@@ -53,6 +53,20 @@ const DB_PHRASES = {
 };
 const UNDO_PHRASES = ["Whoopsie!", "Oops, my bad!", "Undoing that one!",
                       "Sorry! Rolling it back."];
+// Something spotted that needs your say-so — he flags it, he doesn't fix it.
+const SPOT_PHRASES = ["Spotted!", "Aha — got one!", "Ooh, what's this?",
+                      "Something's off here.", "One for you!",
+                      "Found something!"];
+// The same, when the fix is obvious — a blank field, a stray space.
+const EASY_PHRASES = ["That's an easy one!", "Simple fix!", "No trouble at all!",
+                      "Easy!", "Barely worth the wrench!"];
+const APPROVE_PHRASES = ["I fixed it!", "Done and dusted!", "All sorted!",
+                         "Consider it fixed!", "That's that one!",
+                         "Wrenched it!", "Good as new!"];
+// Mechanical changes: the value speaks for itself, so no judgement needed.
+const EASY_TYPES = ["fix_formatting", "fix_icon", "fix_relation"];
+
+function pick(pool) { return pool[Math.floor(Math.random() * pool.length)]; }
 
 function phraseFor(ev) {
   const pool = PHRASES[ev.type] || ["Nice!"];
@@ -60,7 +74,7 @@ function phraseFor(ev) {
   if (Math.random() < 0.34 && DB_PHRASES[ev.db] && ev.type !== "recommendation") {
     return DB_PHRASES[ev.db];
   }
-  return pool[Math.floor(Math.random() * pool.length)];
+  return pick(pool);
 }
 
 // ---- data loading --------------------------------------------------------- //
@@ -124,11 +138,10 @@ export function restore() {
 
 // ---- runs ----------------------------------------------------------------- //
 
-export async function startRun({ dryRun, webResearch } = {}) {
+export async function startRun({ webResearch } = {}) {
   S.busy = webResearch ? "search" : "start"; S.error = null; emit();
   try {
     const body = {};
-    if (dryRun !== undefined) body.dry_run = dryRun;
     if (webResearch) body.web_research = true;
     const job = await post("/api/jobs/felix", body);
     attach(job.id);
@@ -202,7 +215,9 @@ function attach(jobId) {
    single selects, {values} for multi-selects. Omitted means "approve exactly
    what Felix planned". */
 export async function review(changeId, action, survivorId = "", edit = null) {
-  S.busy = `review-${changeId}`; emit();
+  // The action is part of the key so the spinner sits on the button that was
+  // actually pressed; its neighbour is only disabled.
+  S.busy = `review-${changeId}-${action}`; emit();
   try {
     const res = await post(`/api/felix/changes/${changeId}/review`,
                            { action, survivor_id: survivorId, ...(edit || {}) });
@@ -212,33 +227,27 @@ export async function review(changeId, action, survivorId = "", edit = null) {
     S.changes = S.changes.map((c) => c.change_id === changeId
       ? { ...c, review_status: next } : c);
     if (action === "undo") {
-      spawnLabel(UNDO_PHRASES[Math.floor(Math.random() * UNDO_PHRASES.length)],
-                 "caution");
+      say(pick(UNDO_PHRASES), "caution", true);
     } else if (action === "approve" && change) {
-      if (res.execution_status === "Applied") {
-        // The approval genuinely wrote to Notion — Felix runs over to that
-        // database's station and celebrates the real fix.
-        eventQueue.push({
-          change_id: `${changeId}-approved`, db: change.database,
-          record: change.record_name, type: change.change_type,
-          status: "Applied", label: "fixed on your say-so",
-        });
-        lastEventAt = Date.now();
-      } else {
-        spawnLabel("Filed away!", "teal");
-      }
+      // Either way Felix runs to that database's station and reports back —
+      // "I fixed it!" only when the approval genuinely wrote to Notion.
+      const wrote = res.execution_status === "Applied";
+      eventQueue.push({
+        change_id: `${changeId}-approved`, db: change.database,
+        record: change.record_name, type: change.change_type,
+        status: wrote ? "Applied" : "Filed",
+        label: wrote ? "fixed on your say-so" : "filed on your say-so",
+        say: wrote ? pick(APPROVE_PHRASES) : "Filed away!",
+        tone: wrote ? "positive" : "teal",
+      });
+      lastEventAt = Date.now();
     }
     fetchChanges();   // twins of this finding get superseded server-side
+    // Clearing the last outstanding decision powers Felix up again, server
+    // side — pick that run up so the scene shows it.
+    refreshStatus();
   } catch (e) { S.error = e.message; }
   S.busy = ""; emit();
-}
-
-export async function setConfig(patch) {
-  try {
-    const cfg = await post("/api/felix/config", patch);
-    if (S.status) S.status = { ...S.status, ...cfg };
-    emit();
-  } catch (e) { S.error = e.message; emit(); }
 }
 
 // ---- the game loop -------------------------------------------------------- //
@@ -246,6 +255,19 @@ export async function setConfig(patch) {
 function spawnLabel(text, tone) {
   S.scene.labels = [...S.scene.labels.slice(-4),
                     { id: labelSeq++, text, tone, zone: S.scene.zone }];
+}
+
+/* A busy run finds things faster than anyone can read, so bubbles are rationed:
+   one every few seconds. Anything the user themselves set off (an approval, an
+   undo) jumps the queue — they are waiting to see it land. */
+const BUBBLE_GAP = 3200;
+let lastBubbleAt = 0;
+
+function say(text, tone, force = false) {
+  const now = Date.now();
+  if (!force && now - lastBubbleAt < BUBBLE_GAP) return;
+  lastBubbleAt = now;
+  spawnLabel(text, tone);
 }
 
 function set(activity, caption, ms) {
@@ -269,7 +291,9 @@ function tick() {
   const now = Date.now();
   if (now < phaseUntil) return;
   const power = S.scene.power;
-  const walkMs = power ? 850 : 900;      // matches .fx-sprite's .8s travel
+  // Powered up he sprints; off the clock he ambles. The gap is what sells the
+  // power-up — see the matching transition durations on .px-felix.
+  const walkMs = power ? 620 : 1550;
   const fixMs = power ? 900 : 1400;
 
   // A real event: dash to its zone, wrench it, say something.
@@ -282,13 +306,19 @@ function tick() {
       eventQueue.unshift(ev);            // wrench it after arriving
     } else {
       set("fix", `${ev.record || "record"} — ${ev.label || "fixing"}`, fixMs);
-      if (["Applied", "Planned (dry-run)"].includes(ev.status)) {
-        spawnLabel(phraseFor(ev),
-                   ev.status === "Applied" ? "positive" : "teal");
+      if (ev.say) {
+        // The user just pressed a button and is watching for the result.
+        say(ev.say, ev.tone || "positive", true);
+      } else if (["Applied", "Planned (dry-run)"].includes(ev.status)) {
+        say(phraseFor(ev), ev.status === "Applied" ? "positive" : "teal");
+      } else if (ev.status === "Proposed") {
+        // Spotted, not fixed: it is waiting for the user's approval.
+        say(pick(EASY_TYPES.includes(ev.type) ? EASY_PHRASES : SPOT_PHRASES),
+            "teal");
       } else if (ev.status === "Recommended") {
-        spawnLabel(phraseFor({ ...ev, type: "recommendation" }), "caution");
+        say(pick(SPOT_PHRASES), "caution");
       } else if (ev.status === "Failed") {
-        spawnLabel("Hmm, that one wouldn't budge.", "caution");
+        say("Hmm, that one wouldn't budge.", "caution");
       }
     }
     emit();

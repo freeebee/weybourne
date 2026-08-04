@@ -1912,7 +1912,6 @@ threading.Thread(target=_auto_outlook_refresh, daemon=True).start()
 # --------------------------------------------------------------------------- #
 
 class FelixRunIn(BaseModel):
-    dry_run: Optional[bool] = None      # None → dry unless live mode is enabled
     max_writes: Optional[int] = None
     databases: Optional[list[str]] = None
     # Ordinary runs never search the web; the user asks for that separately
@@ -1922,20 +1921,15 @@ class FelixRunIn(BaseModel):
 
 @app.post("/api/jobs/felix")
 def start_felix_job(body: Optional[FelixRunIn] = None):
+    """Felix runs live. Every write is snapshotted and reversible, and anything
+    below High confidence waits for approval rather than being applied."""
     body = body or FelixRunIn()
-    cfg = felix_store.load_config()
-    live_ok = bool(cfg.get("live_enabled"))
-    dry = body.dry_run if body.dry_run is not None else (not live_ok)
-    if not dry and not live_ok:
-        raise HTTPException(status_code=400,
-                            detail="Live runs are disabled — review a dry run "
-                                   "and enable live mode first")
     with _JOBS_LOCK:
         if any(j["kind"] == "felix" and j["status"] == "running"
                for j in _JOBS.values()):
             raise HTTPException(status_code=409,
                                 detail="A Felix run is already in progress")
-    opts = FelixRunOptions(dry_run=dry, web_research=bool(body.web_research))
+    opts = FelixRunOptions(dry_run=False, web_research=bool(body.web_research))
     if body.max_writes:
         opts.max_writes = max(1, min(200, body.max_writes))
     if body.databases:
@@ -1947,8 +1941,7 @@ def start_felix_job(body: Optional[FelixRunIn] = None):
         return felix_run(job, _notion, client, opts,
                          checkpoint=lambda: _checkpoint(job))
 
-    label = "Felix clean-up" + (" (dry run)" if dry else "")
-    return _job_summary(_start_job("felix", label, work))
+    return _job_summary(_start_job("felix", "Felix clean-up", work))
 
 
 @app.get("/api/felix/runs")
@@ -2024,10 +2017,13 @@ _FELIX_TOPUP = {"last": 0.0}
 
 
 def _felix_topup_if_low():
-    """Keep the review queue stocked: when clearing decisions drops the pool
-    of outstanding suggestions below ten, quietly start another dry run (which
-    researches the next unsure items — decided pairs are never re-searched)."""
-    if time.time() - _FELIX_TOPUP["last"] < 900:
+    """Clearing the last outstanding decision powers Felix up again.
+
+    A run stops at ten findings, so the queue empties only when the user has
+    worked through all of them — that is the moment to go looking for the next
+    ten. While anything is still waiting, Felix stays put.
+    """
+    if time.time() - _FELIX_TOPUP["last"] < 120:
         return
     with _JOBS_LOCK:
         if any(j["kind"] == "felix" and j["status"] == "running"
@@ -2037,19 +2033,19 @@ def _felix_topup_if_low():
                    review="Awaiting Review", limit=300)
                if c.execution_status in ("Proposed", "Recommended",
                                          "Planned (dry-run)")]
-    if len(waiting) >= 10:
+    if waiting:
         return
     client = _client()
     if client is None:
         return
     _FELIX_TOPUP["last"] = time.time()
-    opts = FelixRunOptions(dry_run=True)
+    opts = FelixRunOptions(dry_run=False)
 
     def work(job: dict):
         return felix_run(job, _notion, client, opts,
                          checkpoint=lambda: _checkpoint(job))
 
-    _start_job("felix", "Felix top-up (dry run)", work)
+    _start_job("felix", "Felix clean-up", work)
 
 
 def _resolve_reviewed_pair(change, action: str) -> None:
@@ -2170,7 +2166,10 @@ def felix_review(change_id: str, body: FelixReviewIn):
                                        else ""))
             result["execution_status"] = out.get("status", "")
             if out.get("status") == "Applied":
-                _notion.invalidate_cache()
+                # The archived copy is named explicitly: a delta sync cannot
+                # see archives, and throwing the snapshot away instead would
+                # cost a multi-minute re-pull of the whole workspace.
+                _notion.invalidate_cache(archived_ids=[out.get("loser_id")])
                 result["note"] = (f"merged: kept '{out.get('survivor')}', "
                                   f"archived '{out.get('loser')}'")
             elif out.get("note"):
@@ -2221,14 +2220,12 @@ def felix_stats():
 
 @app.get("/api/felix/status")
 def felix_status():
-    cfg = felix_store.load_config()
     with _JOBS_LOCK:
         running = next((_job_summary(j) for j in _JOBS.values()
                         if j["kind"] == "felix" and j["status"] == "running"),
                        None)
-    return {"live": _notion.live, "live_enabled": bool(cfg.get("live_enabled")),
-            "auto_run_enabled": bool(cfg.get("auto_run_enabled")),
-            "auto_run_hour": cfg.get("auto_run_hour", 7),
+    return {"live": _notion.live,
+            "max_findings": FelixRunOptions().max_findings,
             "running": running,
             "pending_research": felix_pending(),
             "stats": felix_store.stats()}
@@ -2256,50 +2253,14 @@ def felix_pending():
 
 
 class FelixConfigIn(BaseModel):
-    live_enabled: Optional[bool] = None
-    auto_run_enabled: Optional[bool] = None
-    auto_run_hour: Optional[int] = None
+    """Nothing left to configure — Felix runs live, on demand, and starts
+    himself again when the review queue is empty. Kept so an older tab posting
+    to this endpoint gets the current settings back rather than a 422."""
 
 
 @app.post("/api/felix/config")
-def felix_config(body: FelixConfigIn):
-    patch = {k: v for k, v in body.model_dump().items() if v is not None}
-    if "auto_run_hour" in patch:
-        patch["auto_run_hour"] = max(0, min(23, patch["auto_run_hour"]))
-    felix_store.save_config(patch)
+def felix_config(body: Optional[FelixConfigIn] = None):
     return felix_store.load_config()
-
-
-def _auto_felix_run():
-    """One automatic clean-up run per day at the configured hour — only once
-    live mode has been explicitly enabled (auto dry-runs would just spam)."""
-    time.sleep(120)
-    while True:
-        try:
-            cfg = felix_store.load_config()
-            now = time.localtime()
-            today = time.strftime("%Y-%m-%d", now)
-            due = (cfg.get("auto_run_enabled") and cfg.get("live_enabled")
-                   and now.tm_hour >= int(cfg.get("auto_run_hour", 7))
-                   and cfg.get("last_auto_run_date") != today)
-            if due:
-                with _JOBS_LOCK:
-                    busy = any(j["kind"] == "felix" and j["status"] == "running"
-                               for j in _JOBS.values())
-                if not busy:
-                    felix_store.save_config({"last_auto_run_date": today})
-                    opts = FelixRunOptions(dry_run=False)
-                    client = _client()
-                    _start_job("felix", "Felix clean-up (scheduled)",
-                               lambda job: felix_run(
-                                   job, _notion, client, opts,
-                                   checkpoint=lambda: _checkpoint(job)))
-        except Exception:  # noqa: BLE001 - the scheduler must never die
-            pass
-        time.sleep(600)
-
-
-threading.Thread(target=_auto_felix_run, daemon=True).start()
 
 # A Felix run whose thread died — the server reloading mid-run is the usual
 # cause — leaves its record saying "running" for ever and records nothing, so

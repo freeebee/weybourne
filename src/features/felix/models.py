@@ -8,8 +8,11 @@ from pydantic import BaseModel, Field
 
 
 class RunOptions(BaseModel):
-    dry_run: bool = True
+    dry_run: bool = False
     max_writes: int = int(os.environ.get("FELIX_MAX_WRITES", "50"))
+    # A run stops as soon as this many findings are waiting on the user. Going
+    # further only buries the queue; Felix starts again once it is cleared.
+    max_findings: int = int(os.environ.get("FELIX_MAX_FINDINGS", "10"))
     max_merges: int = int(os.environ.get("FELIX_MAX_MERGES", "5"))
     max_llm_calls: int = int(os.environ.get("FELIX_MAX_LLM_CALLS", "30"))
     # Web-search escalations per run (unsure duplicates + fund field lookups).

@@ -34,6 +34,12 @@ button{font-family:var(--sans)}
 
 .fade-in{animation:fade .28s var(--ease)}
 @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+/* Content that arrives after the page has already faded in — the calendar
+   card, say. Opacity only and slower: a late white block that also slides
+   reads as a separate event arriving on top of the page rather than as part
+   of it settling. */
+.fade-soft{animation:fade-soft .55s var(--ease) both}
+@keyframes fade-soft{from{opacity:0}to{opacity:1}}
 
 /* Mascot motion — the exported SVGs are static; these bring them to life. */
 @keyframes wb-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
@@ -61,7 +67,7 @@ button{font-family:var(--sans)}
 @keyframes fx-hop{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
 .fx-sprite{transition:left .85s cubic-bezier(.4,.05,.3,1),top .85s cubic-bezier(.4,.05,.3,1)}
 .fx-sprite.powered{filter:drop-shadow(0 0 6px rgba(226,88,34,.55))}
-@media (prefers-reduced-motion: reduce){.fade-in,[aria-label^="mascot"]{animation:none!important}.fx-sprite{transition:none}}
+@media (prefers-reduced-motion: reduce){.fade-in,.fade-soft,[aria-label^="mascot"]{animation:none!important}.fx-sprite{transition:none}}
 
 /* ---- Fix-it Felix: the pixel office --------------------------------------- */
 /* The room is drawn once at 1600x430 and scaled as a single unit, so the
@@ -83,13 +89,21 @@ button{font-family:var(--sans)}
 .px-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
   overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
-/* Felix walks on integer pixel positions along the floor line. */
+/* Felix walks on integer pixel positions along the floor line. The travel
+   time is set per-render from the scene (slow when idling, quick when powered
+   up), so only the easing lives here. */
 .px-felix{position:absolute;bottom:130px;left:0;width:116px;
-  transition:transform 1.05s cubic-bezier(.35,.05,.25,1);will-change:transform}
-.px-felix-body{position:relative;height:116px;image-rendering:pixelated}
+  transition:transform 1.5s cubic-bezier(.35,.05,.25,1);will-change:transform}
+.px-felix-body{position:relative;height:116px;image-rendering:pixelated;z-index:1}
 .px-felix-body.walking{animation:px-step .42s steps(2) infinite}
-.px-felix.powered{filter:drop-shadow(0 0 6px rgba(226,88,34,.5))}
+.px-felix.powered .px-felix-body.walking{animation-duration:.22s}
+.px-felix.powered{filter:drop-shadow(0 0 10px rgba(226,88,34,.6))}
 .px-frame{position:absolute;inset:0}
+/* The fire engulfs him: it sits behind the sprite and overshoots the body on
+   every side, so the flame licks past his shoulders rather than framing him. */
+.px-flames{position:absolute;left:-13px;right:-13px;bottom:-8px;top:-20px;
+  z-index:0;pointer-events:none;opacity:.92}
+.px-flame{width:100%;height:100%;display:block}
 @keyframes px-step{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 @keyframes px-station-shake{0%,100%{transform:translateX(0)}
   25%{transform:translateX(-2px)}75%{transform:translateX(2px)}}
@@ -145,8 +159,11 @@ button{font-family:var(--sans)}
 }
 @media (prefers-reduced-motion: reduce){
   .px-felix{transition:none}
-  .px-felix-body.walking,.px-station-active,.px-led.on,.px-bubble,.px-powerup{
+  .px-felix-body.walking,.px-station-active,.px-led.on,.px-bubble,.px-powerup,
+  .px-flames .px-frame{
     animation:none!important}
+  /* Without the flicker both frames would stack — keep the first one only. */
+  .px-flames .px-frame:last-child{display:none}
 }
 
 /* ---- App shell ------------------------------------------------------------ */
