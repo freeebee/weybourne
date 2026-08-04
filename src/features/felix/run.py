@@ -124,6 +124,22 @@ def _prop_payload(ptype: str, value: str) -> dict:
     return {"rich_text": [{"text": {"content": str(value)[:1900]}}]}
 
 
+def _clip(text: str, limit: int = 900) -> str:
+    """Trim to a word boundary with an ellipsis.
+
+    Evidence used to be cut mid-word at 180-300 characters — "This directly
+    ti" — which is worse than useless: the reviewer cannot tell whether the
+    sentence supported the change or contradicted it. These strings sit in a
+    local JSON file, so the old limits were buying nothing.
+    """
+    s = (text or "").strip()
+    if len(s) <= limit:
+        return s
+    cut = s[:limit]
+    space = cut.rfind(" ")
+    return (cut[:space] if space > limit * 0.6 else cut).rstrip(" ,;:—-") + "…"
+
+
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
@@ -193,6 +209,12 @@ def felix_run(job: dict, notion, client, options: RunOptions,
         nonlocal seq
         cid = store.change_id_for(run_id, seq)
         seq += 1
+        # Carry what kind of value this is, and the workspace's own options
+        # for it, so the reviewer can correct the wording or pick different
+        # tags before approving rather than approving something not quite right.
+        kind = ptype if ptype in ("select", "multi_select", "status",
+                                  "rich_text", "title", "url",
+                                  "phone_number") else ""
         rec = ChangeRecord(
             change_id=cid, run_id=run_id, timestamp=_now(),
             database=db_card["db"], record_name=db_card["name"],
@@ -200,7 +222,10 @@ def felix_run(job: dict, notion, client, options: RunOptions,
             change_type="fill_missing", property_changed=prop,
             previous_value=str(db_card["plain"].get(prop) or ""),
             new_value=str(value)[:1900], source=source, reason=reason,
-            confidence="Medium", execution_status="Proposed")
+            confidence="Medium", execution_status="Proposed",
+            value_kind=kind,
+            value_options=list((options_by_db.get(db_card["db"]) or {})
+                               .get(prop) or []))
         store.save_snapshot(cid, {
             "kind": "proposal", "record_id": db_card["id"],
             "database": db_card["db"],
@@ -603,7 +628,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
             merges.append({
                 "db": p["db"], "survivor": surv, "loser": losers[0],
                 "confidence": "Medium",
-                "source": f"online research — {r.get('evidence', '')[:400]}",
+                "source": f"online research — {_clip(r.get('evidence', ''))}",
                 "reason": "researched online: same entity — "
                           f"{r.get('explanation', '')[:500]}{emp_txt}",
                 "web_check": f"web-checked: same person "
@@ -616,7 +641,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                 p["a"], "(possible duplicate)",
                 f"researched online: DISTINCT from '{p['b']['name']}' — "
                 f"{r.get('explanation', '')[:600]}{emp_txt}",
-                source=f"web research — {r.get('evidence', '')[:400]}",
+                source=f"web research — {_clip(r.get('evidence', ''))}",
                 detail=pair_detail)
         else:
             lean = r.get("lean", "")
@@ -627,7 +652,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                 f"may duplicate '{p['b']['name']}' — online research was "
                 f"inconclusive: {r.get('explanation', '')[:600]}{emp_txt}"
                 f"{lean_txt}",
-                source=f"web research — {r.get('evidence', '')[:400]}"
+                source=f"web research — {_clip(r.get('evidence', ''))}"
                        if r.get("evidence") else f"name similarity {p['score']}",
                 detail=pair_detail)
 
@@ -657,7 +682,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                        "did not verify word-for-word — approve only if it "
                        "reads right to you",
                 source=(f"{t.get('source_label', 'linked notes')} — "
-                        f"paraphrased as \"{quote[:220]}\"" if quote
+                        f"paraphrased as \"{_clip(quote, 600)}\"" if quote
                         else t.get("source_label", "linked notes")))
             continue
         ptype = t.get("ptype", "rich_text")
@@ -670,7 +695,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
             "payload": {"properties": {t["property"]: payload}},
             "expect_prop": t["property"], "scanned_plain": "",
             "confidence": "High" if prop_fill["confidence"] == "high" else "Medium",
-            "source": f"{t.get('source_label', 'linked note')} — \"{prop_fill['evidence_quote'][:180]}\"",
+            "source": f"{t.get('source_label', 'linked note')} — \"{_clip(prop_fill['evidence_quote'], 600)}\"",
             "reason": "explicit information in linked material"})
 
     # Email-field clutter → parse job titles, phone numbers, descriptions out
@@ -705,7 +730,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
             t["card"], t["property"], pr["value"], t.get("ptype", "rich_text"),
             reason="parsed from the extra text that was sitting in the email "
                    f"field{note}",
-            source=f"email field text — \"{pr['evidence_quote'][:150]}\"")
+            source=f"email field text — \"{_clip(pr['evidence_quote'], 500)}\"")
 
     # Asset class / geography gaps on funds → web lookup. Values are validated
     # against the live select options in code; each lands as a Proposed change
@@ -750,8 +775,8 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                     "type", "multi_select")
                 record_proposal(
                     card, pr["property"], pr["value"], ptype,
-                    reason=f"researched online: {pr['explanation'][:200]}",
-                    source=f"web — {pr['source'][:180]}")
+                    reason=f"researched online: {_clip(pr['explanation'], 600)}",
+                    source=f"web — {_clip(pr['source'], 500)}")
 
     # ---- Phase 4c: enrichment — the gaps rules cannot close ----------------- #
     # Notes and attachments first, the web second. Relations are proposed by
@@ -838,7 +863,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
             continue
         where = ("linked meeting notes" if not found.get("used_web")
                  else "web research")
-        src = f"{where} — {found.get('evidence', '')[:300]}"
+        src = f"{where} — {_clip(found.get('evidence', ''))}"
 
         employer = (found.get("employer") or "").strip()
         if employer and emp_prop and emp_prop in miss["missing"]:
@@ -871,7 +896,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
             value = (found.get(key) or "").strip()
             if value and prop and prop in miss["missing"]:
                 record_proposal(card, prop, value, "rich_text",
-                                reason=f"{where}: {found.get('evidence', '')[:200]}",
+                                reason=f"{where}: {_clip(found.get('evidence', ''), 600)}",
                                 source=src)
         photo = (found.get("photo_url") or "").strip()
         if photo.startswith("http") and found.get("confidence") == "high":
@@ -907,7 +932,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
                 if not options.web_research:
                     defer_to_web("fund_company", card, co_prop)
                 continue
-            src = f"research — {found.get('evidence', '')[:300]}"
+            src = f"research — {_clip(found.get('evidence', ''))}"
             hit = enrich.resolve_name(name, companies)
             if hit["match"]:
                 _relation_proposal(card, co_prop, hit["match"],
@@ -955,7 +980,7 @@ def felix_run(job: dict, notion, client, options: RunOptions,
             continue
         if found.get("confidence") == "low":
             continue
-        src = f"the note's own text — \"{found.get('evidence', '')[:220]}\""
+        src = f"the note's own text — \"{_clip(found.get('evidence', ''), 600)}\""
         if want_type and found.get("note_type"):
             record_proposal(card, "Note Type", found["note_type"], "select",
                             reason="inferred from what the meeting actually was",

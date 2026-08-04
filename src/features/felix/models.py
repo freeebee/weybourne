@@ -54,6 +54,11 @@ class ChangeRecord(BaseModel):
                                        # Proposed (approve applies it) /
                                        # Recommended (informational only)
     review_status: str = "Awaiting Review"  # / Approved / Undo Requested
+    # What kind of value this writes — rich_text / title / select /
+    # multi_select / "" for anything the reviewer cannot sensibly retype.
+    # Drives the edit control offered before approving.
+    value_kind: str = ""
+    value_options: list[str] = Field(default_factory=list)   # for select kinds
     undo_result: str = ""
     parent_change_id: str = ""
     # Structured extras for the review UI (JSON string). Merges store the

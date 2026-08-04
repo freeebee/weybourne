@@ -60,8 +60,14 @@ _CONTACT_SCHEMA = {
         "title": {"type": "string", "description": "Their job title. Empty if "
                                                    "not established."},
         "description": {"type": "string",
-                        "description": "One or two factual sentences on who "
-                                       "they are professionally. Empty if not "
+                        "description": "The text to write into the CRM field: "
+                                       "one or two factual sentences on who "
+                                       "they are professionally, as a reader "
+                                       "of the record should see it. State the "
+                                       "facts only — no hedging, no 'appears "
+                                       "to be', and NEVER any reasoning about "
+                                       "how you worked it out. Your reasoning "
+                                       "belongs in `evidence`. Empty if not "
                                        "established."},
         "linkedin_url": {"type": "string",
                          "description": "Their LinkedIn profile URL, ONLY if "
@@ -100,6 +106,12 @@ several people share the name and you cannot tell them apart, return empty \
 fields with confidence "low". A wrong contact record is worse than a blank one.
 - The employer is the company name as an organisation would write it, not a \
 description ("Axeleo Capital", not "a French VC firm").
+- Every field you return is written into the record VERBATIM. Write what the \
+record should say, never how you reached it: "General Partner at Quadrant, the \
+Australian private capital firm behind the Strategic Equity Fund", not "Appears \
+to be a GP at Quadrant based on his being tagged to the Meeting with Quadrant \
+SEF note". The workings go in `evidence`, which is shown to the reviewer beside \
+the value but never saved to Notion.
 - Only give linkedin_url when you are confident the profile is this exact \
 person. Only give photo_url when you genuinely found an image URL; never \
 construct or guess one.

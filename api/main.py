@@ -1981,6 +1981,43 @@ class FelixReviewIn(BaseModel):
     # Which record of a duplicate pair to keep. Empty means Felix's own pick
     # (the richer copy); the reviewer can override it in the side-by-side.
     survivor_id: str = ""
+    # The reviewer's own wording, or their own choice of tags, replacing what
+    # Felix proposed. None means "approve exactly what was planned".
+    value: Optional[str] = None
+    values: Optional[list[str]] = None
+
+
+def _revalue_payload(planned: dict, value: Optional[str],
+                     values: Optional[list[str]]) -> dict:
+    """Rewrite a planned payload with the reviewer's edit.
+
+    The shape of what Felix planned tells us the property type, so an edit
+    keeps the same kind of write — text stays text, tags stay tags — and any
+    property we do not understand is left exactly as planned.
+    """
+    props = (planned or {}).get("properties") or {}
+    out: dict = {"properties": {}}
+    for prop, payload in props.items():
+        if "rich_text" in payload and value is not None:
+            out["properties"][prop] = {
+                "rich_text": [{"text": {"content": value[:1900]}}]}
+        elif "title" in payload and value is not None:
+            out["properties"][prop] = {
+                "title": [{"text": {"content": value[:1900]}}]}
+        elif "select" in payload and value is not None:
+            out["properties"][prop] = {"select": {"name": value} if value else None}
+        elif "status" in payload and value is not None:
+            out["properties"][prop] = {"status": {"name": value} if value else None}
+        elif "multi_select" in payload and values is not None:
+            out["properties"][prop] = {
+                "multi_select": [{"name": v} for v in values if v.strip()]}
+        elif "url" in payload and value is not None:
+            out["properties"][prop] = {"url": value or None}
+        elif "phone_number" in payload and value is not None:
+            out["properties"][prop] = {"phone_number": value or None}
+        else:
+            out["properties"][prop] = payload
+    return out
 
 
 _FELIX_TOPUP = {"last": 0.0}
@@ -2085,8 +2122,16 @@ def felix_review(change_id: str, body: FelixReviewIn):
                                           "Recommended")
                 and snap and snap.get("planned")):
             from src.features.felix import execute as felix_execute
+            planned = snap["planned"]
+            if body.value is not None or body.values is not None:
+                planned = _revalue_payload(planned, body.value, body.values)
+                shown = (", ".join(body.values) if body.values is not None
+                         else body.value)
+                felix_store.update_change(change_id, {"new_value": shown[:1900]})
+                change.new_value = shown[:1900]
+                result["note"] = "written as you edited it"
             updated = felix_execute.apply_change(
-                _notion, change, snap["planned"],
+                _notion, change, planned,
                 expect_prop=snap.get("expect_prop", ""),
                 scanned_plain=snap.get("scanned_plain"),
                 dry_run=False, quiet_minutes=0,

@@ -692,8 +692,80 @@ function ReviewTable({ s }) {
 
 /* One finding: what was wrong, the evidence, and the decision. Duplicate rows
    let the reviewer pick which copy survives before approving. */
+/* Amend a suggested value before approving it. Tag properties get the
+   workspace's own options rather than a free-text box, because a tag Notion
+   has never heard of is a new tag, not a correction. */
+function ValueEdit({ c, edit, onChange }) {
+  const [open, setOpen] = React.useState(false);
+  const multi = c.value_kind === "multi_select";
+  const tagged = c.value_kind === "select" || c.value_kind === "status" || multi;
+  const current = multi
+    ? (edit?.values ?? (c.new_value ? c.new_value.split(",").map((x) => x.trim())
+                                        .filter(Boolean) : []))
+    : (edit?.value ?? c.new_value ?? "");
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="mono"
+        style={{ background: "var(--paper-050)", cursor: "pointer",
+                 border: "1px solid var(--paper-200)", borderRadius: 4,
+                 padding: "3px 9px", marginTop: 6, color: "var(--teal-700)",
+                 fontSize: 10, letterSpacing: ".1em" }}>
+        {edit ? "EDITED — CHANGE AGAIN" : "EDIT THIS"}
+      </button>
+    );
+  }
+  return (
+    <div style={{ marginTop: 7, padding: "10px 12px",
+                  background: "var(--paper-050)", borderRadius: 4,
+                  border: "1px solid var(--paper-200)" }}>
+      <div className="microlabel" style={{ marginBottom: 6 }}>
+        {(c.property_changed || "VALUE").toUpperCase()}
+      </div>
+      {tagged && c.value_options?.length > 0 ? (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {c.value_options.map((opt) => {
+            const on = multi ? current.includes(opt) : current === opt;
+            return (
+              <button key={opt} onClick={() => onChange(multi
+                ? { values: on ? current.filter((v) => v !== opt)
+                                : [...current, opt] }
+                : { value: on ? "" : opt })}
+                style={{ cursor: "pointer", borderRadius: 4, padding: "4px 10px",
+                         fontSize: "12.5px",
+                         border: `1px solid ${on ? "var(--teal-500)" : "var(--paper-200)"}`,
+                         background: on ? "var(--teal-100)" : "var(--paper-000)",
+                         color: on ? "var(--teal-700)" : "var(--stone-600)" }}>
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <textarea value={current} rows={3}
+          onChange={(e) => onChange({ value: e.target.value })}
+          style={{ width: "100%", padding: "8px 10px", fontSize: "13px",
+                   background: "var(--paper-000)", borderRadius: 4,
+                   border: "1px solid var(--paper-200)" }} />
+      )}
+      <div className="row" style={{ marginTop: 8, gap: 8 }}>
+        <Button variant="ghost" onClick={() => setOpen(false)}>Done</Button>
+        {edit && (
+          <Button variant="ghost"
+            onClick={() => { onChange(null); setOpen(false); }}>
+            Revert to Felix's version
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ChangeRow({ c, s }) {
   const [keepId, setKeepId] = React.useState("");
+  // The reviewer's own wording or tags. null until they touch it, so an
+  // untouched row approves exactly what Felix planned.
+  const [edit, setEdit] = React.useState(null);
   const d = describeChange(c);
   const [statusWord, statusTone] = STATUS_WORDS[c.execution_status]
     || [c.execution_status.toUpperCase(), "neutral"];
@@ -732,6 +804,12 @@ function ChangeRow({ c, s }) {
               <MergeCompare detail={c.detail} done={applied}
                 keepId={keepId} onPick={canPick ? setKeepId : undefined} />
             )}
+            {/* A suggested value is a draft. Correct the wording, or pick
+                different tags from the workspace's own options, and Approve
+                writes what you settled on. */}
+            {awaiting && !applied && c.value_kind && (
+              <ValueEdit c={c} edit={edit} onChange={setEdit} />
+            )}
             {d.source && (
               <div className="muted" style={{ fontSize: "12px", marginTop: 3 }}>
                 Why Felix is confident: {d.source}
@@ -749,8 +827,10 @@ function ChangeRow({ c, s }) {
               {awaiting ? (
                 <>
                   <Button variant="dark" busy={s.busy === `review-${c.change_id}`}
-                    onClick={() => fx.review(c.change_id, "approve", keepId)}>
-                    {canPick && keepId ? "Approve — keep the chosen copy" : "Approve"}
+                    onClick={() => fx.review(c.change_id, "approve", keepId, edit)}>
+                    {edit ? "Approve your version"
+                      : canPick && keepId ? "Approve — keep the chosen copy"
+                      : "Approve"}
                   </Button>
                   <Button variant="ghost" busy={s.busy === `review-${c.change_id}`}
                     onClick={() => fx.review(c.change_id,
