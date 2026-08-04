@@ -175,14 +175,55 @@ export function SearchSelect({ value = "", onChange, options = [], multi = false
   );
 }
 
+/* Does a dropped file match the `accept` string the picker was given?
+   Handles both forms in use: extension lists (".pdf") and wildcards
+   ("image/*"). An empty accept takes anything. */
+function fileAccepted(file, accept) {
+  if (!accept) return true;
+  const name = (file.name || "").toLowerCase();
+  const type = (file.type || "").toLowerCase();
+  return accept.split(",").map((a) => a.trim().toLowerCase()).filter(Boolean)
+    .some((a) => (a.startsWith(".") ? name.endsWith(a)
+                : a.endsWith("/*") ? type.startsWith(a.slice(0, -1))
+                : type === a));
+}
+
 /* Styled file picker — the native "Choose File" control hidden behind a quiet
-   mono button, with the chosen filename (and a clear ×) beside it. */
+   mono button, with the chosen filename (and a clear ×) beside it. The whole
+   row is also a drop target: dragging a deck onto it is faster than three
+   clicks through a file dialogue, and the browser offers no way to do both
+   without owning the drag events. */
 export function FilePick({ file, onChange, accept, label = "Choose file" }) {
   const ref = React.useRef(null);
+  const [over, setOver] = React.useState(false);
+  const [rejected, setRejected] = React.useState("");
+
+  function take(dropped) {
+    if (!dropped) return;
+    if (!fileAccepted(dropped, accept)) {
+      setRejected(`${dropped.name} is not ${accept}`);
+      return;
+    }
+    setRejected("");
+    onChange(dropped);
+  }
+
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+    <div
+      onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        take(e.dataTransfer?.files?.[0] || null);
+      }}
+      style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+               border: `1px dashed ${over ? "var(--teal-500)" : "var(--paper-200)"}`,
+               background: over ? "var(--teal-100)" : "transparent",
+               borderRadius: "var(--radius)", padding: "10px 12px",
+               transition: "border-color .15s, background .15s" }}>
       <input ref={ref} type="file" accept={accept} hidden
-        onChange={(e) => onChange(e.target.files[0] || null)} />
+        onChange={(e) => take(e.target.files[0] || null)} />
       <button type="button" onClick={() => ref.current?.click()} className="mono"
         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--teal-500)"; }}
         onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--paper-200)"; }}
@@ -197,14 +238,20 @@ export function FilePick({ file, onChange, accept, label = "Choose file" }) {
                        alignItems: "center", minWidth: 0, overflowWrap: "anywhere" }}>
           {file.name}
           <button type="button" title="Remove"
-            onClick={() => { onChange(null); if (ref.current) ref.current.value = ""; }}
+            onClick={() => { onChange(null); setRejected("");
+                             if (ref.current) ref.current.value = ""; }}
             style={{ background: "none", border: "none", cursor: "pointer",
                      color: "var(--stone-400)", fontSize: 15, padding: 0, lineHeight: 1 }}>
             ×
           </button>
         </span>
       ) : (
-        <span className="muted" style={{ fontSize: "12.5px" }}>No file chosen</span>
+        <span className="muted" style={{ fontSize: "12.5px" }}>
+          {over ? "Drop it here" : "or drag one here"}
+        </span>
+      )}
+      {rejected && (
+        <span style={{ fontSize: "12.5px", color: "var(--caution-600)" }}>{rejected}</span>
       )}
     </div>
   );

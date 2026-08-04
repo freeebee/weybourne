@@ -23,6 +23,9 @@ export default function Prep() {
   const [error, setError] = React.useState(null);
   const [justDone, setJustDone] = React.useState(null);   // {label, entity, email, company, vehicle}
   const [minimized, setMinimized] = React.useState({});   // {screen: bool, brief: bool}
+  // Reading mode: the source pane (calendar / name / deck) folds away and the
+  // result takes the whole page. A briefing is a document, not a side panel.
+  const [wide, setWide] = React.useState(false);
   const pollRef = React.useRef(null);
   const doneSeen = React.useRef(new Set());
 
@@ -98,7 +101,7 @@ export default function Prep() {
     try {
       const d = await get(`/api/preps/${id}`);
       setViewing({ name: d.name, result: d.result });
-      setShowFull(false);
+      setMinimized({});
     } catch (e) { setError(e.message); }
   }
 
@@ -217,8 +220,10 @@ export default function Prep() {
       </div>
 
       <div className="panes">
-        {/* Left pane — source */}
-        <div style={{ flex: "1 1 300px", maxWidth: 400, minWidth: "min(100%,280px)" }}>
+        {/* Left pane — source. Hidden in reading mode so the result can use
+            the full width; the Prepare bar above stays put either way. */}
+        <div style={{ flex: "1 1 300px", maxWidth: 400, minWidth: "min(100%,280px)",
+                      display: wide ? "none" : "block" }}>
           {tab === "calendar" && (
             <>
               <SectionHead label="NEXT TWENTY-ONE DAYS" right={String(events.length)} />
@@ -274,7 +279,8 @@ export default function Prep() {
         </div>
 
         {/* Right pane — running jobs / result / library */}
-        <div style={{ flex: "2 1 480px", minWidth: "min(100%,320px)" }}>
+        <div style={{ flex: wide ? "1 1 100%" : "2 1 480px",
+                      minWidth: "min(100%,320px)" }}>
           {running.map((j) => (
             <Card key={j.id} style={{ padding: "18px 20px", marginBottom: 14 }}>
               <div className="spread" style={{ marginBottom: 12 }}>
@@ -378,11 +384,13 @@ export default function Prep() {
           {viewing?.result?.screen && (
             minimized.screen ? (
               <MinimizedBar label={`PREFERENCE SCREEN · ${(viewing.result.entity || viewing.name || "").toUpperCase()} · ${viewing.result.screen.overall_fit.toUpperCase()}`}
+                wide={wide} onToggleWide={() => setWide((w) => !w)}
                 onExpand={() => setMinimized((m) => ({ ...m, screen: false }))} />
             ) : (
               <ScreenView screen={viewing.result.screen}
                 entityName={viewing.result.entity || viewing.name || ""}
                 received={viewing.result.source_label || ""}
+                wide={wide} onToggleWide={() => setWide((w) => !w)}
                 onMinimize={() => setMinimized((m) => ({ ...m, screen: true }))} />
             )
           )}
@@ -394,11 +402,13 @@ export default function Prep() {
             minimized.brief ? (
               <MinimizedBar style={{ marginTop: viewing?.result?.screen ? 12 : 0 }}
                 label={`BRIEF · ${(viewing.result.briefing.entity || viewing.name || "").toUpperCase()}`}
+                wide={wide} onToggleWide={() => setWide((w) => !w)}
                 onExpand={() => setMinimized((m) => ({ ...m, brief: false }))} />
             ) : (
               <BriefingView data={viewing.result.briefing}
                 entityName={viewing.result.briefing.entity || viewing.name || ""}
                 keyQs={keyQs} onToggleKey={toggleKey} onAddKey={addKey}
+                wide={wide} onToggleWide={() => setWide((w) => !w)}
                 onMinimize={() => setMinimized((m) => ({ ...m, brief: true }))}
                 style={{ marginTop: viewing?.result?.screen ? 20 : 0 }} />
             )
@@ -453,15 +463,33 @@ function MiniBtn({ onClick, children }) {
    button is already under the cursor. */
 const FOLD_INSET = 28;
 
-function MinimizedBar({ label, onExpand, style }) {
+/* The identical control cluster wherever a block can be folded — same buttons,
+   same order, same inset on the screen, the briefing and the minimised bars,
+   so moving between them is muscle memory. */
+function FoldControls({ wide, onToggleWide, onMinimize, onExpand }) {
+  return (
+    <div className="row" style={{ gap: 6, flex: "none" }}>
+      {onToggleWide && (
+        <MiniBtn onClick={onToggleWide}>{wide ? "NARROW" : "WIDEN"}</MiniBtn>
+      )}
+      {onMinimize && <MiniBtn onClick={onMinimize}>MINIMIZE</MiniBtn>}
+      {onExpand && <MiniBtn onClick={onExpand}>EXPAND</MiniBtn>}
+    </div>
+  );
+}
+
+function MinimizedBar({ label, onExpand, style, wide, onToggleWide }) {
   return (
     <div onClick={onExpand} className="click" style={{
       display: "flex", justifyContent: "space-between", alignItems: "center",
-      padding: `10px ${FOLD_INSET}px`, background: "var(--paper-000)",
+      gap: 14, padding: `10px ${FOLD_INSET}px`, background: "var(--paper-000)",
       cursor: "pointer", border: "1px solid var(--paper-200)",
       borderRadius: "var(--radius)", marginBottom: 12, ...style }}>
       <span className="microlabel">{label}</span>
-      <MiniBtn onClick={onExpand}>EXPAND</MiniBtn>
+      {/* Clicking the bar expands it, so the buttons must not bubble into that. */}
+      <span onClick={(e) => e.stopPropagation()}>
+        <FoldControls wide={wide} onToggleWide={onToggleWide} onExpand={onExpand} />
+      </span>
     </div>
   );
 }
@@ -483,7 +511,8 @@ const VERDICT_ORDER = { "not-fit": 0, conditional: 1, unevidenced: 2, fit: 3 };
 const HAIR = "1px solid var(--paper-200)";
 const COLS = "1fr 1fr 1.25fr";
 
-function ScreenView({ screen, onMinimize, entityName, received }) {
+function ScreenView({ screen, onMinimize, entityName, received,
+                      wide, onToggleWide }) {
   const criteria = [...(screen.criteria || [])].sort(
     (a, b) => (VERDICT_ORDER[a.verdict] ?? 9) - (VERDICT_ORDER[b.verdict] ?? 9));
   const count = (v) => criteria.filter((c) => c.verdict === v).length;
@@ -526,7 +555,8 @@ function ScreenView({ screen, onMinimize, entityName, received }) {
         </div>
         <div style={{ display: "flex", flexDirection: "column",
                       alignItems: "flex-end", gap: 10 }}>
-          {onMinimize && <MiniBtn onClick={onMinimize}>MINIMIZE</MiniBtn>}
+          <FoldControls wide={wide} onToggleWide={onToggleWide}
+                        onMinimize={onMinimize} />
           <div style={{ textAlign: "right" }}>
             <div style={eyebrow({ color: "var(--stone-300)" })}>COMPARED AGAINST</div>
             <div style={{ fontSize: "13px", color: "var(--paper-050)", marginTop: 4 }}>
@@ -680,7 +710,7 @@ function ScreenView({ screen, onMinimize, entityName, received }) {
 }
 
 function BriefingView({ data, keyQs = [], onToggleKey, onAddKey,
-                        entityName = "", onMinimize, style }) {
+                        entityName = "", onMinimize, wide, onToggleWide, style }) {
   const keySet = new Set(keyQs.map((k) => k.q));
   return (
     <div style={{ background: "var(--paper-000)", border: HAIR, borderRadius: 6,
@@ -707,7 +737,8 @@ function BriefingView({ data, keyQs = [], onToggleKey, onAddKey,
         </div>
         <div style={{ display: "flex", flexDirection: "column",
                       alignItems: "flex-end", gap: 10 }}>
-          {onMinimize && <MiniBtn onClick={onMinimize}>MINIMIZE</MiniBtn>}
+          <FoldControls wide={wide} onToggleWide={onToggleWide}
+                        onMinimize={onMinimize} />
           {data.meeting_details && (
             <div className="mono" style={{ fontSize: 10.5, color: "var(--stone-400)",
                                            textAlign: "right" }}>
