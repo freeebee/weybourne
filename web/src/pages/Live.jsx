@@ -161,6 +161,83 @@ function TranscriptLibrary() {
   );
 }
 
+/* Languages the cleaned transcript can be written in, and friendly names for
+   the codes whisper detects. */
+const OUTPUT_LANGS = ["English", "Chinese", "French", "German", "Spanish", "Italian",
+  "Japanese", "Korean", "Portuguese", "Dutch", "Hindi", "Arabic"];
+
+const LANG_NAMES = {
+  en: "English", zh: "Chinese", yue: "Cantonese", es: "Spanish", fr: "French",
+  de: "German", it: "Italian", ja: "Japanese", ko: "Korean", pt: "Portuguese",
+  nl: "Dutch", ru: "Russian", hi: "Hindi", ar: "Arabic", id: "Indonesian",
+  ms: "Malay", ta: "Tamil", th: "Thai", vi: "Vietnamese", tr: "Turkish",
+  pl: "Polish", sv: "Swedish", da: "Danish", no: "Norwegian", fi: "Finnish",
+  he: "Hebrew", uk: "Ukrainian", cs: "Czech", el: "Greek", ro: "Romanian",
+  hu: "Hungarian", tl: "Tagalog",
+};
+const langName = (code) => LANG_NAMES[code] || (code || "").toUpperCase();
+
+/* The cleaned-up live transcript, sentence by sentence — whisper hears any
+   language, Haiku tidies it into the chosen output language. The chip shows
+   what is being heard and what is being written; click it to change the
+   output language mid-meeting. */
+function LiveTranscript() {
+  const s = live.S;
+  const boxRef = React.useRef(null);
+  const [pickLang, setPickLang] = React.useState(false);
+
+  React.useEffect(() => {
+    const el = boxRef.current;
+    if (el) el.scrollTop = el.scrollHeight;   // newest line at the bottom
+  }, [s.entries.length]);
+
+  if (!s.running && !s.entries.length) return null;
+  return (
+    <div style={{ marginTop: 14 }}>
+      <SectionHead label="LIVE TRANSCRIPT"
+        right={s.tidyPending > 0 ? "CLEANING…" : `${s.entries.length} SEGMENTS`} />
+      <button className="mono" onClick={() => setPickLang(!pickLang)}
+        title="Auto-detected spoken language and the language the transcript is written in — click to change the output"
+        style={{ background: "var(--paper-000)", border: "1px solid var(--paper-200)",
+                 borderRadius: 4, cursor: "pointer", padding: "4px 10px",
+                 fontSize: 10.5, letterSpacing: ".08em", marginBottom: 8,
+                 color: "var(--teal-700)" }}>
+        HEARING {s.detectedLang ? langName(s.detectedLang).toUpperCase() : "—"}
+        {s.detectedLang && s.detectedProb ? ` ${Math.round(s.detectedProb * 100)}%` : ""}
+        {" · WRITING "}{s.outputLang.toUpperCase()} ▾
+      </button>
+      {pickLang && (
+        <select value={s.outputLang} style={{ ...inputStyle, marginBottom: 8 }}
+          onChange={(e) => { live.set({ outputLang: e.target.value }); setPickLang(false); }}>
+          {OUTPUT_LANGS.map((l) => <option key={l} value={l}>{l}</option>)}
+        </select>
+      )}
+      <Card style={{ padding: "12px 14px" }}>
+        <div ref={boxRef} style={{ maxHeight: 240, overflowY: "auto" }}>
+          {!s.entries.length && (
+            <span className="muted" style={{ fontSize: "13px", fontStyle: "italic" }}>
+              The cleaned-up transcript appears here as speech comes in.
+            </span>
+          )}
+          {s.entries.slice(-60).map((en, i) => (
+            <p key={i} style={{ fontSize: "12.5px", lineHeight: 1.5, margin: "0 0 6px" }}>
+              <span className="mono" style={{ fontSize: 9.5, color: "var(--stone-400)",
+                                              marginRight: 6 }}>{en.at}</span>
+              {en.text}
+            </p>
+          ))}
+          {s.tidyPending > 0 && (
+            <span className="mono" style={{ fontSize: 10, color: "var(--teal-600)",
+                                            letterSpacing: ".08em" }}>
+              CLEANING THE LAST CHUNK…
+            </span>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 function fmtElapsed(ms) {
   const s = Math.floor(ms / 1000);
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
@@ -188,9 +265,19 @@ export default function Live() {
     return () => clearInterval(t);
   }, [s.running]);
 
+  // Recaps are newest-first, so the latest lives at the TOP of the box. When
+  // a fresh one lands, jump up to it — unless the user is mid-scroll through
+  // the older text (any manual scroll in the last few seconds holds position).
+  const lastUserScrollAt = React.useRef(0);
+  const progScrollUntil = React.useRef(0);
   React.useEffect(() => {
     const el = transcriptBoxRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const idleMs = Date.now() - lastUserScrollAt.current;
+    if (idleMs > 4000 || el.scrollTop < 8) {
+      progScrollUntil.current = Date.now() + 900;   // our own smooth-scroll events
+      el.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }, [s.batches.length]);
 
   React.useEffect(() => {
@@ -251,7 +338,7 @@ export default function Live() {
               <Button onClick={live.start}>Start listening</Button>
             </>}>
         {s.who ? `With ${s.who}. ` : ""}
-        {s.goal || "Transcribes the meeting continuously and drafts the Weybourne note at the end. Live question suggestions are optional — recaps land every 30 seconds either way."}
+        {s.goal || `Transcribes the meeting continuously and drafts the Weybourne note at the end. Live question suggestions are optional — recaps land every ${s.cadence} seconds either way.`}
         {!s.running && s.librarySaved && s.transcript ? " Transcript saved to the library." : ""}
       </PageHeader>
 
@@ -295,6 +382,20 @@ export default function Live() {
                 ))}
               </select>
             </Field>
+            <Field label="TRANSCRIPT LANGUAGE" style={{ flex: "1 1 180px" }}
+              hint="Speech in any language is auto-detected; the transcript is cleaned up and written in this language.">
+              <select value={s.outputLang} onChange={(e) => live.set({ outputLang: e.target.value })} style={inputStyle}>
+                {OUTPUT_LANGS.map((l) => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </Field>
+            <Field label="READ EVERY" style={{ flex: "0 1 140px" }}
+              hint="How often the recap and question read runs.">
+              <select value={s.cadence} onChange={(e) => live.set({ cadence: +e.target.value })} style={inputStyle}>
+                <option value={30}>30 seconds</option>
+                <option value={45}>45 seconds</option>
+                <option value={60}>60 seconds</option>
+              </select>
+            </Field>
           </div>
         </Card>
       )}
@@ -317,6 +418,13 @@ export default function Live() {
           <span className="mono" style={{ fontSize: 11, letterSpacing: ".1em", color: "var(--teal-300)" }}>
             {s.busy === "read" ? "READING…" : s.nextIn > 0 ? `NEXT READ ${s.nextIn}S` : "READ DUE"}
           </span>
+          <button onClick={() => live.set({ cadence: { 30: 45, 45: 60, 60: 30 }[s.cadence] || 30 })}
+            className="mono" title="How often the recap + question read runs — click to change"
+            style={{ background: "none", border: "1px solid var(--ink-500)",
+                     borderRadius: 4, cursor: "pointer", padding: "3px 8px",
+                     fontSize: 10.5, letterSpacing: ".1em", color: "var(--slate-300)" }}>
+            EVERY {s.cadence}S
+          </button>
           <button onClick={() => live.set({ questions: !s.questions })}
             className="mono" title="Toggle suggested questions from reads — your own sketches always work"
             style={{ background: "none", border: "1px solid var(--ink-500)",
@@ -414,7 +522,7 @@ export default function Live() {
                       color: it.starred ? "var(--brass-700)"
                         : isNew ? "var(--teal-700)" : "var(--stone-400)" }}>
                       {it.starred ? "MARKED · ASK THIS"
-                        : isNew ? "NEW · FROM THE LAST 30 SECONDS"
+                        : isNew ? "NEW · FROM THE LAST READ"
                         : it.batch === 0 ? "YOURS"
                         : `READ · ${s.batches.find((b) => b.id === it.batch)?.at || ""}`}
                       {it.flag && <span style={{ color: "var(--caution-600)" }}> · RISK</span>}
@@ -425,9 +533,19 @@ export default function Live() {
                         style={{ background: "none", border: "none", cursor: "pointer",
                           color: it.starred ? "var(--brass-700)" : "var(--stone-400)",
                           fontSize: 14, lineHeight: 1, padding: 0 }}>✓</button>
-                      <button onClick={() => live.discardItem(it.id)} title="Discard" style={{
-                        background: "none", border: "none", cursor: "pointer",
-                        color: "var(--stone-400)", fontSize: 15, lineHeight: 1, padding: 0 }}>×</button>
+                      {(() => {
+                        // Fresh suggestions are delete-locked for two seconds
+                        // so a mid-clear-out arrival can't be swept away.
+                        const locked = live.isFresh(it);
+                        return (
+                          <button onClick={() => live.discardItem(it.id)}
+                            title={locked ? "Just added — deletable in a moment" : "Discard"}
+                            style={{ background: "none", border: "none",
+                              cursor: locked ? "default" : "pointer",
+                              color: locked ? "var(--paper-200)" : "var(--stone-400)",
+                              fontSize: 15, lineHeight: 1, padding: 0 }}>×</button>
+                        );
+                      })()}
                     </span>
                   </div>
                   <div style={{ fontSize: 15, lineHeight: 1.5 }}>{it.q}</div>
@@ -514,7 +632,12 @@ export default function Live() {
 
           <SectionHead label="WHAT WAS SAID" right={`${words.toLocaleString()} WORDS`} />
           <Card style={{ padding: "14px 16px" }}>
-            <div ref={transcriptBoxRef} style={{ maxHeight: 420, overflowY: "auto" }}>
+            <div ref={transcriptBoxRef} style={{ maxHeight: 420, overflowY: "auto" }}
+              onScroll={() => {
+                // Ignore the events our own smooth jump fires; anything else
+                // is the user reading — hold their place on the next recap.
+                if (Date.now() > progScrollUntil.current) lastUserScrollAt.current = Date.now();
+              }}>
               {s.batches.filter((b) => b.recap).length === 0 && (
                 <span className="muted" style={{ fontSize: "13.5px", fontStyle: "italic" }}>
                   {s.running
@@ -530,6 +653,7 @@ export default function Live() {
               ))}
             </div>
           </Card>
+          <LiveTranscript />
           <Field label="PASTE CAPTIONS (TEAMS, A NOTION TRANSCRIPT)" style={{ marginTop: 14 }}>
             <textarea value={paste} onChange={(e) => setPaste(e.target.value)} rows={3}
               style={{ width: "100%", padding: "11px 13px" }} />

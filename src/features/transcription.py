@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Protocol
 
-from src.config import LIVE_MODEL, REASONING_MODEL
+from src.config import FAST_MODEL, LIVE_MODEL, REASONING_MODEL
 
 
 # --------------------------------------------------------------------------- #
@@ -306,6 +306,61 @@ def read_transcript_batch(
     )
     raw = next((b.text for b in response.content if getattr(b, "type", None) == "text"), "")
     return json.loads(raw)
+
+
+TIDY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "text": {"type": "string",
+                 "description": "The cleaned-up transcript chunk, or empty if the raw "
+                                "chunk carries no actual speech"},
+    },
+    "required": ["text"],
+    "additionalProperties": False,
+}
+
+TIDY_SYSTEM_PROMPT = """You clean up one raw speech-to-text chunk from a live meeting into \
+readable transcript text, and you do it in the requested OUTPUT LANGUAGE.
+
+Rules:
+- Fix punctuation, capitalisation and obvious mis-transcriptions so the chunk reads as \
+proper sentences. Keep it verbatim speech: do NOT summarise, do NOT paraphrase, do NOT \
+drop content, do NOT add anything that was not said.
+- If the speech is in a different language from the output language, translate it \
+faithfully into the output language. If it is already in the output language, keep the \
+speaker's own wording.
+- The chunk continues the transcript shown as PREVIOUS TEXT — carry the sentence on \
+naturally, but never repeat any of the previous text.
+- A chunk may start or end mid-sentence; that is fine, leave it mid-sentence.
+- If the raw chunk is only noise, filler or empty, return an empty string.
+- Output only the cleaned chunk text."""
+
+
+def tidy_transcript_chunk(
+    client,
+    raw: str,
+    prev_tail: str = "",
+    output_language: str = "English",
+    detected_language: str = "",
+) -> str:
+    """One raw whisper chunk → clean sentences in the chosen output language."""
+    user = (
+        f"OUTPUT LANGUAGE: {output_language or 'English'}\n"
+        f"DETECTED SPOKEN LANGUAGE: {detected_language or 'unknown'}\n\n"
+        f"PREVIOUS TEXT (already cleaned — do not repeat)\n"
+        f"\"\"\"{prev_tail or '(start of meeting)'}\"\"\"\n\n"
+        f"RAW CHUNK\n\"\"\"{raw}\"\"\""
+    )
+    response = client.messages.create(
+        # Haiku: this runs on every 8-second chunk, so speed and cost rule.
+        model=FAST_MODEL,
+        max_tokens=800,
+        system=TIDY_SYSTEM_PROMPT,
+        output_config={"format": {"type": "json_schema", "schema": TIDY_SCHEMA}},
+        messages=[{"role": "user", "content": user}],
+    )
+    raw_out = next((b.text for b in response.content if getattr(b, "type", None) == "text"), "")
+    return json.loads(raw_out).get("text", "").strip()
 
 
 SHARPEN_SYSTEM_PROMPT = """You polish an investor's rough question sketch during a live \

@@ -27,8 +27,12 @@ def _get_model():
     return _model
 
 
-def transcribe_wav(wav_bytes: bytes) -> str:
-    """Transcribe a recorded audio segment to plain text.
+def transcribe_wav(wav_bytes: bytes, language: str = "") -> dict:
+    """Transcribe a recorded audio segment.
+
+    Returns {"text", "language", "language_probability"}. ``language`` pins the
+    input language (skips per-chunk detection); empty or "auto" lets whisper
+    detect it, so multilingual meetings come through in whatever was spoken.
 
     Raises RuntimeError with an actionable message when the backend is missing.
     """
@@ -40,14 +44,20 @@ def transcribe_wav(wav_bytes: bytes) -> str:
             "`pip install faster-whisper` in the app's environment."
         ) from e
 
-    segments, _info = model.transcribe(
+    pin = (language or os.environ.get("WHISPER_LANGUAGE", "")).strip().lower()
+    segments, info = model.transcribe(
         io.BytesIO(wav_bytes),
         vad_filter=True,
         # Live chunks arrive every 8 seconds — latency wins over the last few
         # points of accuracy. Greedy decoding (beam 1) is 2-3x faster than the
-        # default beam of 5, and pinning the language skips per-chunk detection.
+        # default beam of 5.
         beam_size=1,
-        language=os.environ.get("WHISPER_LANGUAGE", "en"),
+        language=pin if pin and pin != "auto" else None,
         condition_on_previous_text=False,
     )
-    return " ".join(seg.text.strip() for seg in segments).strip()
+    text = " ".join(seg.text.strip() for seg in segments).strip()
+    return {
+        "text": text,
+        "language": getattr(info, "language", "") or "",
+        "language_probability": round(getattr(info, "language_probability", 0.0) or 0.0, 2),
+    }

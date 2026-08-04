@@ -58,6 +58,7 @@ from src.features.transcription import (
     read_transcript_batch,
     refine_thoughts,
     sharpen_question,
+    tidy_transcript_chunk,
 )
 from src.features.track_record import (
     analyse_file,
@@ -1391,12 +1392,32 @@ async def track_record(file: UploadFile):
 # --------------------------------------------------------------------------- #
 
 @app.post("/api/stt")
-async def stt(file: UploadFile):
+async def stt(file: UploadFile, lang: str = "auto"):
+    """Transcribe one recorded chunk. ``lang`` pins the spoken language
+    ("auto" lets whisper detect it per chunk, so multilingual meetings work)."""
     audio = await file.read()
     try:
-        text = transcribe_wav(audio)
+        result = transcribe_wav(audio, language=lang)
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
+    return result
+
+
+class TidyIn(BaseModel):
+    raw: str
+    prev_tail: str = ""
+    output_language: str = "English"
+    detected_language: str = ""
+
+
+@app.post("/api/live/tidy")
+def live_tidy(body: TidyIn):
+    """Raw whisper chunk → clean sentences in the chosen output language
+    (Haiku). The page shows this cleaned text, never the raw transcript."""
+    if not body.raw.strip():
+        return {"text": ""}
+    text = _run(tidy_transcript_chunk, _client(), body.raw, body.prev_tail,
+                body.output_language, body.detected_language)
     return {"text": text}
 
 

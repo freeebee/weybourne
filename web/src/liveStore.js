@@ -4,15 +4,19 @@
 import { get, post, postFile, postStream } from "./api.js";
 
 const CHUNK_MS = 8000;          // recorder restart interval → self-contained blobs
-export const CADENCE_S = 30;    // read the new speech every 30 seconds
 const MIN_NEW_WORDS = 5;
+const FRESH_LOCK_MS = 2000;     // a just-generated question can't be deleted yet
 
 export const S = {
   running: false, who: "", goal: "", source: "system", deviceId: "",
   questions: true,   // live question suggestions — toggleable; recaps always run
   manager: null,     // the loaded manager thread (entity, Notion links, history)
+  cadence: 30,       // seconds between reads — 30 / 45 / 60, user-selectable
+  outputLang: "English",          // the transcript is cleaned INTO this language
+  detectedLang: "", detectedProb: 0,   // what whisper heard on the last chunk
+  tidyPending: 0,    // chunks transcribed but still being cleaned up by Haiku
   transcript: "", entries: [], items: [], batches: [], reads: 0, unreadWords: 0,
-  lastTail: "", lastReadAt: 0, startedAt: 0, reading: false, nextIn: CADENCE_S,
+  lastTail: "", lastReadAt: 0, startedAt: 0, reading: false, nextIn: 30,
   error: null, note: null, noteDraftText: "", sharp: null, sharpPending: "", busy: "", seq: 1, version: 0,
   noteSave: null, noteSaveEdits: {}, noteSaveEditing: {}, noteSaveUrl: "",
   sessionId: "", librarySaved: false,
@@ -102,6 +106,40 @@ async function autosaveNow() {
   autosaving = false;
 }
 
+// ---- tidy queue ----------------------------------------------------------- //
+/* Raw whisper chunks are cleaned into proper sentences (and translated into
+   the chosen output language) by Haiku before they join the transcript. The
+   queue is serialised so chunks land in speaking order; on any failure the
+   raw text goes in instead — nothing is ever lost to a cleanup error. */
+let tidyChain = Promise.resolve();
+
+function appendTranscript(text) {
+  S.transcript += (S.transcript ? " " : "") + text;
+  S.entries = [...S.entries, { at: stamp(), text }];
+  S.unreadWords += text.split(/\s+/).length;
+  emit();
+  autosaveNow();
+}
+
+function enqueueTidy(raw) {
+  S.tidyPending++; emit();
+  tidyChain = tidyChain.then(async () => {
+    let text = raw;
+    try {
+      const r = await post("/api/live/tidy", {
+        raw,
+        prev_tail: S.transcript.slice(-350),
+        output_language: S.outputLang,
+        detected_language: S.detectedLang,
+      });
+      text = (r.text ?? raw);
+    } catch { /* keep the raw text — better rough than missing */ }
+    S.tidyPending = Math.max(0, S.tidyPending - 1);
+    if (text.trim()) appendTranscript(text.trim());
+    else emit();
+  });
+}
+
 // ---- read loop ------------------------------------------------------------ //
 
 export async function performRead() {
@@ -127,9 +165,13 @@ export async function performRead() {
       const bid = Date.now();
       S.batches = [{ id: bid, at: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), recap: parsed.recap || "" }, ...S.batches];
       if (S.questions) {
+        // born: fresh suggestions carry a short delete-lock so a question that
+        // appears mid-clear-out isn't swept away by an accidental click.
         S.items = [...S.items, ...(parsed.questions || []).map((q) => ({
           id: S.seq++, batch: bid, q: q.q, flag: !!q.flag, answer: null,
+          born: Date.now(),
         }))];
+        setTimeout(emit, FRESH_LOCK_MS + 200);   // repaint once the lock lifts
       }
     }
   } catch (e) { S.error = e.message; }
@@ -189,14 +231,13 @@ export async function start() {
         if (!parts.length) return;
         const blob = new Blob(parts, { type: rec.mimeType });
         try {
-          const { text } = await postFile("/api/stt", blob, "chunk.webm");
-          if (text) {
-            S.transcript += (S.transcript ? " " : "") + text;
-            S.entries = [...S.entries, { at: stamp(), text }];
-            S.unreadWords += text.split(/\s+/).length;
+          const res = await postFile("/api/stt?lang=auto", blob, "chunk.webm");
+          if (res.language) {
+            S.detectedLang = res.language;
+            S.detectedProb = res.language_probability || 0;
             emit();
-            autosaveNow();
           }
+          if (res.text) enqueueTidy(res.text);
         } catch (e) { S.error = e.message; emit(); }
       };
       rec.start();
@@ -209,7 +250,7 @@ export async function start() {
     recordChunk();
 
     countdown = setInterval(() => {
-      const due = CADENCE_S - (Date.now() - S.lastReadAt) / 1000;
+      const due = S.cadence - (Date.now() - S.lastReadAt) / 1000;
       S.nextIn = Math.max(0, Math.round(due));
       // Per-source "am I hearing it?" indicators, with a 3-second hold.
       const now = Date.now();
@@ -245,6 +286,7 @@ export function stop() {
   if (wasRunning && S.sessionId && S.transcript.trim()) {
     setTimeout(async () => {
       try {
+        await tidyChain;   // let the final chunk finish its Haiku cleanup
         await post("/api/live/finish", sessionPayload());
         S.librarySaved = true; emit();
       } catch { /* the autosave copy still exists on disk */ }
@@ -339,8 +381,15 @@ export async function resolveManager(q) {
 
 export function dropSharp() { S.sharp = null; emit(); }
 
+/* True while a just-generated suggestion is still delete-locked. */
+export function isFresh(it) {
+  return !!it.born && Date.now() - it.born < FRESH_LOCK_MS;
+}
+
 export function discardItem(id) {
-  S.items = S.items.filter((it) => it.id !== id);
+  const it = S.items.find((x) => x.id === id);
+  if (it && isFresh(it)) return;   // just appeared — protect it from the sweep
+  S.items = S.items.filter((x) => x.id !== id);
   emit();
 }
 
@@ -384,7 +433,8 @@ export function newSession() {
   stop();
   Object.assign(S, {
     transcript: "", entries: [], items: [], batches: [], reads: 0, unreadWords: 0,
-    lastTail: "", lastReadAt: 0, startedAt: 0, nextIn: CADENCE_S, error: null,
+    lastTail: "", lastReadAt: 0, startedAt: 0, nextIn: S.cadence, error: null,
+    detectedLang: "", detectedProb: 0, tidyPending: 0,
     note: null, noteDraftText: "", sharp: null, sharpPending: "", busy: "", seq: 1, manager: null,
     noteSave: null, noteSaveEdits: {}, noteSaveEditing: {}, noteSaveUrl: "",
     sessionId: "", librarySaved: false,
