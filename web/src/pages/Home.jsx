@@ -169,7 +169,11 @@ export default function Home() {
                         display: "flex", flexDirection: "column", gap: 30 }}>
           <section>
             <SectionHead label="TODAY" />
-            {!calLoaded ? (
+            {/* The card is the brightest thing on the page, so it showed
+                through the opening animation's veil as a glowing white block
+                while everything around it stayed dim. It waits for the veil
+                to clear, then fades up with the rest. */}
+            {!calLoaded || uiStore.ui.splashUp ? (
               <div style={{ minHeight: 128 }} aria-hidden />
             ) : next ? (
               <div className="fade-soft">

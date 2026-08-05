@@ -127,6 +127,8 @@ export default function App() {
     window.addEventListener("wb-replay-splash", replay);
     return () => window.removeEventListener("wb-replay-splash", replay);
   }, []);
+  // Pages render behind the veil throughout, so they need to know it is there.
+  React.useEffect(() => { uiStore.setSplashUp(!booted); }, [booted]);
   const shell = <AppShell />;
   if (!booted) return <Splash onDone={() => setBooted(true)}>{shell}</Splash>;
   return shell;

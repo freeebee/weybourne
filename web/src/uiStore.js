@@ -5,6 +5,10 @@
 const S = {
   inboxCount: null,
   refresh: { running: false, jobId: null, eta: 0, elapsed: 0, note: null },
+  // The opening animation renders the whole app behind its veil, so pages
+  // mount and load their data while it plays. Anything bright enough to show
+  // through the veil holds off until this clears.
+  splashUp: false,
   version: 0,
 };
 let listeners = new Set();
@@ -14,6 +18,9 @@ export function getVersion() { return S.version; }
 export const ui = S;
 function emit() { S.version++; listeners.forEach((f) => f()); }
 export function setInboxCount(n) { S.inboxCount = n; emit(); }
+export function setSplashUp(on) {
+  if (S.splashUp !== on) { S.splashUp = on; emit(); }
+}
 
 /* ---- Outlook refresh (background job; survives navigation) -------------- */
 

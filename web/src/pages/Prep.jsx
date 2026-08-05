@@ -374,8 +374,18 @@ export default function Prep() {
                   {threadLine.toUpperCase()}
                 </span>
               )}
-              <Button variant="ghost" onClick={openInNoteTaker}
-                style={{ marginLeft: "auto" }}>
+              {/* One control for the pair: the screen and the briefing are
+                  one document, and folding them one at a time to get at the
+                  library below is two clicks too many. */}
+              <span style={{ marginLeft: "auto" }}>
+                <MiniBtn onClick={() => setMinimized(
+                  minimized.screen && minimized.brief
+                    ? {} : { screen: true, brief: true })}>
+                  {minimized.screen && minimized.brief
+                    ? "+  EXPAND BOTH" : "−  MINIMIZE BOTH"}
+                </MiniBtn>
+              </span>
+              <Button variant="ghost" onClick={openInNoteTaker}>
                 Open in note taker
               </Button>
             </div>
@@ -465,30 +475,54 @@ const FOLD_INSET = 28;
 
 /* The identical control cluster wherever a block can be folded — same buttons,
    same order, same inset on the screen, the briefing and the minimised bars,
-   so moving between them is muscle memory. */
-function FoldControls({ wide, onToggleWide, onMinimize, onExpand }) {
+   so moving between them is muscle memory. Widening has its own handle on the
+   panel's left edge; a word in this cluster did not read as "make this wider". */
+function FoldControls({ onMinimize, onExpand }) {
   return (
     <div className="row" style={{ gap: 6, flex: "none" }}>
-      {onToggleWide && (
-        <MiniBtn onClick={onToggleWide}>{wide ? "NARROW" : "WIDEN"}</MiniBtn>
-      )}
       {onMinimize && <MiniBtn onClick={onMinimize}>MINIMIZE</MiniBtn>}
       {onExpand && <MiniBtn onClick={onExpand}>EXPAND</MiniBtn>}
     </div>
   );
 }
 
+/* The widen control rides the panel's left edge and points the way the panel
+   is about to move: left to take over the calendar column, right to give it
+   back. Sits opposite MINIMIZE, at the same height. */
+function WidenHandle({ wide, onToggle, top = 24 }) {
+  const label = wide ? "Narrow — give the column back"
+    : "Widen — take over the column on the left";
+  return (
+    <button onClick={onToggle} title={label} aria-label={label}
+      style={{ position: "absolute", left: -13, top, width: 26, height: 34,
+               display: "flex", alignItems: "center", justifyContent: "center",
+               background: "var(--paper-050)", cursor: "pointer",
+               border: "1px solid var(--paper-200)", borderRadius: 4,
+               color: "var(--teal-700)", padding: 0, zIndex: 2 }}>
+      <svg width="11" height="14" viewBox="0 0 11 14" fill="none"
+           stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"
+           strokeLinejoin="round" aria-hidden="true">
+        <path d={wide ? "M3.5 1.5 L9 7 L3.5 12.5" : "M7.5 1.5 L2 7 L7.5 12.5"} />
+      </svg>
+    </button>
+  );
+}
+
 function MinimizedBar({ label, onExpand, style, wide, onToggleWide }) {
   return (
     <div onClick={onExpand} className="click" style={{
+      position: "relative",
       display: "flex", justifyContent: "space-between", alignItems: "center",
       gap: 14, padding: `10px ${FOLD_INSET}px`, background: "var(--paper-000)",
       cursor: "pointer", border: "1px solid var(--paper-200)",
       borderRadius: "var(--radius)", marginBottom: 12, ...style }}>
-      <span className="microlabel">{label}</span>
       {/* Clicking the bar expands it, so the buttons must not bubble into that. */}
       <span onClick={(e) => e.stopPropagation()}>
-        <FoldControls wide={wide} onToggleWide={onToggleWide} onExpand={onExpand} />
+        <WidenHandle wide={wide} onToggle={onToggleWide} top={3} />
+      </span>
+      <span className="microlabel">{label}</span>
+      <span onClick={(e) => e.stopPropagation()}>
+        <FoldControls onExpand={onExpand} />
       </span>
     </div>
   );
@@ -533,8 +567,12 @@ function ScreenView({ screen, onMinimize, entityName, received,
   const legacy = !criteria.length;
 
   return (
-    <div style={{ background: "var(--paper-000)", border: HAIR, borderRadius: 6,
-                  overflow: "hidden" }}>
+    // The handle overhangs the left edge, so it lives outside the clipped
+    // panel rather than being cut in half by its overflow.
+    <div style={{ position: "relative" }}>
+      <WidenHandle wide={wide} onToggle={onToggleWide} />
+      <div style={{ background: "var(--paper-000)", border: HAIR, borderRadius: 6,
+                    overflow: "hidden" }}>
       {/* Header */}
       <div className="spread" style={{ background: "var(--ink-800)",
                                        padding: `22px ${FOLD_INSET}px 20px`, gap: 20,
@@ -555,8 +593,7 @@ function ScreenView({ screen, onMinimize, entityName, received,
         </div>
         <div style={{ display: "flex", flexDirection: "column",
                       alignItems: "flex-end", gap: 10 }}>
-          <FoldControls wide={wide} onToggleWide={onToggleWide}
-                        onMinimize={onMinimize} />
+          <FoldControls onMinimize={onMinimize} />
           <div style={{ textAlign: "right" }}>
             <div style={eyebrow({ color: "var(--stone-300)" })}>COMPARED AGAINST</div>
             <div style={{ fontSize: "13px", color: "var(--paper-050)", marginTop: 4 }}>
@@ -705,6 +742,7 @@ function ScreenView({ screen, onMinimize, entityName, received,
           READ ONLY · SCREENING OUTPUT
         </span>
       </div>
+      </div>
     </div>
   );
 }
@@ -713,8 +751,10 @@ function BriefingView({ data, keyQs = [], onToggleKey, onAddKey,
                         entityName = "", onMinimize, wide, onToggleWide, style }) {
   const keySet = new Set(keyQs.map((k) => k.q));
   return (
-    <div style={{ background: "var(--paper-000)", border: HAIR, borderRadius: 6,
-                  overflow: "hidden", ...style }}>
+    <div style={{ position: "relative", ...style }}>
+      <WidenHandle wide={wide} onToggle={onToggleWide} />
+      <div style={{ background: "var(--paper-000)", border: HAIR, borderRadius: 6,
+                    overflow: "hidden" }}>
       {/* Same shell as the screen above it: navy band, eyebrow, serif title —
           so the two read as one document and the fold controls align. */}
       <div className="spread" style={{ background: "var(--ink-800)",
@@ -737,8 +777,7 @@ function BriefingView({ data, keyQs = [], onToggleKey, onAddKey,
         </div>
         <div style={{ display: "flex", flexDirection: "column",
                       alignItems: "flex-end", gap: 10 }}>
-          <FoldControls wide={wide} onToggleWide={onToggleWide}
-                        onMinimize={onMinimize} />
+          <FoldControls onMinimize={onMinimize} />
           {data.meeting_details && (
             <div className="mono" style={{ fontSize: 10.5, color: "var(--stone-400)",
                                            textAlign: "right" }}>
@@ -879,6 +918,7 @@ function BriefingView({ data, keyQs = [], onToggleKey, onAddKey,
           Prepared from Notion, Outlook and independent research. Teams chat is never used as a source.
         </p>
       </Section>
+      </div>
       </div>
     </div>
   );

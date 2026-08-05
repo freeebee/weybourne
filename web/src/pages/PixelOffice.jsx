@@ -388,25 +388,55 @@ const FRAMES = {
   type: ["felix-type-a", "felix-type-b", ".22s"],
 };
 
-/* Pixel fire for the power-up. Half-widths per row from the tip down, drawn
-   on the same crisp grid as the sprites; two frames flickered by the px-swap
-   pair so the flame licks rather than tweens. */
-const FLAME_A = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 11, 11,
-                 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11];
-const FLAME_B = [1, 1, 2, 4, 5, 5, 7, 9, 9, 10, 11, 11, 10, 11, 11,
-                 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11];
-const FLAME_BANDS = [[0, "#E25822"], [3, "#F59E0B"], [6, "#FDE68A"]];
+/* Pixel fire for the power-up: one row of rects per scanline, on the same
+   crisp grid as the sprites, with two frames flickered by the px-swap pair so
+   the flame licks rather than tweens.
 
-function FlameFrame({ halves }) {
+   The silhouette is a teardrop stood on its point — narrow at his boots where
+   the fire is fed, bulging across his body, breaking into licks above his
+   head. Each side wobbles independently: a symmetrical outline reads as a gem,
+   not a flame. */
+const FLAME_H = 40;
+
+function flameFrame(seed) {
+  const rows = [];
+  for (let y = 0; y < FLAME_H; y++) {
+    const t = y / (FLAME_H - 1);
+    // Widens quickly to the bulge, then draws back in slowly (the exponent
+    // keeps the fire full down past his knees before it narrows).
+    const base = t < 0.46
+      ? 1 + (t / 0.46) * 9.5
+      : 10.5 - ((t - 0.46) / 0.54) ** 1.9 * 5.2;
+    const wobble = (p, q) =>
+      Math.sin((y + 1) * p + seed) * 1.6 + Math.sin((y + 1) * q + seed * 3) * 0.9;
+    const edge = (p, q) =>
+      Math.max(0, Math.min(11, Math.round(base + wobble(p, q))));
+    rows.push([11 - edge(0.9, 2.4), 11 + edge(1.31, 3.1)]);
+  }
+  return rows;
+}
+
+/* Hottest low and central: the yellow core never reaches the tips, so the
+   licks stay red the way a real flame's do. */
+const FLAME_BANDS = [
+  { inset: 0, fill: "#E25822", from: 0, to: 39 },
+  { inset: 3, fill: "#F59E0B", from: 6, to: 38 },
+  { inset: 6, fill: "#FDE68A", from: 14, to: 37 },
+];
+
+const FLAME_FRAMES = [flameFrame(0.6), flameFrame(2.4)];
+
+function FlameFrame({ rows }) {
   return (
-    <svg className="px-flame" viewBox="0 0 22 28" preserveAspectRatio="none"
-         shapeRendering="crispEdges" aria-hidden="true">
-      {FLAME_BANDS.map(([inset, fill]) =>
-        halves.map((h, y) => {
-          const half = h - inset;
-          if (half <= 0) return null;
-          return <rect key={`${inset}-${y}`} x={11 - half} y={y}
-                       width={half * 2} height={1} fill={fill} />;
+    <svg className="px-flame" viewBox={`0 0 22 ${FLAME_H}`}
+         preserveAspectRatio="none" shapeRendering="crispEdges"
+         aria-hidden="true">
+      {FLAME_BANDS.map((b) =>
+        rows.map(([l, r], y) => {
+          const [x, right] = [l + b.inset, r - b.inset];
+          if (y < b.from || y > b.to || right <= x) return null;
+          return <rect key={`${b.inset}-${y}`} x={x} y={y}
+                       width={right - x} height={1} fill={b.fill} />;
         }))}
     </svg>
   );
@@ -424,11 +454,11 @@ function FelixMascot({ scene, x }) {
         <div className="px-flames" aria-hidden="true">
           <div className="px-frame"
                style={{ animation: "px-swapA .18s steps(1) infinite" }}>
-            <FlameFrame halves={FLAME_A} />
+            <FlameFrame rows={FLAME_FRAMES[0]} />
           </div>
           <div className="px-frame"
                style={{ animation: "px-swapB .18s steps(1) infinite" }}>
-            <FlameFrame halves={FLAME_B} />
+            <FlameFrame rows={FLAME_FRAMES[1]} />
           </div>
         </div>
       )}
