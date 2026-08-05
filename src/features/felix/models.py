@@ -80,6 +80,10 @@ class RunRecord(BaseModel):
     counts: dict = Field(default_factory=dict)
     deferred: int = 0
     error: str = ""
+    # Per-phase timing, persisted so a slow run can be explained after the
+    # fact rather than only by re-running with a debugger attached — each
+    # entry is {"label", "detail", "duration_s"}. See run.py's _stage/_finish.
+    stages: list[dict] = Field(default_factory=list)
 
 
 class PendingResearch(BaseModel):

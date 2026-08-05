@@ -17,6 +17,34 @@ def run_felix(base, dry=True, client=None, **opt):
     return j, out
 
 
+class TestStageTimings:
+    """Per-phase durations persist on the RunRecord — real minutes-per-stage,
+    not just a whole-run elapsed counter, so a slow run can be explained
+    after the fact."""
+
+    def test_run_record_carries_a_duration_per_stage(self, tmp_path):
+        _j, out = run_felix(tmp_path, dry=True)
+        run = store.load_run(out["run_id"], base=tmp_path)
+        assert run.stages
+        labels = [s["label"] for s in run.stages]
+        assert "Scanning" in labels
+        assert "Detecting issues" in labels
+        assert all(isinstance(s["duration_s"], (int, float)) for s in run.stages)
+        assert all(s["duration_s"] >= 0 for s in run.stages)
+
+    def test_stage_durations_sum_to_roughly_the_whole_run(self, tmp_path):
+        import time
+
+        t0 = time.time()
+        _j, out = run_felix(tmp_path, dry=True)
+        wall = time.time() - t0
+        run = store.load_run(out["run_id"], base=tmp_path)
+        total = sum(s["duration_s"] for s in run.stages)
+        # Loose bound — this mock run is fast, but the sum must not run away
+        # from the actual wall clock (e.g. double-counting a stage).
+        assert total <= wall + 1.0
+
+
 class TestDryRun:
     def test_full_dry_run_plans_without_writing(self, tmp_path):
         j, out = run_felix(tmp_path, dry=True)

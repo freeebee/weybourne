@@ -145,7 +145,22 @@ def _now() -> str:
 
 
 def _stage(job: dict, label: str, detail: str = "") -> None:
-    job["stages"].append({"label": label, "detail": detail})
+    job["stages"].append({"label": label, "detail": detail, "at": time.time()})
+
+
+def _stage_durations(stages: list[dict]) -> list[dict]:
+    """Each stage's wall-clock duration: the gap to the NEXT stage's start,
+    or to now for whichever stage was still open when the run ended (either
+    finished normally or stopped at the findings cap). This is what actually
+    explains why one run took 21 minutes and another took 72 — see the
+    per-phase breakdown on a RunRecord rather than a single elapsed total."""
+    now = time.time()
+    out = []
+    for i, s in enumerate(stages):
+        end = stages[i + 1]["at"] if i + 1 < len(stages) else now
+        out.append({"label": s["label"], "detail": s["detail"],
+                    "duration_s": round(end - s.get("at", end), 1)})
+    return out
 
 
 def _emit(job: dict, change: ChangeRecord) -> None:
@@ -202,6 +217,7 @@ def _felix_run(job: dict, notion, client, options: RunOptions,
         run.status = status
         run.counts = counts
         run.error = error
+        run.stages = _stage_durations(job.get("stages", []))
         store.save_run(run, base)
         return {"run_id": run_id, "counts": counts, "dry_run": options.dry_run,
                 "status": status, "error": error,
@@ -580,6 +596,108 @@ def _felix_run(job: dict, notion, client, options: RunOptions,
                     "web_check": f"not needed — the two share an exact "
                                  f"{group['evidence']}"})
 
+    # ---- Phase 3b: execute the deterministic fixes found so far ------------ #
+    # Formatting, dangling relations, icons, employer-domain links and exact
+    # duplicates need no model call — writing them now, before adjudication
+    # and enrichment, means the run shows real applied progress within
+    # seconds even on a workspace where the LLM/research phases end up
+    # taking many minutes, and a crash or cancellation during those later
+    # phases does not cost the cheap fixes this scan already found.
+    write_remaining = options.max_writes
+    merge_remaining = options.max_merges
+    archived_ids: list[str] = []
+
+    def _execute_batch(planned_items: list[dict], merge_items: list[dict],
+                       stage_label: str) -> None:
+        nonlocal seq, write_remaining, merge_remaining
+        order = {"fix_formatting": 0, "fix_icon": 1, "fill_missing": 2,
+                 "fix_relation": 3}
+        planned_items = sorted(planned_items,
+                               key=lambda p: order.get(p["change_type"], 2))
+        merge_items = merge_items[:merge_remaining]
+        merge_remaining -= len(merge_items)
+        run_list = planned_items[:write_remaining]
+        write_remaining -= len(run_list)
+        counts["deferred"] += len(planned_items) - len(run_list)
+        if not run_list and not merge_items:
+            return
+        mode = "recording the would-do plan" if options.dry_run else "applying fixes"
+        _stage(job, stage_label, f"{len(run_list)} change(s) + "
+                                 f"{len(merge_items)} merge(s) — {mode}")
+        job["total"] = job.get("total", 0) + len(run_list) + len(merge_items)
+        job.setdefault("done", 0)
+        for p in run_list:
+            checkpoint()
+            change = ChangeRecord(
+                change_id=store.change_id_for(run_id, seq), run_id=run_id,
+                timestamp=_now(), database=p["db"], record_name=p["card"]["name"],
+                record_id=p["card"]["id"], record_url=p["card"]["url"],
+                change_type=p["change_type"], property_changed=p["property"],
+                previous_value=str(p["previous"])[:1900],
+                new_value=str(p["new"])[:1900],
+                previous_relation_ids=p.get("prev_ids", []),
+                new_relation_ids=p.get("new_ids", []),
+                source=p["source"], reason=p["reason"], confidence=p["confidence"])
+            seq += 1
+            change = execute.apply_change(
+                notion, change, p["payload"], expect_prop=p["expect_prop"],
+                scanned_plain=p["scanned_plain"], dry_run=options.dry_run,
+                quiet_minutes=options.quiet_minutes,
+                scanned_raw=p["card"]["raw"], base=base)
+            _emit(job, change)
+            job["done"] += 1
+            st = change.execution_status
+            if st == "Applied":
+                counts["applied"] += 1
+                counts[{"fix_formatting": "formatting_fixed",
+                        "fix_relation": "relations_repaired",
+                        "fill_missing": "missing_filled",
+                        "fix_icon": "icons_added"}.get(
+                            change.change_type, "formatting_fixed")] += 1
+                counts["high" if change.confidence == "High" else "medium"] += 1
+            elif st == "Planned (dry-run)":
+                counts["planned"] += 1
+            elif st == "Failed":
+                counts["failed"] += 1
+            elif st == "Skipped":
+                counts["skipped"] += 1
+
+        for m in merge_items:
+            checkpoint()
+            transfers = detect.plan_merge_transfers(m["survivor"], m["loser"])
+            records, seq = execute.execute_merge(
+                notion, run_id, seq, m["survivor"], m["loser"], transfers,
+                all_cards, prop_ids, m["confidence"], m["source"], m["reason"],
+                dry_run=options.dry_run, quiet_minutes=options.quiet_minutes,
+                base=base, on_change=lambda c: _emit(job, c),
+                detail=_merge_detail(m["survivor"], m["loser"], transfers,
+                                     names_by_id, notes_by_id,
+                                     m.get("web_check", "")))
+            job["done"] += 1
+            parent = records[0]
+            if parent.execution_status == "Applied":
+                counts["applied"] += 1
+                counts["merges"] += 1
+                counts["high" if parent.confidence == "High" else "medium"] += 1
+                archived_ids.append(m["loser"]["id"])
+            elif parent.execution_status == "Planned (dry-run)":
+                counts["planned"] += 1
+                counts["merges"] += 1
+            elif parent.execution_status == "Failed":
+                counts["failed"] += 1
+
+    # Ids already spoken for by an exact-duplicate merge — captured BEFORE
+    # the reset below, and carried forward (Phase 4 adds to it as its own
+    # merges are decided) so a web-research verdict can never propose merging
+    # a record this run already archived.
+    merged_ids = {m["loser"]["id"] for m in merges} | \
+                 {m["survivor"]["id"] for m in merges}
+    _execute_batch(planned, merges, "Executing mechanical fixes")
+    # Fresh lists: everything from here on (evidence-based fills, web-research
+    # -confirmed merges) is genuinely LLM/research-derived and executes later,
+    # at the run's original point, with whatever write/merge budget remains.
+    planned, merges = [], []
+
     # ---- Phase 4: LLM adjudication ----------------------------------------- #
     fuzzy_all = list(contested_pairs)   # same name, contradicting records
     for key, cards in cards_by_db.items():
@@ -593,12 +711,19 @@ def _felix_run(job: dict, notion, client, options: RunOptions,
                 continue                # already queued as a contested name
             p["db"] = key
             fuzzy_all.append(p)
+    # The cap applies here too, not just to what gets WRITTEN: adjudicating a
+    # pair the run has no room left to act on is a wasted CLI call. Trimmed
+    # to remaining findings headroom (worst case, one finding per pair) —
+    # conservative on purpose, since some pairs resolve as merges or silent
+    # "distinct" verdicts rather than findings at all. Whatever gets left
+    # off this run stays a candidate for the next one.
+    if fuzzy_all and options.max_findings:
+        remaining = max(0, options.max_findings - findings)
+        fuzzy_all = fuzzy_all[:remaining]
     if fuzzy_all:
         _stage(job, "Adjudicating look-alikes",
                f"{len(fuzzy_all)} candidate pair(s)")
         checkpoint()
-    merged_ids = {m["loser"]["id"] for m in merges} | \
-                 {m["survivor"]["id"] for m in merges}
     # EVERY look-alike pair goes to web research before anything is proposed:
     # a name score plus a model opinion is not evidence that two people are
     # the same person, and it cannot tell a shared name from a job move.
@@ -1081,82 +1206,10 @@ def _felix_run(job: dict, notion, client, options: RunOptions,
     store.save_pending_research(pending, base)
     counts["needs_web"] = len(pending)
 
-    # ---- Phase 5: plan + order --------------------------------------------- #
-    order = {"fix_formatting": 0, "fix_icon": 1, "fill_missing": 2,
-             "fix_relation": 3}
-    planned.sort(key=lambda p: order.get(p["change_type"], 2))
-    merges = merges[:options.max_merges]
-    budget = options.max_writes
-    run_list = planned[:budget]
-    deferred_now = len(planned) - len(run_list)
-    counts["deferred"] += deferred_now
-
-    # ---- Phase 6: execute --------------------------------------------------- #
-    mode = "recording the would-do plan" if options.dry_run else "applying fixes"
-    _stage(job, "Executing", f"{len(run_list)} change(s) + "
-                             f"{len(merges)} merge(s) — {mode}")
-    job["total"] = len(run_list) + len(merges)
-    job["done"] = 0
-    for p in run_list:
-        checkpoint()
-        change = ChangeRecord(
-            change_id=store.change_id_for(run_id, seq), run_id=run_id,
-            timestamp=_now(), database=p["db"], record_name=p["card"]["name"],
-            record_id=p["card"]["id"], record_url=p["card"]["url"],
-            change_type=p["change_type"], property_changed=p["property"],
-            previous_value=str(p["previous"])[:1900],
-            new_value=str(p["new"])[:1900],
-            previous_relation_ids=p.get("prev_ids", []),
-            new_relation_ids=p.get("new_ids", []),
-            source=p["source"], reason=p["reason"], confidence=p["confidence"])
-        seq += 1
-        change = execute.apply_change(
-            notion, change, p["payload"], expect_prop=p["expect_prop"],
-            scanned_plain=p["scanned_plain"], dry_run=options.dry_run,
-            quiet_minutes=options.quiet_minutes,
-            scanned_raw=p["card"]["raw"], base=base)
-        _emit(job, change)
-        job["done"] += 1
-        st = change.execution_status
-        if st == "Applied":
-            counts["applied"] += 1
-            counts[{"fix_formatting": "formatting_fixed",
-                    "fix_relation": "relations_repaired",
-                    "fill_missing": "missing_filled",
-                    "fix_icon": "icons_added"}.get(
-                        change.change_type, "formatting_fixed")] += 1
-            counts["high" if change.confidence == "High" else "medium"] += 1
-        elif st == "Planned (dry-run)":
-            counts["planned"] += 1
-        elif st == "Failed":
-            counts["failed"] += 1
-        elif st == "Skipped":
-            counts["skipped"] += 1
-
-    archived_ids: list[str] = []
-    for m in merges:
-        checkpoint()
-        transfers = detect.plan_merge_transfers(m["survivor"], m["loser"])
-        records, seq = execute.execute_merge(
-            notion, run_id, seq, m["survivor"], m["loser"], transfers,
-            all_cards, prop_ids, m["confidence"], m["source"], m["reason"],
-            dry_run=options.dry_run, quiet_minutes=options.quiet_minutes,
-            base=base, on_change=lambda c: _emit(job, c),
-            detail=_merge_detail(m["survivor"], m["loser"], transfers,
-                                 names_by_id, notes_by_id,
-                                 m.get("web_check", "")))
-        job["done"] += 1
-        parent = records[0]
-        if parent.execution_status == "Applied":
-            counts["applied"] += 1
-            counts["merges"] += 1
-            counts["high" if parent.confidence == "High" else "medium"] += 1
-            archived_ids.append(m["loser"]["id"])
-        elif parent.execution_status == "Planned (dry-run)":
-            counts["planned"] += 1
-            counts["merges"] += 1
-        elif parent.execution_status == "Failed":
-            counts["failed"] += 1
+    # ---- Phase 6: execute the LLM/research-derived changes ------------------ #
+    # Same batch executor as Phase 3b — whatever write/merge budget the
+    # mechanical fixes did not use is what these get.
+    _execute_batch(planned, merges, "Executing")
 
     # ---- Phase 7: summarise ------------------------------------------------- #
     if not options.dry_run and (counts["applied"] or counts["undone"]):
