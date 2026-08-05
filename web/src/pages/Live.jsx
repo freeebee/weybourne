@@ -246,6 +246,25 @@ function TranscriptLibrary() {
   );
 }
 
+/* One button, two jobs: it writes the note, and while it is writing it is the
+   way to stop. A drafting run takes the better part of a minute, and there was
+   nothing to press but the browser's back button. */
+function WriteNoteButton({ s }) {
+  if (s.noteBusy) {
+    return (
+      <Button variant="ghost" onClick={live.cancelNote}
+        title="Stop writing — the half-written draft is discarded">
+        Cancel writing
+      </Button>
+    );
+  }
+  return (
+    <Button variant="dark" onClick={live.draftNote}>
+      {s.note ? "Write it again" : "Write the note"}
+    </Button>
+  );
+}
+
 /* The two languages the room is ever in. Anything else whisper thinks it hears
    is a mis-detection, and the transcript is always written in English. */
 const LANG_NAMES = { en: "English", zh: "Chinese" };
@@ -378,12 +397,12 @@ export default function Live() {
   const [refine, setRefine] = React.useState("");
   const [copied, setCopied] = React.useState(false);
 
-  // Writing the note minimises the questions + recap panes so the draft gets
-  // the room; they come back via SHOW, or when the note is gone.
-  const [panesMin, setPanesMin] = React.useState(false);
-  React.useEffect(() => {
-    if (!s.note && s.busy !== "note") setPanesMin(false);
-  }, [!!s.note, s.busy]);
+  // Writing the note folds the questions + recap panes away so the draft gets
+  // the room, and a transcript that already has a note opens folded. The flag
+  // lives in the store: leaving the page and coming back must not reopen them
+  // mid-draft, and SHOW is a decision that should stick.
+  const panesMin = s.panesMin;
+  const setPanesMin = (on) => live.set({ panesMin: on });
 
   const openItems = s.items.filter((it) => !it.answer);
   const answeredItems = s.items.filter((it) => it.answer);
@@ -399,17 +418,11 @@ export default function Live() {
         actions={s.running
           ? <>
               <Button variant="ghost" onClick={live.stop}>Stop</Button>
-              <Button variant="dark" busy={s.busy === "note"}
-                onClick={() => { setPanesMin(true); live.draftNote(); }}>Write the note</Button>
+              <WriteNoteButton s={s} />
             </>
           : <>
               {/* Closing the transcript now sits on the transcript itself. */}
-              {s.transcript && (
-                <Button variant="dark" busy={s.busy === "note"}
-                  onClick={() => { setPanesMin(true); live.draftNote(); }}>
-                  Write the note
-                </Button>
-              )}
+              {s.transcript && <WriteNoteButton s={s} />}
               <Button onClick={live.start}>Start listening</Button>
             </>}>
         {s.who ? `With ${s.who}. ` : ""}
@@ -789,11 +802,14 @@ export default function Live() {
       )}
 
       {/* The draft forming in real time — replaced by the finished card below */}
-      {!s.note && s.busy === "note" && (
+      {!s.note && s.noteBusy && (
         <Card accent="brass" style={{ marginTop: 24 }}>
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <Mascot state="working" width={44} />
-            <span className="microlabel">NOTE DRAFT · BEING WRITTEN…</span>
+          <div className="spread" style={{ gap: 12 }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <Mascot state="working" width={44} />
+              <span className="microlabel">NOTE DRAFT · BEING WRITTEN…</span>
+            </div>
+            <Button variant="ghost" onClick={live.cancelNote}>Cancel writing</Button>
           </div>
           {s.noteDraftText
             ? <Markdown text={s.noteDraftText} />

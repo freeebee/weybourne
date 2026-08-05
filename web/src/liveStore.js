@@ -23,6 +23,15 @@ export const S = {
   transcript: "", entries: [], items: [], batches: [], reads: 0, unreadWords: 0,
   lastTail: "", lastReadAt: 0, startedAt: 0, reading: false, nextIn: 30,
   error: null, note: null, noteDraftText: "", sharp: null, sharpPending: "", busy: "", seq: 1, version: 0,
+  // The note draft gets its own flag rather than sharing `busy`. `busy` is one
+  // slot for seven operations, and a recap read finishing mid-draft cleared it:
+  // the streaming panel vanished, the questions sprang back open and the
+  // button re-armed, so a second draft could be started on top of the first.
+  noteBusy: false,
+  // Questions and recaps fold away while the note has the floor, and stay
+  // folded when you come back to a transcript that already has one. Lives here
+  // rather than in the page so leaving and returning does not reopen them.
+  panesMin: false,
   noteSave: null, noteSaveEdits: {}, noteSaveEditing: {}, noteSaveUrl: "",
   sessionId: "", librarySaved: false,
 };
@@ -148,7 +157,7 @@ function appendTranscript(text, countWords = true) {
    after the words were spoken: an eight-second chunk, then whisper, then a
    Haiku round trip. The rough text is readable immediately and the polish
    catches up. */
-function enqueueTidy(raw) {
+export function hearChunk(raw) {
   tidyQueue.push(raw);
   S.rawPending = (S.rawPending ? S.rawPending + " " : "") + raw;
   // Counted here, not on append: the read loop should react to speech as it
@@ -401,7 +410,7 @@ export async function start() {
             S.detectedProb = prob;
             emit();
           }
-          if (res.text) enqueueTidy(res.text);
+          if (res.text) hearChunk(res.text);
           else if (pin !== "auto") langStreak = { lang: "", n: 0 };
         } catch (e) { S.error = e.message; emit(); }
       };
@@ -576,8 +585,24 @@ export function toggleStar(id) {
   emit();
 }
 
+let noteAbort = null;
+
+/* Stop a draft in flight. The half-written text goes with it — the point of
+   cancelling is to write it again differently. */
+export function cancelNote() {
+  noteAbort?.abort();
+}
+
 export async function draftNote() {
-  S.busy = "note"; S.error = null; S.note = null; S.noteDraftText = ""; emit();
+  // One draft at a time. Two in flight race to set S.note, and the second one
+  // wins whatever the first was worth.
+  if (S.noteBusy) return;
+  noteAbort = new AbortController();
+  const { signal } = noteAbort;
+  S.noteBusy = true; S.busy = "note"; S.error = null;
+  S.note = null; S.noteDraftText = "";
+  S.panesMin = true;      // the draft takes the floor
+  emit();
   const payload = {
     transcript: S.transcript, context: context(),
     unanswered: S.items.filter((it) => !it.answer).map((it) => it.q),
@@ -590,20 +615,27 @@ export async function draftNote() {
       S.noteDraftText = full;
       const now = Date.now();
       if (now - lastPaint > 120) { lastPaint = now; emit(); }
-    });
+    }, signal);
     if (!md.trim() || md.includes("[[STREAM-FAILED]]")) {
       S.noteDraftText = ""; emit();
-      S.note = await post("/api/live/note", payload);   // non-streamed fallback
+      S.note = await post("/api/live/note", payload, signal);   // non-streamed fallback
     } else {
-      const fields = await post("/api/live/note-parse", { markdown: md });
+      const fields = await post("/api/live/note-parse", { markdown: md }, signal);
       S.note = { note: fields, markdown: md };
     }
   } catch (e) {
-    // Streaming unavailable at the transport level — fall back quietly.
-    try { S.note = await post("/api/live/note", payload); }
-    catch (e2) { S.error = e2.message; }
+    if (signal.aborted) {
+      S.panesMin = false;      // give the questions their room back
+    } else {
+      // Streaming unavailable at the transport level — fall back quietly.
+      try { S.note = await post("/api/live/note", payload, signal); }
+      catch (e2) { if (!signal.aborted) S.error = e2.message; }
+    }
   }
-  S.noteDraftText = ""; S.busy = ""; emit();
+  noteAbort = null;
+  S.noteDraftText = ""; S.noteBusy = false;
+  if (S.busy === "note") S.busy = "";
+  emit();
   // File the finished note with the session straight away — pressing
   // "Back to start" later must not lose it.
   if (S.note) {
@@ -617,6 +649,7 @@ export async function draftNote() {
 }
 
 export function newSession() {
+  cancelNote();
   stop();
   tidyQueue = []; chunkNo = 0; langStreak = { lang: "", n: 0 };
   Object.assign(S, {
@@ -625,7 +658,7 @@ export function newSession() {
     detectedLang: "", detectedProb: 0, tidyPending: 0, rawPending: "",
     note: null, noteDraftText: "", sharp: null, sharpPending: "", busy: "", seq: 1, manager: null,
     noteSave: null, noteSaveEdits: {}, noteSaveEditing: {}, noteSaveUrl: "",
-    sessionId: "", librarySaved: false,
+    sessionId: "", librarySaved: false, panesMin: false,
   });
   emit();
 }
@@ -645,9 +678,11 @@ export async function loadFromLibrary(sid) {
     answer: q.answer || null,
   }));
   if (rec.started) S.startedAt = Date.parse(rec.started) || 0;
-  // A note drafted in the original session reappears with it.
+  // A note drafted in the original session reappears with it — and the note is
+  // what you came back for, so it opens with the questions folded away.
   if (rec.note_markdown) {
     S.note = { note: rec.note_fields || {}, markdown: rec.note_markdown };
+    S.panesMin = true;
   }
   emit();
   if (rec.who) resolveManager(rec.who);

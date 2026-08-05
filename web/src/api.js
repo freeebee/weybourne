@@ -33,11 +33,12 @@ export async function getRetry(url, tries = 4, delayMs = 1500) {
 
 export const del = (url) => fetch(url, { method: "DELETE" }).then(handle);
 
-export const post = (url, body) =>
+export const post = (url, body, signal) =>
   fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body ?? {}),
+    signal,
   }).then(handle);
 
 export const postFile = (url, file, filename) => {
@@ -48,11 +49,12 @@ export const postFile = (url, file, filename) => {
 
 /* Streaming POST: the response body arrives as plain-text chunks which are fed
    to onChunk as they land. Resolves with the complete text. */
-export async function postStream(url, body, onChunk) {
+export async function postStream(url, body, onChunk, signal) {
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body ?? {}),
+    signal,
   });
   if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
   const reader = res.body.getReader();
