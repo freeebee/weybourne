@@ -32,6 +32,7 @@ from datetime import datetime, timezone
 from typing import Protocol
 
 from src.config import FAST_MODEL, LIVE_MODEL, REASONING_MODEL
+from src.llm_session import LiveSession, register_lane
 
 
 # --------------------------------------------------------------------------- #
@@ -328,6 +329,48 @@ def read_transcript_batch(
     # Server-side backstop: even if the model ignores the stated budget (or
     # the count above is momentarily stale against a fast-moving open list),
     # the cap is enforced here rather than trusted to prompt-following alone.
+    parsed["questions"] = (parsed.get("questions") or [])[:budget]
+    return parsed
+
+
+def read_transcript_batch_delta(
+    client,
+    new_text: str,
+    open_items: list[dict],
+    context: str = "",
+    max_open_questions: int = MAX_OPEN_QUESTIONS,
+) -> dict:
+    """The persistent-session sibling of read_transcript_batch.
+
+    ``client`` here is a src/llm_session.py LiveSession kept alive for the
+    whole meeting, so it already holds every earlier read (and its own prior
+    recaps) in its own conversation memory — only the NEW speech since the
+    last read is sent. Resending the whole transcript every read, the way
+    read_transcript_batch does for its one-shot fresh-process-per-call world,
+    would make this session's context grow roughly quadratically over a long
+    meeting instead of linearly.
+    """
+    open_list = "\n".join(f"[{it['id']}] {it['q']}" for it in open_items) or "(none open)"
+    budget = max(0, max_open_questions - len(open_items))
+    user = (
+        f"MEETING CONTEXT\n{context or '(none supplied)'}\n\n"
+        f"OPEN QUESTIONS ({len(open_items)}/{max_open_questions} outstanding — the queue is "
+        f"capped, so you may propose AT MOST {budget} new one(s) this read; fewer, including "
+        f"zero, is correct whenever the conversation does not offer that many genuinely worth "
+        f"asking. A full queue is not a reason to lower the bar.)\n{open_list}\n\n"
+        "NEW SPEECH SINCE YOUR LAST READ (everything before this you already hold from "
+        f"earlier reads; speaker labels are unreliable, infer who is talking)\n"
+        f"\"\"\"{new_text or '(nothing new)'}\"\"\""
+    )
+    response = client.messages.create(
+        model=LIVE_MODEL,
+        max_tokens=1500,
+        system=READ_SYSTEM_PROMPT,
+        output_config={"format": {"type": "json_schema", "schema": READ_SCHEMA}},
+        messages=[{"role": "user", "content": user}],
+    )
+    raw = next((b.text for b in response.content if getattr(b, "type", None) == "text"), "")
+    parsed = json.loads(raw)
     parsed["questions"] = (parsed.get("questions") or [])[:budget]
     return parsed
 
@@ -706,3 +749,15 @@ def generate_live_questions(
     questions = parsed.get("questions", [])
     fresh = ledger.propose([q["question"] for q in questions])
     return [q for q in questions if q["question"] in fresh]
+
+
+# --------------------------------------------------------------------------- #
+# Persistent-session lanes for the live meeting loop (src/llm_session.py).
+# Registered here, not in llm_session.py, so that module stays free of any
+# feature-specific model/prompt knowledge.
+# --------------------------------------------------------------------------- #
+
+register_lane("live-tidy", lambda: LiveSession(
+    model=FAST_MODEL, system_prompt=TIDY_SYSTEM_PROMPT, schema=TIDY_SCHEMA))
+register_lane("live-read", lambda: LiveSession(
+    model=LIVE_MODEL, system_prompt=READ_SYSTEM_PROMPT, schema=READ_SCHEMA))

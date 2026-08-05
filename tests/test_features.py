@@ -17,6 +17,7 @@ from src.features.transcription import (
     TranscriptBuffer,
     generate_live_questions,
     read_transcript_batch,
+    read_transcript_batch_delta,
 )
 from src.schemas import (
     Attendee,
@@ -419,4 +420,48 @@ class TestReadTranscriptBatch:
         open_items = [{"id": i, "q": f"q{i}"} for i in range(19)]   # budget = 1
         client = FakeClient(self.PAYLOAD)   # payload has 3 questions
         out = read_transcript_batch(client, buf, open_items)
+        assert len(out["questions"]) == 1
+
+
+class TestReadTranscriptBatchDelta:
+    """The persistent-session sibling of TestReadTranscriptBatch above: only
+    the new speech since the last read is sent — the session (not this call)
+    is what holds everything earlier."""
+
+    PAYLOAD = {"changed": True, "recap": "They confirmed the fund size.",
+               "answered": [], "questions": [{"q": "q1", "flag": False},
+                                             {"q": "q2", "flag": False},
+                                             {"q": "q3", "flag": False}]}
+
+    def test_only_the_new_speech_is_sent_not_a_full_transcript(self):
+        client = FakeClient(self.PAYLOAD)
+        read_transcript_batch_delta(client, "They confirmed the fund size at $300m.", [])
+        prompt = client.calls[0]["messages"][0]["content"]
+        assert "They confirmed the fund size at $300m." in prompt
+        assert "NEW SPEECH SINCE YOUR LAST READ" in prompt
+
+    def test_empty_delta_says_nothing_new_rather_than_an_empty_block(self):
+        client = FakeClient(self.PAYLOAD)
+        read_transcript_batch_delta(client, "", [])
+        prompt = client.calls[0]["messages"][0]["content"]
+        assert "(nothing new)" in prompt
+
+    def test_the_budget_reflects_remaining_headroom(self):
+        open_items = [{"id": i, "q": f"q{i}"} for i in range(18)]
+        client = FakeClient(self.PAYLOAD)
+        read_transcript_batch_delta(client, "Some speech.", open_items)
+        prompt = client.calls[0]["messages"][0]["content"]
+        assert "18/20 outstanding" in prompt
+        assert "AT MOST 2 new" in prompt
+
+    def test_a_full_queue_asks_for_no_new_questions(self):
+        open_items = [{"id": i, "q": f"q{i}"} for i in range(20)]
+        client = FakeClient(self.PAYLOAD)   # would return 3 questions if not capped
+        out = read_transcript_batch_delta(client, "Some speech.", open_items)
+        assert out["questions"] == []
+
+    def test_the_response_is_trimmed_to_budget_even_if_the_model_overshoots(self):
+        open_items = [{"id": i, "q": f"q{i}"} for i in range(19)]   # budget = 1
+        client = FakeClient(self.PAYLOAD)   # payload has 3 questions
+        out = read_transcript_batch_delta(client, "Some speech.", open_items)
         assert len(out["questions"]) == 1

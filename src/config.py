@@ -84,6 +84,22 @@ CLAUDE_CLI_LIVE_CONCURRENT = int(os.environ.get("CLAUDE_CLI_LIVE_CONCURRENT", "1
 # CLAUDE.md / .mcp.json / hooks into every call. See src/llm.py.
 CLAUDE_CLI_SCRATCH_DIR = os.environ.get("CLAUDE_CLI_SCRATCH_DIR")
 
+# A fresh CLI spawn pays ~5-6s of process bootstrap (feature-flag fetch,
+# connector list, session-title generation) that has nothing to do with the
+# prompt — negligible for a one-off call, but tidy/read fire every 8-30s for
+# the life of a live meeting. When enabled, tidy and read each get ONE
+# `claude` process kept alive per meeting (src/llm_session.py) instead of a
+# fresh spawn per call, paying the bootstrap once instead of on every turn.
+# Sessions always fall back to the one-shot path (src/llm.py) on any error,
+# so this is a pure latency optimisation, not a new failure mode. Flip to "0"
+# to roll back to the old fresh-spawn-per-call behaviour.
+LIVE_PERSISTENT_SESSIONS = os.environ.get("LIVE_PERSISTENT_SESSIONS", "1") not in ("0", "false", "False")
+# A meeting's persistent sessions are torn down explicitly when the recording
+# stops (POST /api/live/finish). This is the backstop for when that never
+# arrives — a crashed tab, a closed laptop lid — so an abandoned `claude`
+# process doesn't run indefinitely.
+LIVE_SESSION_IDLE_SECONDS = float(os.environ.get("LIVE_SESSION_IDLE_SECONDS", "600"))
+
 # Page render resolution for scanned pages sent to vision OCR.
 PAGE_RENDER_ZOOM = float(os.environ.get("PAGE_RENDER_ZOOM", "2.0"))
 

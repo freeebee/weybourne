@@ -189,6 +189,7 @@ async function pumpTidy() {
       prev_tail: S.transcript.slice(-350),
       output_language: S.outputLang,
       detected_language: S.detectedLang,
+      session_id: S.sessionId,
     });
     // An empty cleanup claims the chunk held no speech. When whisper heard
     // actual words that claim is wrong, and taking it at face value deleted
@@ -232,6 +233,7 @@ export async function performRead() {
       context: context(),
       prior_recaps: S.batches.slice(0, 3).map((b) => b.recap).filter(Boolean).join(" | "),
       last_tail: S.lastTail,
+      session_id: S.sessionId,
     });
     S.lastTail = text.slice(-240);   // where this read got to, whatever it read
     S.unreadWords = 0; S.lastReadAt = Date.now(); S.reads++;

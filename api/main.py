@@ -34,7 +34,7 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from src import config, llm
+from src import config, llm, llm_session
 from src.connectors.graph import CALENDAR_SNAPSHOT, INBOX_SNAPSHOT, GraphConnector
 from src.connectors.notion_client import NotionConnector
 from src.db import init_db
@@ -67,6 +67,7 @@ from src.features.transcription import (
     note_stream_args,
     note_to_markdown,
     read_transcript_batch,
+    read_transcript_batch_delta,
     refine_thoughts,
     sharpen_question,
     tidy_transcript_chunk,
@@ -121,6 +122,22 @@ def _live_client(pool: str):
     if not ok:
         raise HTTPException(status_code=503, detail=f"AI backend unavailable: {msg}")
     return llm.get_client(pool=pool)
+
+
+def _live_session_or_none(meeting_id: str, pool: str):
+    """The persistent-session client for a live lane (src/llm_session.py), or
+    None to fall back to a fresh one-shot spawn — feature flag off, no
+    meeting id yet (the very first chunk of a recording races session-id
+    creation), or a backend that's already unavailable anyway."""
+    if not config.LIVE_PERSISTENT_SESSIONS or not meeting_id:
+        return None
+    ok, _msg = llm.preflight()
+    if not ok:
+        return None
+    try:
+        return llm_session.get_session(meeting_id, pool)
+    except Exception:  # noqa: BLE001 - never block the call on this optimisation
+        return None
 
 
 def _run(fn, *args, **kwargs):
@@ -1566,14 +1583,29 @@ class TidyIn(BaseModel):
     prev_tail: str = ""
     output_language: str = "English"
     detected_language: str = ""
+    session_id: str = ""
 
 
 @app.post("/api/live/tidy")
 def live_tidy(body: TidyIn):
     """Raw whisper chunk → clean sentences in the chosen output language
-    (Haiku). The page shows this cleaned text, never the raw transcript."""
+    (Haiku). The page shows this cleaned text, never the raw transcript.
+
+    Prefers the meeting's persistent CLI session (src/llm_session.py) when
+    one is available — a fresh process per chunk pays several seconds of CLI
+    bootstrap that a kept-alive process only pays once for the whole
+    meeting. Any failure on that path (a broken pipe, a session that never
+    started) falls straight back to today's fresh one-shot spawn, so this is
+    a pure latency optimisation with no new way for a tidy call to fail."""
     if not body.raw.strip():
         return {"text": ""}
+    session = _live_session_or_none(body.session_id, "live-tidy")
+    if session is not None:
+        try:
+            return {"text": tidy_transcript_chunk(session, body.raw, body.prev_tail,
+                                                   body.output_language, body.detected_language)}
+        except Exception:  # noqa: BLE001 - fall back to the one-shot path below
+            pass
     text = _run(tidy_transcript_chunk, _live_client("live-tidy"), body.raw, body.prev_tail,
                 body.output_language, body.detected_language)
     return {"text": text}
@@ -1585,6 +1617,7 @@ class ReadIn(BaseModel):
     context: str = ""
     prior_recaps: str = ""
     last_tail: str = ""
+    session_id: str = ""
 
 
 def _buffer_from(text: str) -> TranscriptBuffer:
@@ -1594,8 +1627,29 @@ def _buffer_from(text: str) -> TranscriptBuffer:
     return buf
 
 
+def _delta_since(full_text: str, last_tail: str) -> str:
+    """Everything in ``full_text`` after ``last_tail`` — what a persistent
+    read session needs sent, since it already holds everything up to the
+    previous read in its own conversation memory (see
+    read_transcript_batch_delta). Falls back to the whole text when the tail
+    can't be located: the meeting's first read, or ``last_tail`` empty."""
+    if not last_tail:
+        return full_text
+    idx = full_text.rfind(last_tail)
+    return full_text[idx + len(last_tail):] if idx != -1 else full_text
+
+
 @app.post("/api/live/read")
 def live_read(body: ReadIn):
+    """Prefers the meeting's persistent read session, same fallback contract
+    as live_tidy above — see _live_session_or_none."""
+    session = _live_session_or_none(body.session_id, "live-read")
+    if session is not None:
+        try:
+            new_text = _delta_since(body.transcript, body.last_tail)
+            return read_transcript_batch_delta(session, new_text, body.open_items, body.context)
+        except Exception:  # noqa: BLE001 - fall back to the one-shot path below
+            pass
     parsed = _run(read_transcript_batch, _live_client("live-read"), _buffer_from(body.transcript),
                   body.open_items, body.context, body.prior_recaps, body.last_tail)
     return parsed
@@ -1703,7 +1757,24 @@ def live_autosave(body: LiveSessionIn):
 
 @app.post("/api/live/finish")
 def live_finish(body: LiveSessionIn):
+    llm_session.end_meeting(body.id)   # no-op if this meeting never used a persistent session
     return transcript_library.finish(_session_record(body))
+
+
+# Backstop for a meeting whose persistent tidy/read sessions never got the
+# explicit end_meeting above — a crashed tab, a closed laptop lid. Without
+# this an abandoned `claude` process would run until the server restarts.
+def _reap_idle_live_sessions():
+    time.sleep(60)   # let the server finish booting first
+    while True:
+        try:
+            llm_session.reap_idle()
+        except Exception:  # noqa: BLE001 - a failed sweep just waits for the next
+            pass
+        time.sleep(120)
+
+
+threading.Thread(target=_reap_idle_live_sessions, daemon=True).start()
 
 
 @app.get("/api/transcripts")
