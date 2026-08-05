@@ -1,14 +1,16 @@
 """Persistent Claude Code CLI sessions for the live-meeting loop.
 
 Every other caller in this app (src/llm.py's ``ClaudeCodeClient``) gets a
-fresh ``claude -p`` subprocess per call — correct for prep, triage, Felix and
-the rest, which are independent one-off tasks with their own system prompt
-each time. It is the wrong shape for a live meeting: tidy fires every ~8s and
-read every 30-60s, for the same meeting, for as long as it runs, and each
-fresh spawn pays ~5-6s of CLI bootstrap (feature-flag fetch, connector list,
-a hidden session-title API call) that has nothing to do with the prompt —
-measured directly against this app's own CLI invocation, see the
-LIVE_PERSISTENT_SESSIONS comment in src/config.py.
+fresh ``claude -p`` subprocess per call. That's the right shape across
+FEATURES — prep, triage and Felix each have their own fixed system prompt,
+so one process can never correctly serve two of them; only a dedicated
+session per feature (like this module gives tidy and read) would even be
+sound. It is the wrong shape WITHIN a live meeting specifically: tidy fires
+every ~8s and read every 30-60s, for the same meeting, for as long as it
+runs, and each fresh spawn pays ~5-6s of CLI bootstrap (feature-flag fetch,
+connector list, a hidden session-title API call) that has nothing to do with
+the prompt — measured directly against this app's own CLI invocation, see
+the LIVE_PERSISTENT_SESSIONS comment in src/config.py.
 
 A live meeting's tidy calls (and, separately, its read calls) are genuinely
 turns in ONE ongoing task, so this module keeps one
@@ -19,13 +21,18 @@ bootstrap (plus a little more, since structured output is produced via an
 internal tool-call round trip in this mode), but every turn after that lands
 in ~2-3s with no bootstrap at all.
 
-This does NOT generalise to prep/triage/Felix. Those are independent tasks
-with different system prompts each time, and the CLI pins one system prompt
-plus accumulating conversation history for a process's whole life — reusing
-one process across unrelated tasks would leak one task's content into the
-next and grow context unboundedly. It only makes sense where every turn
-really is a continuation of the same thing, which is exactly what a single
-meeting's tidy/read loop is.
+This module's registry (get_session/end_meeting/reap_idle) is not specific
+to meetings — it is keyed by any (id, lane) pair, so a dedicated inbox-triage
+lane, reused across the emails triaged in one sitting, is a structurally
+plausible follow-up (triage's own system prompt IS fixed across emails, same
+as tidy/read's). Not done here because the shape differs in ways that need
+their own design pass, not just wiring: triage calls fire on demand rather
+than a tight fixed cadence, so the win per "session" is smaller, and — the
+same problem read had — each email's draft would need to stop resending
+full context and send only what's new, or an inbox worked for an hour would
+accumulate every earlier email's content in one growing conversation.
+Prep and Felix don't fit this shape at all: their calls aren't repeated
+turns on one ongoing thing the way triaging emails in one sitting is.
 
 Read's prompt needed to change to fit this shape: read_transcript_batch (the
 one-shot sibling) deliberately resends the WHOLE transcript on every read —
