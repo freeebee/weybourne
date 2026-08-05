@@ -1,12 +1,15 @@
-"""A run stops once enough findings are waiting on the user.
+"""A run stops once enough COMPLEX findings are waiting on the user.
 
 Felix used to work through the whole workspace in one go and dump everything
 into the review queue at once. Ten at a time is a session's worth; clearing
 them is what starts the next run.
 
-Only rows that need a decision count — proposals and recommendations. The
-deterministic High-confidence fixes are applied and reversible, so they never
-sit in the queue and never bring the run to a halt.
+Only judgement calls count — a fill, a merge (however confident), a
+recommendation. A formatting/icon/relation fix needs no judgement at all
+(EASY_CHANGE_TYPES), so it never sits against the cap and never brings the
+run to a halt, however low the cap is set. Nothing in either category is
+ever applied without a click — the cap governs when a run stops FILING
+change-log rows, not whether it writes to Notion.
 """
 import pytest
 
@@ -56,14 +59,26 @@ class TestUncappedRun:
         _j, out = run_felix(tmp_path, max_findings=10)
         assert out["status"] == "done" and out["stopped_at_cap"] == 0
 
-    def test_applied_fixes_do_not_count_towards_the_cap(self, tmp_path):
-        """The mock workspace's issues are all High-confidence mechanical
-        fixes. A cap of one must not cut the run short over them."""
+    def test_easy_fixes_do_not_count_towards_the_cap(self, tmp_path):
+        """The mock workspace's formatting/relation fixes need no judgement
+        call. A cap of one must not cut them short — they are filed (never
+        applied without a click) regardless of the cap."""
         _j, out = run_felix(tmp_path, max_findings=1)
-        assert out["status"] == "done" and out["stopped_at_cap"] == 0
-        applied = [c for c in store.list_all_changes(base=tmp_path, limit=500)
-                   if c.execution_status == "Applied"]
-        assert len(applied) > 1
+        changes = store.list_all_changes(base=tmp_path, limit=500)
+        easy = [c for c in changes if c.change_type in runmod.EASY_CHANGE_TYPES]
+        assert len(easy) > 1
+        assert all(c.execution_status == "Planned (dry-run)" for c in easy)
+
+    def test_a_fill_or_merge_does_count_towards_the_cap(self, tmp_path):
+        """Unlike a formatting fix, filling in a property or merging two
+        records is a judgement call — even one of them is enough to stop a
+        run capped at one, exactly as an ambiguous duplicate would."""
+        _j, out = run_felix(tmp_path, max_findings=1)
+        assert out["stopped_at_cap"] >= 1
+        changes = store.list_all_changes(base=tmp_path, limit=500)
+        complex_rows = [c for c in changes
+                       if c.change_type not in runmod.EASY_CHANGE_TYPES]
+        assert len(complex_rows) == 1
 
     def test_zero_disables_the_cap(self, tmp_path):
         _j, out = run_felix(tmp_path, max_findings=0)

@@ -50,7 +50,8 @@ function RunPanel({ s }) {
         </div>
         <span className="mono" style={{ fontSize: 10.5, letterSpacing: ".1em",
                 color: "var(--stone-500)" }}>
-          STOPS AT {cap} FOR APPROVAL · RESTARTS WHEN THE QUEUE IS CLEAR
+          EASY FIXES ARE UNCAPPED · COMPLEX CASES STOP AT {cap} FOR APPROVAL,
+          RESUME BELOW 5
         </span>
       </div>
       <PendingResearch s={s} />

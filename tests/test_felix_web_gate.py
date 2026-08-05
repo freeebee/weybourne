@@ -1,8 +1,12 @@
-"""Web searches are opt-in.
+"""Web searches only fire while the complex-case review queue has room.
 
-An ordinary run does the deterministic fixes and whatever the meeting notes
-settle, then LISTS what it could not close. Nothing is searched until the user
-asks — that is the whole point of the gate.
+An ordinary run now researches ambiguous cases (duplicates, tags the notes
+can't settle) on its own — see run.py's should_research_now and
+TestShouldResearchNow in test_felix_run.py for that gate directly. This mock
+workspace has no such ambiguous case to search for in the first place (its
+only duplicate is an exact-identifier match, settled without a model call),
+so a normal run against it makes no web call regardless of the gate — these
+tests pin that absence of noise, not the gate's on/off logic itself.
 """
 from src.connectors.notion_client import NotionConnector
 from src.features.felix import detect, enrich, store
@@ -22,7 +26,7 @@ class SpyClient(FakeClient):
         return [c for c in self.calls if c.get("extra_allowed_tools")]
 
 
-def test_a_normal_run_never_searches_the_web(tmp_path):
+def test_a_run_against_a_workspace_with_nothing_ambiguous_makes_no_web_call(tmp_path):
     client = SpyClient({"verdict": "unsure", "confidence": "low",
                         "lean": "none", "employer_check": "",
                         "explanation": "", "evidence": "",

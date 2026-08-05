@@ -1,9 +1,11 @@
 """End-to-end pipeline in mock mode: the full dry run, live-mode execution
 against the mock connector, and the undo engine's conflict discipline."""
+import json
+
 from src.connectors.notion_client import NotionConnector
-from src.features.felix import run as runmod
+from src.features.felix import execute, run as runmod
 from src.features.felix import store, undo
-from src.features.felix.models import RunOptions
+from src.features.felix.models import ChangeRecord, RunOptions
 from src.features.felix.run import felix_run
 
 
@@ -16,6 +18,19 @@ def run_felix(base, dry=True, client=None, **opt):
     out = felix_run(j, NotionConnector(), client,
                     RunOptions(dry_run=dry, **opt), base=base)
     return j, out
+
+
+def seed_change(base, n, change_type="fill_missing",
+                execution_status="Proposed", review_status="Awaiting Review"):
+    """A minimal change-log row, as if left over from an earlier run —
+    for testing the backlog count without running the whole pipeline."""
+    run_id = f"seed{n}"
+    ch = ChangeRecord(
+        change_id=f"FLX-seed-{n:04d}", run_id=run_id, timestamp="2026-01-01",
+        database="contacts", record_name=f"Seed {n}", change_type=change_type,
+        execution_status=execution_status, review_status=review_status)
+    store.append_change(ch, base)
+    return ch
 
 
 class TestPendingWithoutModel:
@@ -39,6 +54,54 @@ class TestPendingWithoutModel:
     def test_exactly_at_the_threshold_qualifies(self):
         assert runmod._worth_pending_without_model(
             {"score": runmod.PENDING_WITHOUT_MODEL_THRESHOLD})
+
+
+class TestComplexCaseBacklog:
+    """The 10-at-a-time cap, and the auto-research watermark, both key off
+    this count — everything awaiting review except the uncapped easy types."""
+
+    def test_empty_queue_is_zero(self, tmp_path):
+        assert runmod.complex_case_backlog(tmp_path) == 0
+
+    def test_counts_proposed_and_recommended_and_planned(self, tmp_path):
+        seed_change(tmp_path, 1, execution_status="Proposed")
+        seed_change(tmp_path, 2, execution_status="Recommended")
+        seed_change(tmp_path, 3, execution_status="Planned (dry-run)")
+        assert runmod.complex_case_backlog(tmp_path) == 3
+
+    def test_easy_change_types_are_excluded(self, tmp_path):
+        for t in runmod.EASY_CHANGE_TYPES:
+            seed_change(tmp_path, hash(t) % 10000, change_type=t)
+        assert runmod.complex_case_backlog(tmp_path) == 0
+
+    def test_decided_or_applied_rows_are_excluded(self, tmp_path):
+        seed_change(tmp_path, 1, execution_status="Applied")
+        seed_change(tmp_path, 2, execution_status="Failed")
+        seed_change(tmp_path, 3, review_status="Approved")
+        seed_change(tmp_path, 4, review_status="Dismissed")
+        assert runmod.complex_case_backlog(tmp_path) == 0
+
+
+class TestShouldResearchNow:
+    """options.web_research is a manual override; otherwise an ordinary run
+    researches ambiguous cases on its own exactly while the complex side of
+    the queue has room — see COMPLEX_CASE_LOW_WATERMARK (5)."""
+
+    def test_an_ordinary_run_researches_when_the_queue_is_short(self):
+        opts = RunOptions(web_research=False)
+        assert runmod._should_research_now(opts, backlog=0)
+        assert runmod._should_research_now(
+            opts, backlog=runmod.COMPLEX_CASE_LOW_WATERMARK - 1)
+
+    def test_an_ordinary_run_pauses_at_the_watermark(self):
+        opts = RunOptions(web_research=False)
+        assert not runmod._should_research_now(
+            opts, backlog=runmod.COMPLEX_CASE_LOW_WATERMARK)
+        assert not runmod._should_research_now(opts, backlog=9)
+
+    def test_the_manual_override_ignores_the_watermark(self):
+        opts = RunOptions(web_research=True)
+        assert runmod._should_research_now(opts, backlog=9)
 
 
 class TestStageTimings:
@@ -82,8 +145,16 @@ class TestDryRun:
         assert "fix_relation" in types         # dangling Employed By
         assert "fill_missing" in types         # employer via fife.com domain
         assert "merge" in types                # duplicate Josh Katzin (same email)
-        assert all(ch.execution_status in ("Planned (dry-run)", "Recommended")
+        # Nothing is ever written without a click, dry run or not — easy
+        # fixes land as "Planned (dry-run)", everything needing a reason
+        # (a fill, a merge) as "Proposed", pure information as "Recommended".
+        assert all(ch.execution_status in ("Planned (dry-run)", "Proposed",
+                                           "Recommended")
                    for ch in changes)
+        # A merge always says why it's confident enough to propose, however
+        # sure the match — here, an exact shared identifier.
+        merge = next(ch for ch in changes if ch.change_type == "merge")
+        assert "identifier" in merge.reason
         # Stages narrate the phases; events feed the game.
         assert any(s["label"] == "Scanning" for s in j["stages"])
         assert j["partial"]["events"]
@@ -103,54 +174,101 @@ class TestDryRun:
         run_felix(tmp_path, dry=True)
         assert store.list_all_changes(base=tmp_path, change_type="merge") == []
 
+    def test_the_cap_spans_runs_via_the_real_backlog(self, tmp_path):
+        """A run starting while the complex queue is already full must stop
+        at the very next complex finding rather than piling ten more on top
+        of it — but easy fixes are exempt from the cap entirely, so all of
+        those still show up regardless."""
+        for i in range(10):
+            seed_change(tmp_path, i)
+        j, out = run_felix(tmp_path, dry=True)
+        assert out["counts"]["stopped_at_cap"] >= 10
+        changes = store.list_all_changes(base=tmp_path, limit=500)
+        this_run = [ch for ch in changes if ch.run_id == out["run_id"]]
+        # The cap check runs AFTER recording (findings += 1 then compare), so
+        # the one complex finding that crosses the threshold is still filed
+        # — that is what stops the run — but nothing beyond it is.
+        complex_this_run = [ch for ch in this_run
+                            if ch.change_type not in runmod.EASY_CHANGE_TYPES]
+        assert len(complex_this_run) == 1
+        # Formatting/relation fixes were filed anyway — uncapped.
+        assert any(ch.change_type in runmod.EASY_CHANGE_TYPES for ch in this_run)
+
 
 class TestLiveMock:
-    def test_live_run_applies_and_snapshots(self, tmp_path):
+    def test_a_live_run_still_only_proposes_nothing_applies(self, tmp_path):
+        """dry_run=False no longer means "write it" — a run of any kind only
+        ever files change-log rows; approving each one is what applies it
+        (see api/main.py's felix_review, or execute.apply_change directly)."""
         j, out = run_felix(tmp_path, dry=False)
         c = out["counts"]
-        assert c["applied"] > 0 and c["planned"] == 0
-        applied = store.list_all_changes(base=tmp_path, status="Applied")
-        assert applied
-        # Every applied non-merge change has its snapshot on disk.
-        # (merge children are covered by the parent's merge snapshot)
-        simple = [ch for ch in applied
+        assert c["applied"] == 0
+        assert c["planned"] > 0    # the easy fixes (formatting, relation)
+        assert c["proposed"] > 0   # the fill and the merge
+        assert store.list_all_changes(base=tmp_path, status="Applied") == []
+        # Every property-change proposal has its snapshot on disk so
+        # approving it later applies exactly what was planned here.
+        simple = [ch for ch in store.list_all_changes(base=tmp_path, limit=500)
                   if ch.change_type in ("fix_formatting", "fix_relation",
-                                        "fill_missing")
-                  and not ch.parent_change_id]
+                                        "fill_missing")]
         assert simple
         for ch in simple:
             assert store.load_snapshot(ch.change_id, base=tmp_path) is not None
 
-    def test_max_writes_defers_overflow(self, tmp_path):
+    def test_easy_fixes_are_not_limited_by_max_writes(self, tmp_path):
+        """max_writes no longer gates proposal creation for formatting/icon/
+        relation fixes — only options.max_findings does, and easy fixes are
+        exempt from that cap too (see EASY_CHANGE_TYPES)."""
         j, out = run_felix(tmp_path, dry=True, max_writes=1)
-        assert out["counts"]["deferred"] >= 1
+        easy = [ch for ch in store.list_all_changes(base=tmp_path, limit=500)
+                if ch.change_type in runmod.EASY_CHANGE_TYPES]
+        assert len(easy) > 1
+        assert out["counts"]["deferred"] == 0
 
 
 class TestUndo:
+    """Undo only ever acts on an APPLIED change. Nothing a run files is
+    applied on its own any more — these approve a proposal first (the same
+    call felix_review makes, minus the API layer) before exercising undo."""
+
+    def _approve_first(self, base, change_type="fix_formatting"):
+        ch = store.list_all_changes(base=base, change_type=change_type)[0]
+        snap = store.load_snapshot(ch.change_id, base=base)
+        return execute.apply_change(
+            NotionConnector(), ch, snap["planned"],
+            expect_prop=snap.get("expect_prop", ""),
+            scanned_plain=snap.get("scanned_plain"), dry_run=False,
+            scanned_raw=snap.get("scanned_raw"), base=base)
+
     def test_undo_restores_from_snapshot(self, tmp_path):
-        run_felix(tmp_path, dry=False)
-        ch = store.list_all_changes(base=tmp_path, status="Applied",
-                                    change_type="fix_formatting")[0]
-        out = undo.undo_change(NotionConnector(), ch.change_id, base=tmp_path)
+        run_felix(tmp_path, dry=True)
+        applied = self._approve_first(tmp_path)
+        assert applied.execution_status == "Applied"
+        out = undo.undo_change(NotionConnector(), applied.change_id, base=tmp_path)
         assert out["status"] == "Undone"
-        assert store.find_change(ch.change_id,
+        assert store.find_change(applied.change_id,
                                  base=tmp_path).execution_status == "Undone"
 
     def test_undo_refuses_without_snapshot(self, tmp_path):
-        run_felix(tmp_path, dry=False)
-        ch = store.list_all_changes(base=tmp_path, status="Applied",
-                                    change_type="fix_formatting")[0]
-        snap = tmp_path / "snapshots" / f"{ch.change_id}.json"
+        run_felix(tmp_path, dry=True)
+        applied = self._approve_first(tmp_path)
+        snap = tmp_path / "snapshots" / f"{applied.change_id}.json"
         snap.unlink()
-        out = undo.undo_change(NotionConnector(), ch.change_id, base=tmp_path)
+        out = undo.undo_change(NotionConnector(), applied.change_id, base=tmp_path)
         assert "manual restore required" in out["result"]
-        assert store.find_change(ch.change_id,
+        assert store.find_change(applied.change_id,
                                  base=tmp_path).execution_status == "Applied"
 
     def test_undo_merge_roundtrip(self, tmp_path):
-        run_felix(tmp_path, dry=False)
-        merge = store.list_all_changes(base=tmp_path, change_type="merge")[0]
-        assert merge.execution_status == "Applied"
+        run_felix(tmp_path, dry=True)
+        proposal = store.list_all_changes(base=tmp_path, change_type="merge")[0]
+        assert proposal.execution_status == "Proposed"    # never auto-merged
+        pair = json.loads(proposal.detail)["pair"]
+        out = runmod.merge_pair_now(NotionConnector(), pair, proposal.database,
+                                    source="test", reason="test", base=tmp_path)
+        assert out["status"] == "Applied"
+        merge = store.list_all_changes(base=tmp_path, change_type="merge",
+                                       status="Applied")[0]
         out = undo.undo_merge(NotionConnector(), merge.change_id, base=tmp_path)
         assert out["status"] == "Undone"
 

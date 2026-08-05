@@ -42,7 +42,11 @@ from src.features import managers, notion_sync, transcript_library
 from src.features.felix import store as felix_store
 from src.features.felix import undo as felix_undo
 from src.features.felix.models import RunOptions as FelixRunOptions
-from src.features.felix.run import felix_run
+from src.features.felix.run import (
+    COMPLEX_CASE_LOW_WATERMARK,
+    complex_case_backlog,
+    felix_run,
+)
 from src.features.dedupe import dedupe_entity, domain_of, match_company, match_contact
 from src.features.draft_reply import generate_draft_options
 from src.features.inbox_triage import TRIAGE_BATCH_SIZE, triage_email, triage_email_batch
@@ -2284,11 +2288,15 @@ _FELIX_TOPUP = {"last": 0.0}
 
 
 def _felix_topup_if_low():
-    """Clearing the last outstanding decision powers Felix up again.
+    """Clearing decisions off the complex side of the queue powers Felix up
+    again on its own.
 
-    A run stops at ten findings, so the queue empties only when the user has
-    worked through all of them — that is the moment to go looking for the next
-    ten. While anything is still waiting, Felix stays put.
+    A run stops at ten complex findings (options.max_findings) — easy fixes
+    (formatting, icons, dangling relations) never contribute to that count
+    and never block or trigger this. Below COMPLEX_CASE_LOW_WATERMARK, not
+    only zero, so a queue sitting at 9 doesn't retrigger a search every time
+    one decision clears — see run.py's should_research_now for the run-time
+    half of this same watermark.
     """
     if time.time() - _FELIX_TOPUP["last"] < 120:
         return
@@ -2296,11 +2304,7 @@ def _felix_topup_if_low():
         if any(j["kind"] == "felix" and j["status"] == "running"
                for j in _JOBS.values()):
             return
-    waiting = [c for c in felix_store.list_all_changes(
-                   review="Awaiting Review", limit=300)
-               if c.execution_status in ("Proposed", "Recommended",
-                                         "Planned (dry-run)")]
-    if waiting:
+    if complex_case_backlog() >= COMPLEX_CASE_LOW_WATERMARK:
         return
     client = _client()
     if client is None:
