@@ -37,6 +37,16 @@ _FUNDS_SCAN_PROPS = ["Fund Name", "Name", "Asset Class", "Geographic Focus",
 # that swamped the adjudicator and starved real contact duplicates.
 DEDUPE_DBS = ("contacts", "companies", "funds")
 
+# An ordinary (non-web-research) run never spends a CLI call adjudicating a
+# never-before-seen fuzzy pair — see the comment where this is used. Above
+# this score, a pair is surfaced to the pending-research queue on name
+# similarity alone, no model opinion; below it, the pair simply stays quiet
+# until a Research run (or a future cache hit) actually adjudicates it.
+# Deliberately higher than detect.REVIEW_THRESHOLD (0.72, the bar for being a
+# candidate at all) — that threshold only decides what's worth a model's
+# attention, not what's confident enough to show a person with no check.
+PENDING_WITHOUT_MODEL_THRESHOLD = 0.85
+
 _DB_IDS = {
     "contacts": lambda: config.NOTION_CONTACTS_DB,
     "companies": lambda: config.NOTION_COMPANIES_DB,
@@ -142,6 +152,13 @@ def _clip(text: str, limit: int = 900) -> str:
 
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
+
+
+def _worth_pending_without_model(pair: dict) -> bool:
+    """Whether an ordinary run should surface an uncached fuzzy pair to the
+    pending-research queue on name-similarity score alone, with no model
+    opinion spent on it — see PENDING_WITHOUT_MODEL_THRESHOLD."""
+    return bool(pair.get("contested")) or pair["score"] >= PENDING_WITHOUT_MODEL_THRESHOLD
 
 
 def _stage(job: dict, label: str, detail: str = "") -> None:
@@ -698,6 +715,20 @@ def _felix_run(job: dict, notion, client, options: RunOptions,
     # at the run's original point, with whatever write/merge budget remains.
     planned, merges = [], []
 
+    # An ordinary run spends nothing on the web: it lists what it could not
+    # settle and waits to be asked. Defined here (not lower down, where this
+    # used to live) because the ordinary-run fuzzy-pair path below now needs
+    # it too.
+    pending: list[dict] = []
+
+    def defer_to_web(kind: str, card: dict, field: str = "",
+                     detail: str = "") -> None:
+        pending.append({"kind": kind, "database": card.get("db", ""),
+                        "record_id": card.get("id", ""),
+                        "record_name": card.get("name", ""),
+                        "record_url": card.get("url", ""),
+                        "field": field, "detail": detail})
+
     # ---- Phase 4: LLM adjudication ----------------------------------------- #
     fuzzy_all = list(contested_pairs)   # same name, contradicting records
     for key, cards in cards_by_db.items():
@@ -729,6 +760,24 @@ def _felix_run(job: dict, notion, client, options: RunOptions,
             to_research.append((p, {"verdict": cached["verdict"],
                                     "reason": cached.get("reason", "")
                                              or "cached from an earlier run"}))
+
+    # An ordinary run pays nothing for a model opinion on a pair that has
+    # never been adjudicated: even a duplicate/unsure verdict only becomes a
+    # pending-research item below, never a written change, and (before the
+    # cache above existed) a distinct verdict was thrown away unpersisted —
+    # so the call bought nothing an ordinary run could keep. Skip it outright
+    # and defer by name-similarity score alone; anything below the higher
+    # bar stays silent rather than surfaced with no check of any kind, and a
+    # Research run still adjudicates it properly with the model AND the web.
+    if still_uncached and not options.web_research:
+        for p in still_uncached:
+            if _worth_pending_without_model(p):
+                why = p.get("contested")
+                defer_to_web("duplicate", p["a"], "(possible duplicate)",
+                             f"may duplicate '{p['b']['name']}' — "
+                             + (f"same name, but {why}. " if why else "")
+                             + f"name similarity {p['score']} (not yet checked)")
+        still_uncached = []
     fuzzy_all = still_uncached
 
     # The cap applies here too, not just to what gets WRITTEN: adjudicating a
@@ -760,18 +809,6 @@ def _felix_run(job: dict, notion, client, options: RunOptions,
             to_research.append((p, verdict))
         elif v == "deferred":
             counts["deferred"] += 1
-
-    # An ordinary run spends nothing on the web: it lists what it could not
-    # settle and waits to be asked.
-    pending: list[dict] = []
-
-    def defer_to_web(kind: str, card: dict, field: str = "",
-                     detail: str = "") -> None:
-        pending.append({"kind": kind, "database": card.get("db", ""),
-                        "record_id": card.get("id", ""),
-                        "record_name": card.get("name", ""),
-                        "record_url": card.get("url", ""),
-                        "field": field, "detail": detail})
 
     research_budget = (options.max_research
                        if client is not None and options.web_research else 0)

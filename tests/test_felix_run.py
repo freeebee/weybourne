@@ -1,6 +1,7 @@
 """End-to-end pipeline in mock mode: the full dry run, live-mode execution
 against the mock connector, and the undo engine's conflict discipline."""
 from src.connectors.notion_client import NotionConnector
+from src.features.felix import run as runmod
 from src.features.felix import store, undo
 from src.features.felix.models import RunOptions
 from src.features.felix.run import felix_run
@@ -15,6 +16,29 @@ def run_felix(base, dry=True, client=None, **opt):
     out = felix_run(j, NotionConnector(), client,
                     RunOptions(dry_run=dry, **opt), base=base)
     return j, out
+
+
+class TestPendingWithoutModel:
+    """An ordinary run's cheap, no-model-call decision on whether an
+    uncached fuzzy pair is confident enough to surface as-is."""
+
+    def test_a_contested_same_name_pair_always_qualifies(self):
+        # score alone would not clear the bar, but a same-name group is its
+        # own strong signal regardless of the raw similarity score.
+        pair = {"score": 0.5, "contested": "different employers"}
+        assert runmod._worth_pending_without_model(pair)
+
+    def test_a_high_score_pair_qualifies(self):
+        assert runmod._worth_pending_without_model({"score": 0.9})
+
+    def test_a_borderline_review_threshold_score_does_not_qualify(self):
+        # 0.72 clears detect.REVIEW_THRESHOLD (worth a model's attention)
+        # but not the higher bar for showing it with none at all.
+        assert not runmod._worth_pending_without_model({"score": 0.72})
+
+    def test_exactly_at_the_threshold_qualifies(self):
+        assert runmod._worth_pending_without_model(
+            {"score": runmod.PENDING_WITHOUT_MODEL_THRESHOLD})
 
 
 class TestStageTimings:
