@@ -15,7 +15,7 @@ from __future__ import annotations
 import hashlib
 
 from src.connectors.notion_client import plain_value, relation_ids
-from src.features.dedupe import _name_score, _squash, domain_of
+from src.features.dedupe import _name_score, _squash, domain_of, normalize_name, vintage_of
 
 REVIEW_THRESHOLD = 0.72
 
@@ -203,22 +203,127 @@ def find_exact_duplicate_groups(cards: list[dict]) -> list[dict]:
     return out
 
 
+def _trigrams(s: str) -> set[str]:
+    if len(s) < 3:
+        return {s} if s else set()
+    return {s[i:i + 3] for i in range(len(s) - 2)}
+
+
+def _domain_bucket(active: list[dict]) -> dict[tuple, list[int]]:
+    buckets: dict[tuple, list[int]] = {}
+    for i, c in enumerate(active):
+        if c["domain"] and c["domain"] not in GENERIC_DOMAINS:
+            buckets.setdefault(("dom", c["domain"]), []).append(i)
+    return buckets
+
+
+def _contact_buckets(active: list[dict]) -> dict[tuple, list[int]]:
+    """Squashed SURNAME, not first name or full-name prefix — a shared first
+    name (or a full-name prefix, which for "First Last" names is nearly the
+    same thing) is shared by too many unrelated people to mean anything on
+    its own. No domain bucket here: two contacts sharing a corporate domain
+    almost always have two DIFFERENT addresses at it, which the "distinct
+    identifiers" check below already excludes outright — domain alone
+    cannot produce a surviving contact pair, only wasted comparisons.
+    Surname matches still need corroboration — see _contact_pair_allowed —
+    before they become a pair."""
+    buckets: dict[tuple, list[int]] = {}
+    for i, c in enumerate(active):
+        toks = c["name"].split()
+        sn = _squash(toks[-1]) if toks else ""
+        if sn:
+            buckets.setdefault(("surname", sn), []).append(i)
+    return buckets
+
+
+def _contact_pair_allowed(a: dict, b: dict) -> bool:
+    """A shared surname alone is not evidence two contacts are the same
+    person (there are a lot of Smiths) — require a shared employer relation
+    too. (Not a shared email domain: by the time two contacts share one,
+    they necessarily have two DIFFERENT addresses at it, which the caller's
+    "distinct identifiers" check has already excluded before this runs.)"""
+    return bool(employers_of(a) & employers_of(b))
+
+
+def _company_buckets(active: list[dict]) -> dict[tuple, list[int]]:
+    """Character trigrams of the legal-name-normalised name (noise tokens
+    like "LLC"/"Capital"/"Partners" stripped, so an entity-suffix difference
+    does not change the trigram set), on top of the domain blocking every
+    type gets. A trigram match does not require the similarity to start at
+    character 1 the way the old squashed-4-char-prefix bucket did, so
+    "The Northwind Group" and "Northwind Capital" now block together."""
+    buckets = _domain_bucket(active)
+    by_trigram: dict[str, list[int]] = {}
+    for i, c in enumerate(active):
+        for tg in _trigrams(_squash(normalize_name(c["name"]))):
+            by_trigram.setdefault(tg, []).append(i)
+    for tg, members in by_trigram.items():
+        if len(members) > 1:
+            buckets[("tri", tg)] = members
+    return buckets
+
+
+def _fund_pair_allowed(a: dict, b: dict) -> bool:
+    """Fund I is not Fund II however similar the rest of the name — unless
+    the two also share a manager relation, which is corroborating evidence
+    this is the same fund entered twice with a reformatted vintage rather
+    than two real vintages of one franchise."""
+    va, vb = vintage_of(a["name"]), vintage_of(b["name"])
+    if va and vb and va != vb:
+        return bool(employers_of(a) & employers_of(b))
+    return True
+
+
+def _mutual_nearest(pairs: list[dict], top_k: int = 3) -> list[dict]:
+    """Keep a pair only if each side is among THAT SIDE's own best `top_k`
+    matches by score — not merely someone who cleared the review threshold.
+    A large blocking pool can produce candidates that are technically above
+    threshold but far from either record's best option; those are exactly
+    what swamp the adjudicator with volume instead of quality. ``pairs`` is
+    expected already sorted by descending score."""
+    if not pairs:
+        return pairs
+    by_id: dict[str, list[dict]] = {}
+    for p in pairs:
+        by_id.setdefault(p["a"]["id"], []).append(p)
+        by_id.setdefault(p["b"]["id"], []).append(p)
+    top_ids: dict[str, set[int]] = {
+        rid: {id(p) for p in sorted(plist, key=lambda p: -p["score"])[:top_k]}
+        for rid, plist in by_id.items()
+    }
+    return [p for p in pairs
+            if id(p) in top_ids[p["a"]["id"]] and id(p) in top_ids[p["b"]["id"]]]
+
+
 def find_fuzzy_duplicate_pairs(cards: list[dict],
                                threshold: float = REVIEW_THRESHOLD) -> list[dict]:
     """Similar-but-not-identical pairs for the adjudicator, via blocking —
-    candidates only compared inside shared buckets (squashed 4-char prefix,
-    email domain, first name token), never all-pairs."""
-    buckets: dict[tuple, list[int]] = {}
+    candidates only compared inside shared buckets, never all-pairs.
+    Blocking is tuned per database (see _contact_buckets/_company_buckets):
+    contacts require surname + a shared employer relation rather than a
+    bare first-name or full-name-prefix match; companies block on
+    legal-name-normalised trigrams as well as domain; funds keep the plain
+    blocking but drop pairs whose names carry explicitly different vintages
+    unless they share a manager. Whatever clears that is then narrowed to
+    MUTUAL nearest matches (_mutual_nearest): each side keeps a candidate
+    only if it is genuinely among that side's own best options, not just
+    anyone above the score threshold.
+    """
     active = [c for c in cards if not c["archived"] and c["name"]]
-    for i, c in enumerate(active):
-        sq = _squash(c["name"])
-        if sq:
-            buckets.setdefault(("pre", sq[:4]), []).append(i)
-        if c["domain"] and c["domain"] not in GENERIC_DOMAINS:
-            buckets.setdefault(("dom", c["domain"]), []).append(i)
-        first = c["name"].lower().split()[0] if c["name"].split() else ""
-        if len(first) > 2:
-            buckets.setdefault(("tok", first), []).append(i)
+    if not active:
+        return []
+    db = active[0].get("db", "")
+    if db == "contacts":
+        buckets = _contact_buckets(active)
+    elif db == "companies":
+        buckets = _company_buckets(active)
+    else:
+        buckets = _domain_bucket(active)
+        for i, c in enumerate(active):
+            sq = _squash(c["name"])
+            if sq:
+                buckets.setdefault(("pre", sq[:4]), []).append(i)
+
     seen: set[tuple] = set()
     out = []
     for members in buckets.values():
@@ -233,11 +338,15 @@ def find_fuzzy_duplicate_pairs(cards: list[dict],
                     continue                     # exact — handled elsewhere
                 if a["email"] and b["email"] and a["email"] != b["email"]:
                     continue                     # distinct identifiers
+                if db == "contacts" and not _contact_pair_allowed(a, b):
+                    continue
+                if db == "funds" and not _fund_pair_allowed(a, b):
+                    continue
                 score = _name_score(a["name"], b["name"])
                 if score >= threshold:
                     out.append({"a": a, "b": b, "score": round(score, 3)})
     out.sort(key=lambda p: -p["score"])
-    return out
+    return _mutual_nearest(out)
 
 
 def choose_survivor(cards: list[dict]) -> tuple[dict, list[dict]]:

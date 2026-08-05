@@ -107,6 +107,110 @@ class TestFuzzyPairs:
                  card("b", name="Zephyr Partners", email=None)]
         assert detect.find_fuzzy_duplicate_pairs(cards) == []
 
+    def test_a_similar_company_name_missed_by_a_prefix_only_bucket_still_pairs(self):
+        # Squashed 4-char prefixes ("then"/"nort") differ, so the old
+        # prefix-only blocking would never have compared these — the
+        # legal-name-normalised trigram bucket does.
+        cards = [card("a", db="companies", name="The Northwind Group", email=None),
+                 card("b", db="companies", name="Northwind Capital", email=None)]
+        pairs = detect.find_fuzzy_duplicate_pairs(cards)
+        assert len(pairs) == 1
+
+
+class TestContactBlocking:
+    """Contacts need surname + domain/employer corroboration to block, not
+    a bare shared first name (or a full-name prefix, which is nearly the
+    same thing for typical "First Last" names)."""
+
+    def test_shared_first_name_alone_never_pairs(self):
+        cards = [card("a", name="John Adams", email="john@alpha.com"),
+                 card("b", name="John Baker", email="john@beta.com")]
+        assert detect.find_fuzzy_duplicate_pairs(cards) == []
+
+    def test_shared_surname_with_no_corroboration_does_not_pair(self):
+        cards = [card("a", name="Jon Smith", email="jon@alpha.com"),
+                 card("b", name="Jonathan Smith", email="jonathan@beta.com")]
+        assert detect.find_fuzzy_duplicate_pairs(cards) == []
+
+    def test_a_shared_domain_alone_does_not_override_distinct_emails(self):
+        # Two contacts sharing a corporate domain necessarily have two
+        # DIFFERENT addresses at it — the pre-existing "distinct
+        # identifiers" rule (different non-empty emails => not a pair)
+        # already excludes this regardless of the shared domain.
+        cards = [card("a", name="Jon Smith", email="jon@acme.com"),
+                 card("b", name="Jonathan Smith", email="jonathan@acme.com")]
+        assert detect.find_fuzzy_duplicate_pairs(cards) == []
+
+    def test_shared_surname_and_employer_relation_pairs_even_without_email(self):
+        cards = [card("a", name="Jon Smith", email=None,
+                      relations={"Employed By": ["co1"]}),
+                 card("b", name="Jonathan Smith", email=None,
+                      relations={"Employed By": ["co1"]})]
+        pairs = detect.find_fuzzy_duplicate_pairs(cards)
+        assert len(pairs) == 1
+
+
+class TestFundBlocking:
+    """Explicit different vintages (Fund I vs Fund II) block a pair unless a
+    shared manager corroborates it's the same fund entered twice."""
+
+    def test_different_vintages_do_not_pair(self):
+        cards = [card("a", db="funds", name="Piting Capital Fund I", email=None),
+                 card("b", db="funds", name="Piting Capital Fund II", email=None)]
+        assert detect.find_fuzzy_duplicate_pairs(cards) == []
+
+    def test_different_vintages_with_a_shared_manager_still_pair(self):
+        cards = [card("a", db="funds", name="Piting Capital Fund I", email=None,
+                      relations={"Company": ["co1"]}),
+                 card("b", db="funds", name="Piting Capital Fund II", email=None,
+                      relations={"Company": ["co1"]})]
+        pairs = detect.find_fuzzy_duplicate_pairs(cards)
+        assert len(pairs) == 1
+
+    def test_same_vintage_pairs_normally(self):
+        cards = [card("a", db="funds", name="Piting Capital Fund I", email=None),
+                 card("b", db="funds", name="Piting Capital Fund 1", email=None)]
+        pairs = detect.find_fuzzy_duplicate_pairs(cards)
+        assert len(pairs) == 1
+
+
+class TestMutualNearest:
+    """Each side of a surviving pair must consider the other among its own
+    best few options — not merely someone above the review threshold."""
+
+    @staticmethod
+    def _pair(a_id, b_id, score):
+        return {"a": {"id": a_id}, "b": {"id": b_id}, "score": score}
+
+    def test_a_pair_outside_either_sides_top_k_is_dropped(self):
+        pairs = sorted([
+            self._pair("x", "a", 0.95),
+            self._pair("x", "b", 0.90),
+            self._pair("x", "c", 0.85),
+            self._pair("x", "weak", 0.72),
+        ], key=lambda p: -p["score"])
+        out = detect._mutual_nearest(pairs, top_k=3)
+        assert {(p["a"]["id"], p["b"]["id"]) for p in out} == \
+            {("x", "a"), ("x", "b"), ("x", "c")}
+
+    def test_a_pair_within_both_sides_top_k_survives(self):
+        pairs = [self._pair("x", "y", 0.9)]
+        assert detect._mutual_nearest(pairs, top_k=3) == pairs
+
+    def test_one_sided_room_is_not_enough(self):
+        # "y" has no other matches (trivially in its own top-k), but "x" has
+        # three stronger matches elsewhere, pushing (x, y) out of x's top-3.
+        pairs = sorted([
+            self._pair("x", "y", 0.72),
+            self._pair("x", "p", 0.95),
+            self._pair("x", "q", 0.90),
+            self._pair("x", "r", 0.85),
+        ], key=lambda p: -p["score"])
+        out = detect._mutual_nearest(pairs, top_k=3)
+        ids = {(p["a"]["id"], p["b"]["id"]) for p in out}
+        assert ("x", "y") not in ids
+        assert len(ids) == 3
+
 
 class TestSurvivorAndTransfers:
     def test_survivor_prefers_relations_then_fill(self):
