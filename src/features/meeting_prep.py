@@ -20,6 +20,7 @@ page passes one in; tests pass a stub).
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +33,35 @@ from src.features.web_research import research_block
 from src.schemas import CalendarEvent, MeetingPrep
 
 INTERNAL_DOMAIN = "weybourneholdings.com"
+
+# Weybourne's own people, across every domain the group uses. A meeting with
+# only these is an internal one: there is no counterparty to research and no
+# preferences to screen against, so prep works off what we have said to each
+# other instead. Override with WEYBOURNE_INTERNAL_DOMAINS (comma-separated).
+INTERNAL_DOMAINS = tuple(
+    d.strip().lower() for d in os.environ.get(
+        "WEYBOURNE_INTERNAL_DOMAINS",
+        "weybourneholdings.com,weybourne.co.uk,weybournepartners.com,"
+        "weybourne.com,tarenna.com,tarenna.co.uk",
+    ).split(",") if d.strip()
+)
+# Some invitations carry a name and no address. These read as internal.
+INTERNAL_NAME_TOKENS = ("weybourne", "tarenna")
+
+
+def is_internal(email: str = "", name: str = "") -> bool:
+    """Is this attendee one of ours?
+
+    Matched on the email domain first — the reliable signal — and on the name
+    only when there is no address to go on.
+    """
+    addr = (email or "").strip().lower()
+    if "@" in addr:
+        domain = addr.rsplit("@", 1)[1].strip(" ;,<>")
+        return any(domain == d or domain.endswith("." + d) for d in INTERNAL_DOMAINS)
+    if addr:
+        return any(tok in addr for tok in INTERNAL_NAME_TOKENS)
+    return any(tok in (name or "").lower() for tok in INTERNAL_NAME_TOKENS)
 
 PREP_SCHEMA = {
     "type": "object",
@@ -92,6 +122,10 @@ class PrepContext:
     notion_context: str = ""
     document_text: str = ""
     web_context: str = ""
+    # A meeting with our own people. There is nothing to research and nothing
+    # to screen; the prep is built from what we have been mailing each other.
+    internal: bool = False
+    email_context: str = ""
     sources: list[str] = None  # type: ignore[assignment]
 
     def __post_init__(self):
@@ -107,20 +141,38 @@ def external_attendees(event: CalendarEvent, internal_domain: str = INTERNAL_DOM
     """Attendees who are not internal to Weybourne."""
     out = []
     for a in event.attendees:
-        email = (a.email or "").lower()
-        if email and internal_domain in email:
+        if not (a.email or "") and not a.name:
             continue
-        if not email and not a.name:
+        if is_internal(a.email or "", a.name or ""):
             continue
         out.append(a)
     return out
 
 
+def event_is_internal(event: CalendarEvent) -> bool:
+    """A meeting with no outside attendee at all.
+
+    An invitation with no attendee list is NOT called internal: a calendar
+    entry someone typed for themselves ("GP meeting — Old Well Labs") is the
+    commonest way a prep gets requested, and the name in the subject is the
+    counterparty.
+    """
+    return bool(event.attendees) and not external_attendees(event)
+
+
 def counterparty_from_event(event: CalendarEvent) -> tuple[str, str]:
-    """Return (name, email) of the most likely external counterparty."""
+    """Return (name, email) of whoever the prep is about.
+
+    Normally the outside party. For an internal meeting there is no outside
+    party, so it returns the colleague — the prep is then built from what we
+    have already said to each other rather than from research.
+    """
     externals = external_attendees(event)
     if externals:
         return externals[0].name or externals[0].email, externals[0].email
+    if event.attendees:
+        a = event.attendees[0]
+        return (a.name or a.email or "", a.email or "")
     # Fall back to parsing the subject, e.g. "GP meeting — Old Well Labs".
     subject = re.split(r"[—\-–:|]", event.subject)
     return (subject[-1].strip() if len(subject) > 1 else event.subject.strip()), ""
@@ -195,6 +247,21 @@ def extract_pdf_text(path: Path, max_pages: int = 20) -> str:
         doc.close()
 
 
+def format_email_history(messages: list, limit: int = 12) -> str:
+    """Recent mail with one person, as prep material.
+
+    Bodies are trimmed hard: twelve threads at full length swamps everything
+    else in the prompt, and the opening of a mail carries the ask.
+    """
+    lines = []
+    for m in messages[:limit]:
+        body = " ".join((m.body or m.body_preview or "").split())[:700]
+        lines.append(
+            f"[{(m.received or '')[:10]}] {m.subject or '(no subject)'} "
+            f"— from {m.sender_name or m.sender_email}\n{body}")
+    return "\n\n".join(lines)
+
+
 def build_context(
     notion: NotionConnector,
     counterparty_name: str,
@@ -203,18 +270,36 @@ def build_context(
     event: Optional[CalendarEvent] = None,
     pdf_path: Optional[Path] = None,
     research: Optional[Callable[[str], str]] = None,
+    internal: bool = False,
+    emails: Optional[Callable[[str], list]] = None,
 ) -> PrepContext:
     """Assemble all available context for a counterparty."""
     company = company_name or company_from_email_domain(counterparty_email)
+    if internal:
+        company = ""      # a colleague's employer is us
     ctx = PrepContext(
         counterparty_name=counterparty_name,
         counterparty_email=counterparty_email,
         company_name=company,
         meeting_subject=event.subject if event else "",
         meeting_time=event.start if event else "",
+        internal=internal,
     )
 
     ctx.notion_context, ctx.sources = gather_notion_context(notion, counterparty_name, company)
+
+    # Internal meeting: the agenda is whatever is outstanding between the two
+    # of you, and that lives in the mailbox rather than in a research report.
+    if internal and emails is not None:
+        try:
+            found = emails(counterparty_email or counterparty_name)
+            ctx.email_context = format_email_history(found)
+            if found:
+                ctx.sources.append(
+                    f"Outlook: {len(found)} recent message(s) with "
+                    f"{counterparty_name or counterparty_email}")
+        except Exception as e:  # noqa: BLE001 - prep must not fail over its extras
+            ctx.email_context = f"(could not read the mail history: {e})"
 
     if pdf_path is not None:
         try:

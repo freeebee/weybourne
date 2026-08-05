@@ -46,7 +46,12 @@ from src.features.felix.run import felix_run
 from src.features.dedupe import dedupe_entity, domain_of, match_company, match_contact
 from src.features.draft_reply import generate_draft_options
 from src.features.inbox_triage import triage_email
-from src.features.meeting_prep import build_context, counterparty_from_event
+from src.features.meeting_prep import (
+    build_context,
+    counterparty_from_event,
+    event_is_internal,
+    is_internal,
+)
 from src.features.preferences import screen_opportunity
 from src.features.web_research import (
     age_days,
@@ -1111,7 +1116,8 @@ def calendar(days: int = 21, back: int = 0):
     for e in sorted(events, key=lambda ev: ev.start or ""):
         name, email = counterparty_from_event(e)
         out.append({**e.model_dump(), "counterparty_name": name,
-                    "counterparty_email": email})
+                    "counterparty_email": email,
+                    "internal": event_is_internal(e)})
     return {"events": out}
 
 
@@ -1307,11 +1313,18 @@ async def start_prep_job(
     want_screen = include_screen == "1"
     client = _client()   # fail fast with a clear 503 before creating the job
 
+    # Weybourne, Weybourne Partners and Tarenna addresses are our own people.
+    # A meeting with only those has no counterparty: nothing to research, and
+    # nothing to screen against the preference pages.
+    internal = bool(ev and event_is_internal(ev)) or is_internal(email, name)
+
     def work(job: dict):
         from src.features.brief_builder import synthesize_briefing
 
-        job["stages"].append({"label": "Resolve the counterparty",
-                              "detail": name + (f" ({email})" if email else "")})
+        job["stages"].append({
+            "label": "Resolve the counterparty",
+            "detail": (f"{name} — internal meeting, no outside party"
+                       if internal else name + (f" ({email})" if email else ""))})
         # Announce the Notion read BEFORE doing it: a cold cache pull over a
         # 10k-record workspace takes minutes, and without this stage the job
         # looks stuck on "Resolve the counterparty".
@@ -1328,25 +1341,52 @@ async def start_prep_job(
         # does the research inline. A stub that returns "" used to log a
         # "Web research:" source for a search that never happened.
         research=None,
+            internal=internal,
+            emails=(lambda who: _graph.messages_with(who)) if internal else None,
         )
         notion_note = "live Notion" if _notion.live else "sample data — not your live Notion"
         deck_note = (f"deck read ({len(ctx.document_text):,} chars)"
                      if ctx.document_text else "no deck attached")
-        # One research pass, before the fork — so the screen and the briefing
-        # read the same facts, and so running one of them later reuses rather
-        # than repeats the searches.
-        job["stages"].append({"label": "Background research",
-                              "detail": "checking for research already gathered "
-                                        "on this firm"})
-        _checkpoint(job)
-        job["stages"][-1]["detail"] = _attach_research(ctx, name, company)
+        if internal:
+            # Nothing to look up about a colleague. What the two of you have
+            # been mailing about is the agenda instead.
+            job["stages"].append({
+                "label": "Mail history",
+                "detail": (f"{ctx.email_context.count(chr(10) + chr(10)) + 1} recent "
+                           f"exchange(s) with {name}" if ctx.email_context
+                           else "no recent mail with them")})
+        else:
+            # One research pass, before the fork — so the screen and the briefing
+            # read the same facts, and so running one of them later reuses rather
+            # than repeats the searches.
+            job["stages"].append({"label": "Background research",
+                                  "detail": "checking for research already gathered "
+                                            "on this firm"})
+            _checkpoint(job)
+            job["stages"][-1]["detail"] = _attach_research(ctx, name, company)
         job["stages"].append({"label": "Context gathered",
                               "detail": f"{len(ctx.sources)} source(s) against {notion_note} · {deck_note}"})
 
         result: dict = {"kind": "prep", "entity": name,
-                        "email": email, "company": company}
+                        "email": email, "company": company,
+                        "internal": internal}
 
         def run_screen():
+            if internal:
+                # There is no opportunity here to screen. Saying so is the
+                # honest answer; running the preference pages against a
+                # colleague would manufacture a verdict out of nothing.
+                return {
+                    "internal": True,
+                    "sleeve": "",
+                    "overall_fit": "n/a",
+                    "summary": (
+                        f"{name} is at Weybourne, so this is an internal meeting. "
+                        "There is no counterparty to screen and no preference "
+                        "check to run."),
+                    "criteria": [], "facts": [],
+                    "non_fit_points": [], "open_questions": [],
+                }
             entity = ExtractedEntity(
                 fund_name=name, company_name=company or "",
                 contact_email=email,

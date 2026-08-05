@@ -316,6 +316,55 @@ class GraphConnector:
         )
         return [_email_from_graph(m) for m in data.get("value", [])]
 
+    def messages_with(self, person: str, top: int = 20,
+                      days: int = 120) -> list[EmailMessage]:
+        """Mail exchanged with one person, across the whole mailbox.
+
+        Used to prepare an internal meeting: there is nothing to research about
+        a colleague, but what the two of you have been mailing about is exactly
+        the context for the conversation. ``person`` is an address where one is
+        known, otherwise a name.
+        """
+        needle = (person or "").strip().lower()
+        if not needle:
+            return []
+        cutoff = _now() - dt.timedelta(days=days)
+
+        if not self.live:
+            pool: list[EmailMessage] = []
+            for path in (INBOX_SNAPSHOT, SHARED_INBOX_SNAPSHOT):
+                snap = _load_snapshot(path)
+                if snap:
+                    pool.extend(_email_from_snapshot(m) for m in snap)
+            if not pool:
+                pool = list(_SAMPLE_INBOX)
+            hits = [m for m in pool
+                    if needle in (m.sender_email or "").lower()
+                    or needle in (m.sender_name or "").lower()
+                    or needle in (m.body or "").lower()]
+            hits.sort(key=lambda m: m.received, reverse=True)
+            return hits[:top]
+
+        # $search understands KQL: participants covers from, to and cc, which
+        # is what "mail between us" means. It cannot be combined with $filter
+        # or $orderby, so the date window is applied here.
+        try:
+            data = self._get(
+                f"/users/{self.user}/messages",
+                params={
+                    "$search": f'"participants:{needle}"',
+                    "$top": max(top * 2, 25),
+                    "$select": "id,subject,from,receivedDateTime,bodyPreview,"
+                               "hasAttachments,webLink,body,parentFolderId",
+                },
+            )
+        except Exception:  # noqa: BLE001 - prep must not fail over its extras
+            return []
+        out = [_email_from_graph(m) for m in data.get("value", [])]
+        out = [m for m in out if _received_within(m.received, cutoff)]
+        out.sort(key=lambda m: m.received, reverse=True)
+        return out[:top]
+
     def create_reply_draft(self, message_id: str, comment: str) -> dict:
         """Create (but do not send) a reply draft for a message."""
         if not self.live:

@@ -244,6 +244,15 @@ export default function Prep() {
                     <span style={{ fontSize: "12.5px", color: "var(--stone-500)" }}>
                       {e.counterparty_name}{e.is_online ? " · online" : e.location ? ` · ${e.location}` : ""}
                     </span>
+                    {/* Everyone on the invitation is one of ours: the prep is
+                        built from your mail with them, and there is nothing to
+                        screen. Worth knowing before you press the button. */}
+                    {e.internal && (
+                      <span className="mono" style={{ fontSize: 10,
+                            letterSpacing: ".1em", color: "var(--brass-700)" }}>
+                        INTERNAL · NO OUTSIDE PARTY
+                      </span>
+                    )}
                   </span>
                 </div>
               ))}
@@ -391,7 +400,19 @@ export default function Prep() {
             </div>
           )}
 
-          {viewing?.result?.screen && (
+          {/* An internal meeting has no counterparty, so there is nothing to
+              screen. Rather than a table of empty verdicts, say so. */}
+          {viewing?.result?.screen?.internal ? (
+            <Card style={{ marginBottom: 12, padding: "14px 18px" }}>
+              <span className="microlabel" style={{ color: "var(--brass-700)" }}>
+                PREFERENCE CHECK · NOT APPLICABLE
+              </span>
+              <div style={{ fontSize: "13.5px", marginTop: 5,
+                            color: "var(--stone-600)" }}>
+                {viewing.result.screen.summary}
+              </div>
+            </Card>
+          ) : viewing?.result?.screen && (
             minimized.screen ? (
               <MinimizedBar label={`PREFERENCE SCREEN · ${(viewing.result.entity || viewing.name || "").toUpperCase()} · ${viewing.result.screen.overall_fit.toUpperCase()}`}
                 wide={wide} onToggleWide={() => setWide((w) => !w)}

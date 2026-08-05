@@ -208,21 +208,40 @@ no exclamation marks, no emoji. British English. Markdown fields may use short p
 hyphen bullets only."""
 
 
+INTERNAL_BRIEFING_NOTE = """THIS IS AN INTERNAL MEETING. The other person works at \
+Weybourne, so there is no counterparty to assess.
+
+- Do NOT run any web search, and do not write anything about the person's background, \
+their firm, or a strategy. There is no firm and no strategy: this is a colleague.
+- Build the briefing from the mail history below and from our own records. What have the \
+two of you been discussing, what was promised, what is outstanding, what decision is \
+waiting on whom.
+- The questions should be the things worth raising with THIS colleague at THIS meeting: \
+open threads, decisions needed, work you are waiting on. Not diligence questions.
+- Where the mail history is thin, say so plainly and keep the briefing short. A two-line \
+briefing that is true beats a page of padding."""
+
+
 def synthesize_briefing(client, ctx: PrepContext) -> dict:
     """Produce the structured briefing content for the kit."""
     user = (
         f"MEETING\nSubject: {ctx.meeting_subject or '(not from a calendar entry)'}\n"
         f"Time: {ctx.meeting_time or '(unspecified)'}\n"
-        f"Counterparty: {ctx.counterparty_name} <{ctx.counterparty_email}>\n"
-        f"Company: {ctx.company_name or '(unknown)'}\n\n"
-        f"OUR NOTION RECORDS\n{ctx.notion_context}\n\n"
+        + (f"Colleague: {ctx.counterparty_name} <{ctx.counterparty_email}>\n\n"
+           f"{INTERNAL_BRIEFING_NOTE}\n\n"
+           f"MAIL HISTORY WITH THEM\n{ctx.email_context or '(none found)'}\n\n"
+           if ctx.internal else
+           f"Counterparty: {ctx.counterparty_name} <{ctx.counterparty_email}>\n"
+           f"Company: {ctx.company_name or '(unknown)'}\n\n")
+        + f"OUR NOTION RECORDS\n{ctx.notion_context}\n\n"
         # Either a shared dossier is attached (searches done — don't repeat
         # them) or nothing is, in which case this call holds the tools and must
         # search. "(none gathered)" used to read as "the web was unavailable to
         # you", and briefings came back apologising for not verifying anything.
-        f"BACKGROUND RESEARCH\n{research_block(ctx.web_context)}\n\n"
-        f"ATTACHED DOCUMENT (deck)\n{ctx.document_text or '(none)'}\n\n"
-        f"KNOWN SOURCE LIST\n" + "\n".join(f"- {s}" for s in ctx.sources)
+        + ("" if ctx.internal else
+           f"BACKGROUND RESEARCH\n{research_block(ctx.web_context)}\n\n")
+        + f"ATTACHED DOCUMENT (deck)\n{ctx.document_text or '(none)'}\n\n"
+        + "KNOWN SOURCE LIST\n" + "\n".join(f"- {s}" for s in ctx.sources)
     )
     kwargs = dict(
         model=REASONING_MODEL,
@@ -231,15 +250,21 @@ def synthesize_briefing(client, ctx: PrepContext) -> dict:
         output_config={"format": {"type": "json_schema", "schema": BRIEFING_SCHEMA}},
         messages=[{"role": "user", "content": user}],
     )
-    try:
-        # The CLI backend can actually run web searches during synthesis —
-        # this is what fills the background-research and newsflow sections
-        # with post-deck reality instead of restating the deck.
-        response = client.messages.create(
-            **kwargs, extra_allowed_tools=["WebSearch", "WebFetch"])
-    except TypeError:
-        # API-backend clients don't take the kwarg — same call without it.
+    if ctx.internal:
+        # No tools at all for an internal meeting: there is nothing to look up
+        # about a colleague, and handing the model a search tool is an
+        # invitation to use it on a Weybourne employee's name.
         response = client.messages.create(**kwargs)
+    else:
+        try:
+            # The CLI backend can actually run web searches during synthesis —
+            # this is what fills the background-research and newsflow sections
+            # with post-deck reality instead of restating the deck.
+            response = client.messages.create(
+                **kwargs, extra_allowed_tools=["WebSearch", "WebFetch"])
+        except TypeError:
+            # API-backend clients don't take the kwarg — same call without it.
+            response = client.messages.create(**kwargs)
     raw = next((b.text for b in response.content if getattr(b, "type", None) == "text"), "")
     return json.loads(raw)
 
