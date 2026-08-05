@@ -27,6 +27,12 @@ data/research/
 web/node_modules/
 web/dist/
 
+# Playwright output — traces/screenshots from local runs, and the browser
+# binaries it downloads. Neither belongs in the repo.
+web/test-results/
+web/playwright-report/
+web/blob-report/
+
 .DS_Store
 data/questions/
 data/managers/
