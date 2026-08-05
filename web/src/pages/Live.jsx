@@ -543,7 +543,7 @@ export default function Live() {
             </span>
           </div>
         ) : (
-        <div style={{ flex: s.tabWide ? "3 1 640px" : "1.4 1 440px",
+        <div style={{ flex: "1.4 1 440px",
                       minWidth: "min(100%,320px)", transition: "flex .15s ease" }}>
           {/* Floating: stays reachable while scrolled through a long prep
               document or a long questions list, so getting back to the other
@@ -568,20 +568,6 @@ export default function Live() {
                 </button>
               ))}
             </div>
-            <button onClick={() => live.setTabWide(!s.tabWide)}
-              title={s.tabWide ? "Narrow — give the transcript its room back"
-                : "Widen — take over the transcript column to read this in full"}
-              aria-label={s.tabWide ? "Narrow this pane" : "Maximize this pane"}
-              style={{ background: "var(--paper-000)", cursor: "pointer",
-                       border: "1px solid var(--paper-200)", borderRadius: 4,
-                       color: "var(--teal-700)", padding: "5px 8px",
-                       display: "flex", alignItems: "center" }}>
-              <svg width="11" height="14" viewBox="0 0 11 14" fill="none"
-                   stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"
-                   strokeLinejoin="round" aria-hidden="true">
-                <path d={s.tabWide ? "M7.5 1.5 L2 7 L7.5 12.5" : "M3.5 1.5 L9 7 L3.5 12.5"} />
-              </svg>
-            </button>
           </div>
 
           {s.tab === "prep" && (
@@ -730,8 +716,7 @@ export default function Live() {
             the left pane is maximized, and stays mounted (with its own
             MINIMIZE/SHOW toggle and CLOSE TRANSCRIPT) when the left pane is
             minimized — see the comment on the left pane above. */}
-        <div style={{ flex: s.tabWide ? "0.6 1 220px" : "1 1 300px",
-                      maxWidth: s.tabWide ? 300 : 420,
+        <div style={{ flex: "1 1 300px", maxWidth: 420,
                       minWidth: "min(100%,240px)", transition: "flex .15s ease" }}>
           {s.running && <ContextChip />}
           {/* Meeting context stays settable mid-recording — pick from the
@@ -818,12 +803,15 @@ export default function Live() {
 
           {/* Sits here, over the transcript, rather than up with the tabs
               opposite — it only ever folds the LEFT pane, so this button
-              never moves and is always in the same spot to click again. */}
+              never moves and is always in the same spot to click again.
+              It now folds the transcript body below too — same click,
+              both columns — while staying visible itself so SHOW always
+              has somewhere to click back to. */}
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
             <button className="mono" onClick={() => setPanesMin(!panesMin)}
               title={panesMin
-                ? "Bring the questions and recaps back"
-                : "Tuck the questions and recaps away so the note below gets the room"}
+                ? "Bring the questions, recaps and transcript back"
+                : "Tuck the questions and transcript away so the note below gets the room"}
               style={{ background: "none", border: "1px solid var(--paper-200)",
                        borderRadius: 4, cursor: "pointer", padding: "5px 8px",
                        fontSize: 10, letterSpacing: ".1em", color: "var(--teal-700)" }}>
@@ -832,7 +820,8 @@ export default function Live() {
           </div>
 
           {/* Closing belongs over the transcript it closes, not up in the page
-              actions where it read as leaving the app. */}
+              actions where it read as leaving the app — stays visible even
+              minimized, so CLOSE TRANSCRIPT is never itself hidden by MINIMIZE. */}
           <SectionHead label="WHAT WAS SAID" right={
             <span style={{ display: "inline-flex", gap: 12, alignItems: "center" }}>
               <span>{words.toLocaleString()} WORDS</span>
@@ -848,6 +837,17 @@ export default function Live() {
               )}
             </span>
           } />
+          {panesMin ? (
+            <div style={{ padding: "10px 15px", background: "var(--paper-000)",
+                          border: "1px solid var(--paper-200)",
+                          borderRadius: "var(--radius)" }}>
+              <span className="mono" style={{ fontSize: 10.5, letterSpacing: ".1em",
+                                              color: "var(--stone-500)" }}>
+                {words.toLocaleString()} WORDS RECORDED
+              </span>
+            </div>
+          ) : (
+          <>
           <Card style={{ padding: "14px 16px" }}>
             <div ref={transcriptBoxRef} style={{ maxHeight: 420, overflowY: "auto" }}
               onScroll={() => {
@@ -881,6 +881,8 @@ export default function Live() {
             <Button variant="ghost" disabled={!paste}
               onClick={() => { live.addPaste(paste, false); setPaste(""); }}>Add only</Button>
           </div>
+          </>
+          )}
         </div>
       </div>
 

@@ -45,9 +45,8 @@ export const S = {
   sessionId: "", librarySaved: false,
   // Left-pane tabs: the live questions (existing view), the meeting prep
   // document for whoever S.manager resolved to, and the deck attached to
-  // that prep, if any. `wide` maximizes this pane and shrinks the
-  // transcription side, mirroring the Prep page's widen handle.
-  tab: "questions", tabWide: false,
+  // that prep, if any.
+  tab: "questions",
   prepDoc: null, prepDocLoading: false,
 };
 
@@ -632,7 +631,6 @@ async function loadPrepDoc(thread) {
 }
 
 export function setTab(tab) { S.tab = tab; emit(); }
-export function setTabWide(wide) { S.tabWide = wide; emit(); }
 
 /* Fuzzy-resolve any name (calendar counterparty, subject, typed) to a
    manager thread and load it. Returns the thread or null. */
@@ -739,7 +737,7 @@ export function newSession() {
     note: null, noteDraftText: "", sharp: null, sharpPending: "", busy: "", seq: 1, manager: null,
     noteSave: null, noteSaveEdits: {}, noteSaveEditing: {}, noteSaveUrl: "",
     sessionId: "", librarySaved: false, panesMin: false,
-    tab: "questions", tabWide: false, prepDoc: null, prepDocLoading: false,
+    tab: "questions", prepDoc: null, prepDocLoading: false,
   });
   emit();
 }
