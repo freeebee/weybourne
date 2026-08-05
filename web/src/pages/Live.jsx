@@ -522,30 +522,27 @@ export default function Live() {
 
       <ErrorNote error={s.error} />
 
-      {panesMin ? (
-        <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap",
-                      padding: "10px 15px", background: "var(--paper-000)",
-                      border: "1px solid var(--paper-200)",
-                      borderRadius: "var(--radius)", marginBottom: 4 }}>
-          <span className="mono" style={{ fontSize: 10.5, letterSpacing: ".1em",
-                                          color: "var(--stone-500)" }}>
-            QUESTIONS · {openItems.length} OPEN · {answeredItems.length} ANSWERED
-            &nbsp;&nbsp;RECAPS · {s.batches.filter((b) => b.recap).length}
-          </span>
-          <button className="mono" onClick={() => setPanesMin(false)}
-            style={{ background: "none", border: "1px solid var(--paper-200)",
-                     borderRadius: 4, cursor: "pointer", padding: "3px 10px",
-                     fontSize: 10.5, letterSpacing: ".1em", color: "var(--teal-700)" }}>
-            SHOW
-          </button>
-        </div>
-      ) : (
       <div className="panes">
         {/* Left pane — tabbed: live questions, the meeting prep document for
             whoever this session resolved to, and the deck attached to that
             prep, if there is one. Widening it (and shrinking the transcript
-            pane opposite) is a separate, orthogonal control from MINIMIZE,
-            which tucks both panes away entirely. */}
+            pane opposite) is a separate, orthogonal control from MINIMIZE.
+            MINIMIZE only ever folds THIS pane — the transcript pane opposite
+            (and its own MINIMIZE/SHOW toggle and CLOSE TRANSCRIPT) stays
+            mounted regardless, so closing the transcript is never something
+            minimizing the questions happens to hide too. */}
+        {panesMin ? (
+          <div style={{ flex: "1.4 1 440px", minWidth: "min(100%,320px)",
+                        padding: "10px 15px", background: "var(--paper-000)",
+                        border: "1px solid var(--paper-200)",
+                        borderRadius: "var(--radius)" }}>
+            <span className="mono" style={{ fontSize: 10.5, letterSpacing: ".1em",
+                                            color: "var(--stone-500)" }}>
+              QUESTIONS · {openItems.length} OPEN · {answeredItems.length} ANSWERED
+              &nbsp;&nbsp;RECAPS · {s.batches.filter((b) => b.recap).length}
+            </span>
+          </div>
+        ) : (
         <div style={{ flex: s.tabWide ? "3 1 640px" : "1.4 1 440px",
                       minWidth: "min(100%,320px)", transition: "flex .15s ease" }}>
           {/* Floating: stays reachable while scrolled through a long prep
@@ -727,9 +724,12 @@ export default function Live() {
           </>
           )}
         </div>
+        )}
 
         {/* Right pane — audio check + what was said. Shrinks (not hides) when
-            the left pane is maximized, so the transcript stays glanceable. */}
+            the left pane is maximized, and stays mounted (with its own
+            MINIMIZE/SHOW toggle and CLOSE TRANSCRIPT) when the left pane is
+            minimized — see the comment on the left pane above. */}
         <div style={{ flex: s.tabWide ? "0.6 1 220px" : "1 1 300px",
                       maxWidth: s.tabWide ? 300 : 420,
                       minWidth: "min(100%,240px)", transition: "flex .15s ease" }}>
@@ -816,17 +816,18 @@ export default function Live() {
             </Card>
           )}
 
-          {/* MINIMIZE sits here, over the transcript, rather than up with the
-              tabs opposite — it folds this pane too, so reaching for it from
-              the questions/prep tab bar meant scrolling back up first, which
-              is what read as the minimize button "jumping to the top". */}
+          {/* Sits here, over the transcript, rather than up with the tabs
+              opposite — it only ever folds the LEFT pane, so this button
+              never moves and is always in the same spot to click again. */}
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-            <button className="mono" onClick={() => setPanesMin(true)}
-              title="Tuck the questions and recaps away so the note below gets the room"
+            <button className="mono" onClick={() => setPanesMin(!panesMin)}
+              title={panesMin
+                ? "Bring the questions and recaps back"
+                : "Tuck the questions and recaps away so the note below gets the room"}
               style={{ background: "none", border: "1px solid var(--paper-200)",
                        borderRadius: 4, cursor: "pointer", padding: "5px 8px",
                        fontSize: 10, letterSpacing: ".1em", color: "var(--teal-700)" }}>
-              MINIMIZE
+              {panesMin ? "SHOW" : "MINIMIZE"}
             </button>
           </div>
 
@@ -882,7 +883,6 @@ export default function Live() {
           </div>
         </div>
       </div>
-      )}
 
       {/* The draft forming in real time — replaced by the finished card below */}
       {!s.note && s.noteBusy && (
