@@ -488,6 +488,19 @@ class TestReadTranscriptBatch:
         out = read_transcript_batch(client, buf, open_items)
         assert len(out["questions"]) == 1
 
+    def test_a_single_read_never_proposes_more_than_the_per_read_cap(self):
+        # Empty open_items means 20 of queue headroom (MAX_OPEN_QUESTIONS) —
+        # the per-read cap (3), not the queue cap, must be what limits this.
+        payload = {**self.PAYLOAD, "questions": [
+            {"q": f"q{i}", "flag": False} for i in range(5)]}
+        buf = TranscriptBuffer()
+        buf.add("Some speech.")
+        client = FakeClient(payload)
+        out = read_transcript_batch(client, buf, [])
+        assert len(out["questions"]) == 3
+        prompt = client.calls[0]["messages"][0]["content"]
+        assert "AT MOST 3 new" in prompt
+
 
 class TestReadTranscriptBatchDelta:
     """The persistent-session sibling of TestReadTranscriptBatch above: only
@@ -531,3 +544,14 @@ class TestReadTranscriptBatchDelta:
         client = FakeClient(self.PAYLOAD)   # payload has 3 questions
         out = read_transcript_batch_delta(client, "Some speech.", open_items)
         assert len(out["questions"]) == 1
+
+    def test_a_single_read_never_proposes_more_than_the_per_read_cap(self):
+        # Empty open_items means 20 of queue headroom (MAX_OPEN_QUESTIONS) —
+        # the per-read cap (3), not the queue cap, must be what limits this.
+        payload = {**self.PAYLOAD, "questions": [
+            {"q": f"q{i}", "flag": False} for i in range(5)]}
+        client = FakeClient(payload)
+        out = read_transcript_batch_delta(client, "Some speech.", [])
+        assert len(out["questions"]) == 3
+        prompt = client.calls[0]["messages"][0]["content"]
+        assert "AT MOST 3 new" in prompt

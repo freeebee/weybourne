@@ -282,6 +282,15 @@ false ONLY when there is essentially no new speech at all: silence, or a few fil
 # instead of a growing pile the investor has to wade through.
 MAX_OPEN_QUESTIONS = 20
 
+# A SEPARATE, per-read cap: on an early read (little queue headroom used
+# yet), max_open_questions alone would let one read propose up to 20
+# questions at once — far more than a 30-second window of speech usually
+# warrants, and each one adds output tokens the user is waiting on. Three
+# is plenty for one read's worth of new speech; MAX_OPEN_QUESTIONS still
+# governs the running total across the whole meeting.
+MAX_NEW_QUESTIONS_PER_READ = 3
+READ_MAX_TOKENS = 700   # a short recap + a few answered/question items, not 1500's headroom
+
 
 def read_transcript_batch(
     client,
@@ -302,7 +311,7 @@ def read_transcript_batch(
     Sonnet's context window has ample room for even a long meeting.
     """
     open_list = "\n".join(f"[{it['id']}] {it['q']}" for it in open_items) or "(none open)"
-    budget = max(0, max_open_questions - len(open_items))
+    budget = min(MAX_NEW_QUESTIONS_PER_READ, max(0, max_open_questions - len(open_items)))
     user = (
         f"MEETING CONTEXT\n{context or '(none supplied)'}\n\n"
         f"TAIL AT PREVIOUS READ\n\"\"\"{last_tail or '(nothing seen yet)'}\"\"\"\n"
@@ -319,7 +328,7 @@ def read_transcript_batch(
         # Sonnet: sharp enough to spot contradictions and probe implications,
         # fast enough to land within the 30-second read cadence.
         model=LIVE_MODEL,
-        max_tokens=1500,
+        max_tokens=READ_MAX_TOKENS,
         system=READ_SYSTEM_PROMPT,
         output_config={"format": {"type": "json_schema", "schema": READ_SCHEMA}},
         messages=[{"role": "user", "content": user}],
@@ -351,7 +360,7 @@ def read_transcript_batch_delta(
     meeting instead of linearly.
     """
     open_list = "\n".join(f"[{it['id']}] {it['q']}" for it in open_items) or "(none open)"
-    budget = max(0, max_open_questions - len(open_items))
+    budget = min(MAX_NEW_QUESTIONS_PER_READ, max(0, max_open_questions - len(open_items)))
     user = (
         f"MEETING CONTEXT\n{context or '(none supplied)'}\n\n"
         f"OPEN QUESTIONS ({len(open_items)}/{max_open_questions} outstanding — the queue is "
@@ -364,7 +373,7 @@ def read_transcript_batch_delta(
     )
     response = client.messages.create(
         model=LIVE_MODEL,
-        max_tokens=1500,
+        max_tokens=READ_MAX_TOKENS,
         system=READ_SYSTEM_PROMPT,
         output_config={"format": {"type": "json_schema", "schema": READ_SCHEMA}},
         messages=[{"role": "user", "content": user}],

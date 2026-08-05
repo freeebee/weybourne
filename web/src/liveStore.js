@@ -5,6 +5,12 @@ import { get, post, postFile, postStream } from "./api.js";
 
 const CHUNK_MS = 8000;          // recorder restart interval → self-contained blobs
 const MIN_NEW_WORDS = 5;
+// The very first read doesn't wait for a full cadence (30/45/60s) — that's
+// dead air before the first recap or question appears, on top of whatever
+// the model round trip itself takes. Once there's been at least one read
+// this session, the normal cadence/MIN_NEW_WORDS pacing takes over.
+const FIRST_READ_SECONDS = 15;
+const FIRST_READ_WORDS = 30;
 const FRESH_LOCK_MS = 2000;     // a just-generated question can't be deleted yet
 // Matches src/features/transcription.py's MAX_OPEN_QUESTIONS — the backend
 // already budgets each read against this, this is just the backstop.
@@ -220,12 +226,23 @@ function tidyDrained() {
 // ---- read loop ------------------------------------------------------------ //
 
 export async function performRead() {
-  // Normally the tidied transcript; if the cleanup is failing or backed up,
-  // read the rough text rather than skipping the read entirely — no recap at
-  // all is worse than a recap off slightly rough wording.
-  const text = S.transcript.trim() || S.rawPending.trim();
+  // The tidied transcript PLUS whatever's still in the cleanup queue — once
+  // any tidied text exists, rawPending is never stale overlap (pumpTidy
+  // strips off exactly what each cleanup call consumed), so this is always
+  // "everything heard so far," not a duplicate. Reading only S.transcript
+  // left the most recent speech invisible to recaps/questions for however
+  // long cleanup was backed up, which on a slow stretch could be the entire
+  // read cycle.
+  const text = [S.transcript.trim(), S.rawPending.trim()].filter(Boolean).join(" ");
   if (S.reading || !text) return;
-  S.reading = true; S.busy = "read"; emit();
+  // Snapshotted BEFORE the request fires: lastReadAt anchors the next
+  // cadence tick to when this read STARTED, not when it finished, so a
+  // 30s cadence stays 30s instead of 30s-plus-however-long-the-model-took.
+  // unreadWordsAtStart is subtracted (not zeroed) on completion so words
+  // that arrive while this request is in flight are still counted, not
+  // silently discarded.
+  const unreadWordsAtStart = S.unreadWords;
+  S.reading = true; S.busy = "read"; S.lastReadAt = Date.now(); emit();
   try {
     const parsed = await post("/api/live/read", {
       transcript: text,
@@ -236,7 +253,7 @@ export async function performRead() {
       session_id: S.sessionId,
     });
     S.lastTail = text.slice(-240);   // where this read got to, whatever it read
-    S.unreadWords = 0; S.lastReadAt = Date.now(); S.reads++;
+    S.unreadWords = Math.max(0, S.unreadWords - unreadWordsAtStart); S.reads++;
     if (parsed.answered?.length) {
       S.items = S.items.map((it) => {
         const hit = parsed.answered.find((a) => a.id === it.id);
@@ -379,6 +396,12 @@ export async function start() {
   chunkNo = 0; langStreak = { lang: "", n: 0 };
   ensureSessionId();
   emit();
+  // Fire-and-forget: load the Whisper model and spin up this meeting's
+  // persistent tidy/read CLI sessions now, while the user is still granting
+  // mic/screen-share permissions, so the first real chunk and first read
+  // don't pay that startup cost on top of everything else. Never awaited —
+  // a failed or slow warm-up must not delay (or block) recording start.
+  post("/api/live/warm", { session_id: S.sessionId }).catch(() => {});
   try {
     audioCtx = new AudioContext();
     mixedDest = audioCtx.createMediaStreamDestination();
@@ -447,7 +470,10 @@ export async function start() {
     recordChunk();
 
     countdown = setInterval(() => {
-      const due = S.cadence - (Date.now() - S.lastReadAt) / 1000;
+      const isFirstRead = S.reads === 0;
+      const cadenceSecs = isFirstRead ? Math.min(S.cadence, FIRST_READ_SECONDS) : S.cadence;
+      const minWords = isFirstRead ? FIRST_READ_WORDS : MIN_NEW_WORDS;
+      const due = cadenceSecs - (Date.now() - S.lastReadAt) / 1000;
       S.nextIn = Math.max(0, Math.round(due));
       // Per-source "am I hearing it?" indicators, with a 3-second hold.
       const now = Date.now();
@@ -456,7 +482,7 @@ export async function start() {
       S.hearMic = now - lastMicAt < 3000;
       S.hearSystem = now - lastSysAt < 3000;
       emit();
-      if (S.running && !S.reading && due <= 0 && S.unreadWords >= MIN_NEW_WORDS) {
+      if (S.running && !S.reading && due <= 0 && S.unreadWords >= minWords) {
         performRead();
       }
     }, 1000);

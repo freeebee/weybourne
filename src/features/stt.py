@@ -20,6 +20,16 @@ _model = None
 _transcribe_lock = threading.Lock()
 
 MODEL_SIZE = os.environ.get("WHISPER_MODEL", "base")
+# 0 = ctranslate2 picks its own thread count. Benchmarked on this machine
+# (22 logical processors) with a representative ~15s spoken clip: forcing
+# 6, 8, 10 or 16 threads was consistently SLOWER than the default (roughly
+# 7-9s vs ~4.2s avg) — more threads fighting over a workload this small
+# costs more in synchronisation/cache contention than it gains in
+# parallelism. Left at auto; override here only after benchmarking again on
+# the actual target machine, not by assuming more cores helps.
+WHISPER_CPU_THREADS = int(os.environ.get("WHISPER_CPU_THREADS", "0"))
+# "cpu" today; override to "cuda" on a machine with a supported GPU.
+WHISPER_DEVICE = os.environ.get("WHISPER_DEVICE", "cpu")
 
 # Weybourne's meetings are in English or Mandarin, and nothing else. Whisper's
 # open detection routinely mishears accented English as Welsh, Dutch or Korean
@@ -33,7 +43,8 @@ def _get_model():
     if _model is None:
         from faster_whisper import WhisperModel
 
-        _model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8")
+        _model = WhisperModel(MODEL_SIZE, device=WHISPER_DEVICE, compute_type="int8",
+                             cpu_threads=WHISPER_CPU_THREADS)
     return _model
 
 
@@ -41,6 +52,19 @@ def _better_of_allowed(info) -> str:
     """Whichever of English and Mandarin whisper thought more likely."""
     probs = dict(getattr(info, "all_language_probs", None) or [])
     return max(ALLOWED_LANGUAGES, key=lambda code: probs.get(code, 0.0))
+
+
+def warm_model() -> None:
+    """Load the Whisper model now, off the request path. The model is lazy
+    (see _get_model) so it would otherwise load on the FIRST real recorded
+    chunk, adding its load time on top of that chunk's own transcription —
+    called when the Live page starts recording so that cost is already
+    paid by the time real audio arrives. Best-effort: a failed warm-up just
+    means the first real call loads it instead, same as today."""
+    try:
+        _get_model()
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def transcribe_wav(wav_bytes: bytes, language: str = "") -> dict:

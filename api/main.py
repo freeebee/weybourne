@@ -59,7 +59,7 @@ from src.features.web_research import (
     dossier_text,
     get_dossier,
 )
-from src.features.stt import transcribe_wav
+from src.features.stt import transcribe_wav, warm_model
 from src.features.transcription import (
     TranscriptBuffer,
     draft_meeting_note,
@@ -1599,6 +1599,45 @@ async def track_record(file: UploadFile):
 # --------------------------------------------------------------------------- #
 # Live meeting
 # --------------------------------------------------------------------------- #
+
+def _warm_live_cli_sessions(session_id: str) -> None:
+    """Best-effort: spin up this meeting's persistent tidy/read CLI processes
+    (src/llm_session.py) now, with a throwaway turn each, so the first REAL
+    chunk/read doesn't pay their ~5-6s CLI bootstrap on top of everything
+    else. A warm-up turn does become part of that lane's own conversation
+    history (same as any turn), but it carries no meeting content, so it
+    doesn't affect what the model later recalls about the meeting. Any
+    failure here is silent — the first real call just pays the cost itself,
+    exactly as if this had never run."""
+    try:
+        tidy_session = llm_session.get_session(session_id, "live-tidy")
+        tidy_transcript_chunk(tidy_session, "(warm-up — no meeting content yet)")
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        read_session = llm_session.get_session(session_id, "live-read")
+        read_transcript_batch_delta(
+            read_session, "(system warm-up, no meeting content yet — ignore)", [], "")
+    except Exception:  # noqa: BLE001
+        pass
+
+
+class WarmIn(BaseModel):
+    session_id: str = ""
+
+
+@app.post("/api/live/warm")
+def live_warm(body: WarmIn):
+    """Fire-and-forget prewarm, called the moment recording starts: loads
+    the Whisper model and spins up this meeting's persistent CLI sessions in
+    background threads. Returns immediately without waiting on either —
+    the caller does not (and should not) await this call."""
+    threading.Thread(target=warm_model, daemon=True).start()
+    if body.session_id and config.LIVE_PERSISTENT_SESSIONS:
+        threading.Thread(target=_warm_live_cli_sessions, args=(body.session_id,),
+                         daemon=True).start()
+    return {"ok": True}
+
 
 @app.post("/api/stt")
 async def stt(file: UploadFile, lang: str = "auto"):
