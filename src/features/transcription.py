@@ -245,12 +245,14 @@ actually said (a partial answer should say what is still missing). Never invent 
 A vague or dodged reply does NOT count as answered — leave it open and re-pose it sharper \
 as a new question, saying what they ducked. Missing a genuinely answered question is the \
 worst failure mode: it leaves the investor asking something the room already answered.
-- Give up to 5 new questions, most useful first — and zero is correct when the \
-conversation offers nothing genuinely worth asking (small talk, logistics, a demo). EVERY \
-question must anchor to something actually said: quote the figure, name, or claim it \
-responds to ("you said the fund caps at $300m, at what point does that bind?"). No generic \
-questions ("what's your process?"), no bare requests for documents or data ("can you send \
-the track record?") — probe what the claim IMPLIES: where it breaks, what it contradicts, \
+- The user message states how many new questions you may add this read (the open-question \
+queue is capped) — never exceed that number. Give the best of them, most useful first, and \
+zero is correct when the conversation offers nothing genuinely worth asking (small talk, \
+logistics, a demo) — a full or near-full queue is not licence to lower the bar just to use up \
+the budget. EVERY question must anchor to something actually said: quote the figure, name, or \
+claim it responds to ("you said the fund caps at $300m, at what point does that bind?"). No \
+generic questions ("what's your process?"), no bare requests for documents or data ("can you \
+send the track record?") — probe what the claim IMPLIES: where it breaks, what it contradicts, \
 what decision hangs on it, whether the stated edge survives scale. Strategy over collection.
 - Flag true for AT MOST two questions: the ones probing a weak spot, a contradiction with \
 something said earlier, or an unresolved decision. Everything else is flag false.
@@ -273,6 +275,13 @@ false ONLY when there is essentially no new speech at all: silence, or a few fil
 - Keep each question one sentence a person can say out loud. Never use em dashes."""
 
 
+# The open-question queue is capped, not unbounded: past this many outstanding
+# questions, a read proposes none at all until some get answered or discarded
+# and headroom opens back up. Keeps the list a genuinely prioritised shortlist
+# instead of a growing pile the investor has to wade through.
+MAX_OPEN_QUESTIONS = 20
+
+
 def read_transcript_batch(
     client,
     buffer: TranscriptBuffer,
@@ -280,20 +289,30 @@ def read_transcript_batch(
     context: str = "",
     prior_recaps: str = "",
     last_tail: str = "",
+    max_open_questions: int = MAX_OPEN_QUESTIONS,
 ) -> dict:
     """One panel-style read: recap of new speech + answered ids + fresh questions.
 
-    ``open_items`` is a list of {"id": int, "q": str} still outstanding.
+    ``open_items`` is a list of {"id": int, "q": str} still outstanding. The
+    model reads the WHOLE transcript from the start of the meeting, not a
+    recent window — a truncated tail is exactly what made later-meeting
+    questions shallower and less connected than the same model asked
+    directly, with the full conversation in front of it, in a browser tab.
+    Sonnet's context window has ample room for even a long meeting.
     """
     open_list = "\n".join(f"[{it['id']}] {it['q']}" for it in open_items) or "(none open)"
+    budget = max(0, max_open_questions - len(open_items))
     user = (
         f"MEETING CONTEXT\n{context or '(none supplied)'}\n\n"
         f"TAIL AT PREVIOUS READ\n\"\"\"{last_tail or '(nothing seen yet)'}\"\"\"\n"
         "Everything after that point is new speech. Speaker labels are unreliable; infer who "
         "is talking.\n\n"
-        f"OPEN QUESTIONS\n{open_list}\n\n"
+        f"OPEN QUESTIONS ({len(open_items)}/{max_open_questions} outstanding — the queue is "
+        f"capped, so you may propose AT MOST {budget} new one(s) this read; fewer, including "
+        f"zero, is correct whenever the conversation does not offer that many genuinely worth "
+        f"asking. A full queue is not a reason to lower the bar.)\n{open_list}\n\n"
         f"EARLIER IN THIS CALL\n\"\"\"{prior_recaps or '(nothing yet)'}\"\"\"\n\n"
-        f"TRANSCRIPT (recent window)\n{buffer.recent_text()}"
+        f"TRANSCRIPT (from the start of the meeting)\n{buffer.full_text()}"
     )
     response = client.messages.create(
         # Sonnet: sharp enough to spot contradictions and probe implications,
@@ -305,7 +324,12 @@ def read_transcript_batch(
         messages=[{"role": "user", "content": user}],
     )
     raw = next((b.text for b in response.content if getattr(b, "type", None) == "text"), "")
-    return json.loads(raw)
+    parsed = json.loads(raw)
+    # Server-side backstop: even if the model ignores the stated budget (or
+    # the count above is momentarily stale against a fast-moving open list),
+    # the cap is enforced here rather than trusted to prompt-following alone.
+    parsed["questions"] = (parsed.get("questions") or [])[:budget]
+    return parsed
 
 
 TIDY_SCHEMA = {

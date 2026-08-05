@@ -6,6 +6,9 @@ import { get, post, postFile, postStream } from "./api.js";
 const CHUNK_MS = 8000;          // recorder restart interval → self-contained blobs
 const MIN_NEW_WORDS = 5;
 const FRESH_LOCK_MS = 2000;     // a just-generated question can't be deleted yet
+// Matches src/features/transcription.py's MAX_OPEN_QUESTIONS — the backend
+// already budgets each read against this, this is just the backstop.
+const MAX_OPEN_QUESTIONS = 20;
 
 export const S = {
   running: false, who: "", goal: "", source: "system", deviceId: "",
@@ -242,9 +245,15 @@ export async function performRead() {
       const bid = Date.now();
       S.batches = [{ id: bid, at: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), recap: parsed.recap || "" }, ...S.batches];
       if (S.questions) {
+        // The backend already budgets each read against MAX_OPEN_QUESTIONS,
+        // reading the open count as of when the request was built — this is
+        // the backstop against that count having moved (or the model simply
+        // not following the budget) by the time the response lands.
+        const openNow = S.items.filter((it) => !it.answer).length;
+        const room = Math.max(0, MAX_OPEN_QUESTIONS - openNow);
         // born: fresh suggestions carry a short delete-lock so a question that
         // appears mid-clear-out isn't swept away by an accidental click.
-        S.items = [...S.items, ...(parsed.questions || []).map((q) => ({
+        S.items = [...S.items, ...(parsed.questions || []).slice(0, room).map((q) => ({
           id: S.seq++, batch: bid, q: q.q, flag: !!q.flag, answer: null,
           born: Date.now(),
         }))];

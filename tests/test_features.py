@@ -12,7 +12,12 @@ from src.features.meeting_prep import (
     external_attendees,
 )
 from src.features.preferences import screen_opportunity
-from src.features.transcription import QuestionLedger, TranscriptBuffer, generate_live_questions
+from src.features.transcription import (
+    QuestionLedger,
+    TranscriptBuffer,
+    generate_live_questions,
+    read_transcript_batch,
+)
 from src.schemas import (
     Attendee,
     CalendarEvent,
@@ -370,3 +375,48 @@ class TestTranscription:
         buf.add("Capacity is $2bn.")
         generate_live_questions(FakeClient(payload), buf, ledger)
         assert ledger.answered == ["Capacity?"]
+
+
+class TestReadTranscriptBatch:
+    """The live meeting's recap + questions read: the whole transcript, and a
+    question queue capped at MAX_OPEN_QUESTIONS."""
+
+    PAYLOAD = {"changed": True, "recap": "They confirmed the fund size.",
+               "answered": [], "questions": [{"q": "q1", "flag": False},
+                                             {"q": "q2", "flag": False},
+                                             {"q": "q3", "flag": False}]}
+
+    def test_the_whole_transcript_is_sent_not_a_truncated_tail(self):
+        buf = TranscriptBuffer()
+        buf.add("x" * 8000)   # longer than the old 6000-char recent_text() cap
+        client = FakeClient(self.PAYLOAD)
+        read_transcript_batch(client, buf, [])
+        prompt = client.calls[0]["messages"][0]["content"]
+        assert "x" * 8000 in prompt
+        assert "recent window" not in prompt
+
+    def test_the_budget_reflects_remaining_headroom(self):
+        buf = TranscriptBuffer()
+        buf.add("Some speech.")
+        open_items = [{"id": i, "q": f"q{i}"} for i in range(18)]
+        client = FakeClient(self.PAYLOAD)
+        read_transcript_batch(client, buf, open_items)
+        prompt = client.calls[0]["messages"][0]["content"]
+        assert "18/20 outstanding" in prompt
+        assert "AT MOST 2 new" in prompt
+
+    def test_a_full_queue_asks_for_no_new_questions(self):
+        buf = TranscriptBuffer()
+        buf.add("Some speech.")
+        open_items = [{"id": i, "q": f"q{i}"} for i in range(20)]
+        client = FakeClient(self.PAYLOAD)   # would return 3 questions if not capped
+        out = read_transcript_batch(client, buf, open_items)
+        assert out["questions"] == []
+
+    def test_the_response_is_trimmed_to_budget_even_if_the_model_overshoots(self):
+        buf = TranscriptBuffer()
+        buf.add("Some speech.")
+        open_items = [{"id": i, "q": f"q{i}"} for i in range(19)]   # budget = 1
+        client = FakeClient(self.PAYLOAD)   # payload has 3 questions
+        out = read_transcript_batch(client, buf, open_items)
+        assert len(out["questions"]) == 1
