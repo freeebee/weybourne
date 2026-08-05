@@ -172,15 +172,30 @@ export async function cancelRun() {
   }
 }
 
+// A job the server no longer knows about (it restarted, or pruned an old
+// job) must not be polled forever — a handful of other transient failures
+// (a dropped connection, a reload window) get more patience before giving up.
+const JOB_GONE = "No such job";
+const MAX_POLL_FAILURES = 5;
+
 function attach(jobId) {
   clearInterval(pollTimer);
   ensureSceneLoop();
+  let failures = 0;
+  const giveUp = () => {
+    clearInterval(pollTimer); pollTimer = null;
+    powerDown();
+    S.scene.researching = false;
+    S.runJob = null;
+    emit();
+  };
   pollTimer = setInterval(async () => {
     try {
       const [summary, partial] = await Promise.all([
         get(`/api/jobs/${jobId}`),
         get(`/api/jobs/${jobId}/partial`).catch(() => null),
       ]);
+      failures = 0;
       S.runJob = summary;
       if (summary.status === "running") powerUp();
       // Web-research stages put Felix at his computer desk.
@@ -205,7 +220,12 @@ function attach(jobId) {
         fetchChanges();
       }
       emit();
-    } catch { /* transient — keep polling */ }
+    } catch (e) {
+      if (e?.message === JOB_GONE || ++failures >= MAX_POLL_FAILURES) {
+        giveUp();
+      }
+      /* otherwise: transient — keep polling */
+    }
   }, 2000);
 }
 

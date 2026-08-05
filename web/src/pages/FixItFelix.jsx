@@ -744,13 +744,15 @@ export default function FixItFelix() {
       )}
 
       {/* Sticky: the workshop scrolls WITH you through the change log, so
-          Felix's dash-and-fix theatrics stay in view while reviewing. Below
-          ~820px there is no room for a cinematic room, so the stations become
-          a plain row of buttons doing exactly the same thing. */}
+          Felix's dash-and-fix theatrics stay in view while reviewing. Flush
+          to top: 8 (0) left a sliver of the scrolled-past review text visible
+          through the gap above the pinned scene. Below ~820px there is no
+          room for a cinematic room, so the stations become a plain row of
+          buttons doing exactly the same thing. */}
       {narrow ? (
         <StationStrip scene={s.scene} onSelect={fx.selectStation} />
       ) : (
-        <div style={{ position: "sticky", top: 8, zIndex: 30 }}>
+        <div style={{ position: "sticky", top: 0, zIndex: 30 }}>
           <PixelOfficeScene scene={s.scene} stats={s.stats}
             onSelect={fx.selectStation} />
         </div>

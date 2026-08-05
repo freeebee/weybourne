@@ -34,6 +34,12 @@ export const S = {
   panesMin: false,
   noteSave: null, noteSaveEdits: {}, noteSaveEditing: {}, noteSaveUrl: "",
   sessionId: "", librarySaved: false,
+  // Left-pane tabs: the live questions (existing view), the meeting prep
+  // document for whoever S.manager resolved to, and the deck attached to
+  // that prep, if any. `wide` maximizes this pane and shrinks the
+  // transcription side, mirroring the Prep page's widen handle.
+  tab: "questions", tabWide: false,
+  prepDoc: null, prepDocLoading: false,
 };
 
 function stamp() {
@@ -292,6 +298,12 @@ async function attachSystem() {
     display.getTracks().forEach((t) => t.stop());
     throw new Error('no audio in the share — pick a tab or screen AND tick "Also share audio" in the picker');
   }
+  // Only the audio is ever used — the picker is unavoidable (that consent
+  // dialogue is the only way a browser will hand a page system audio at
+  // all), but nothing needs the video, so end that capture immediately
+  // rather than leaving the screen/tab actively shared for the whole
+  // meeting.
+  display.getVideoTracks().forEach((t) => t.stop());
   const src = audioCtx.createMediaStreamSource(new MediaStream(audioTracks));
   sysAnalyser = audioCtx.createAnalyser(); sysAnalyser.fftSize = 1024;
   src.connect(mixedDest); src.connect(analyser); src.connect(sysAnalyser);
@@ -552,7 +564,38 @@ export function setManagerContext(thread) {
   (thread.questions || []).forEach((k) => addOwnQuestion(k.q, true, true));
   emit();
   persistLibraryRecord();   // retitle the stored session if one is loaded
+  loadPrepDoc(thread);
 }
+
+/* The most recent prep this manager thread has on file — fetched so the note
+   taker can show it as its own tab instead of making you leave the meeting
+   to go read it on the Prep page. Best-effort: no prep on file is the normal
+   case for most meetings, not an error. */
+async function loadPrepDoc(thread) {
+  const preps = (thread?.history || []).filter((h) => h.kind === "prep");
+  const latest = preps[preps.length - 1];
+  if (!latest) {
+    S.prepDoc = null;
+    if (S.tab !== "questions") S.tab = "questions";
+    emit();
+    return;
+  }
+  S.prepDocLoading = true; emit();
+  try {
+    S.prepDoc = await get(`/api/preps/${encodeURIComponent(latest.id)}`);
+  } catch {
+    S.prepDoc = null;
+  }
+  S.prepDocLoading = false;
+  // Don't strand the user on a tab that just lost its content — e.g. the
+  // deck tab was showing a previous manager's deck and this one has none.
+  if (S.tab === "deck" && !S.prepDoc?.has_deck) S.tab = "questions";
+  if (S.tab === "prep" && !S.prepDoc) S.tab = "questions";
+  emit();
+}
+
+export function setTab(tab) { S.tab = tab; emit(); }
+export function setTabWide(wide) { S.tabWide = wide; emit(); }
 
 /* Fuzzy-resolve any name (calendar counterparty, subject, typed) to a
    manager thread and load it. Returns the thread or null. */
@@ -659,6 +702,7 @@ export function newSession() {
     note: null, noteDraftText: "", sharp: null, sharpPending: "", busy: "", seq: 1, manager: null,
     noteSave: null, noteSaveEdits: {}, noteSaveEditing: {}, noteSaveUrl: "",
     sessionId: "", librarySaved: false, panesMin: false,
+    tab: "questions", tabWide: false, prepDoc: null, prepDocLoading: false,
   });
   emit();
 }

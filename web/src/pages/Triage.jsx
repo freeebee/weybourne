@@ -235,6 +235,11 @@ function DetailPane({ msg, result, flag }) {
   const runScreen = () => ts.runScreen(msg);
   const genDrafts = () => ts.genDrafts(msg);
   const saveDraft = () => ts.saveDraft(msg);
+  const sendReply = () => {
+    const to = msg.sender_name || msg.sender_email || "this sender";
+    if (!window.confirm(`Send this reply to ${to} now? This cannot be undone.`)) return;
+    ts.sendReply(msg);
+  };
 
   const verdictColor = screen && { Fit: "var(--positive-600)", Partial: "var(--caution-600)",
     "Non-fit": "var(--critical-600)", Unclear: "var(--stone-500)" }[screen.overall_fit];
@@ -585,11 +590,23 @@ function DetailPane({ msg, result, flag }) {
               </div>
               {options && (
                 <>
-                  <div className="row" style={{ marginBottom: 10 }}>
+                  <div className="row" style={{ marginBottom: 10, flexWrap: "wrap",
+                                                alignItems: "center", gap: 8 }}>
                     {options.map((o, i) => (
-                      <Button key={i} variant={i === chosen ? "primary" : "ghost"}
-                        style={{ fontSize: "12.5px", padding: "7px 12px" }}
-                        onClick={() => ts.setWork(msg.id, { chosen: i, draftBody: o.body })}>{o.label}</Button>
+                      <React.Fragment key={i}>
+                        {/* The screen's top-up options land after a divider
+                            rather than replacing what was already drafted —
+                            everything before it is untouched. */}
+                        {i === w.sharpenedFrom && (
+                          <span className="mono" style={{ fontSize: 10, letterSpacing: ".08em",
+                                color: "var(--stone-400)", margin: "0 2px" }}>
+                            + SHARPENED BY THE SCREEN
+                          </span>
+                        )}
+                        <Button variant={i === chosen ? "primary" : "ghost"}
+                          style={{ fontSize: "12.5px", padding: "7px 12px" }}
+                          onClick={() => ts.setWork(msg.id, { chosen: i, draftBody: o.body })}>{o.label}</Button>
+                      </React.Fragment>
                     ))}
                   </div>
                   <textarea value={draftBody}
@@ -600,12 +617,20 @@ function DetailPane({ msg, result, flag }) {
                       font: "400 15px/1.65 var(--serif)", color: "var(--ink-700)",
                       padding: "14px 16px",
                     }} />
-                  <div className="row" style={{ marginTop: 10 }}>
-                    <Button variant="dark" busy={isBusy("save")} onClick={saveDraft}>
+                  <div className="row" style={{ marginTop: 10, alignItems: "center" }}>
+                    <Button variant="dark" busy={isBusy("save")}
+                      disabled={isBusy("send")} onClick={saveDraft}>
                       Save as draft in Outlook
                     </Button>
+                    <Button variant="ghost" busy={isBusy("send")}
+                      disabled={isBusy("save")} onClick={sendReply}
+                      style={{ borderColor: "var(--critical-600)", color: "var(--critical-600)" }}>
+                      Send now
+                    </Button>
                     <span className="muted" style={{ fontSize: "12.5px" }}>
-                      Replies are drafts only — nothing is ever sent from here.
+                      Save keeps it a draft in Outlook. Send goes straight to
+                      {" "}{msg.sender_name || msg.sender_email || "the sender"} —
+                      final, with one confirmation first.
                     </span>
                   </div>
                 </>

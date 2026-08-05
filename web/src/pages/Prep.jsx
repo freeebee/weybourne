@@ -29,6 +29,15 @@ export default function Prep() {
   const pollRef = React.useRef(null);
   const doneSeen = React.useRef(new Set());
 
+  // A briefing is long enough that "back to the top" earns its own button,
+  // once you've actually scrolled far enough for it to matter.
+  const [showTop, setShowTop] = React.useState(false);
+  React.useEffect(() => {
+    const onScroll = () => setShowTop(window.scrollY > 320);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   // Retrying fetches: mounting this page during a backend reload (a few
   // seconds after any code change) must not blank the calendar and library.
   const refreshLibrary = React.useCallback(() => {
@@ -470,6 +479,26 @@ export default function Prep() {
           </div>
         </div>
       </div>
+
+      {showTop && (
+        <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          title="Back to top" style={{
+            position: "fixed", right: 28, bottom: 28, zIndex: 40,
+            display: "flex", alignItems: "center", gap: 7,
+            padding: "9px 14px 9px 11px", cursor: "pointer",
+            background: "var(--ink-800)", border: "1px solid var(--ink-800)",
+            borderRadius: 999, color: "var(--paper-050)",
+            boxShadow: "0 4px 14px rgba(20,30,40,.22)" }}>
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none"
+               stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"
+               strokeLinejoin="round" aria-hidden="true">
+            <path d="M1.5 7 L5.5 2.5 L9.5 7" />
+          </svg>
+          <span className="mono" style={{ fontSize: 10.5, letterSpacing: ".1em" }}>
+            BACK TO TOP
+          </span>
+        </button>
+      )}
     </div>
   );
 }
@@ -514,18 +543,26 @@ function WidenHandle({ wide, onToggle, top = 24 }) {
   const label = wide ? "Narrow — give the column back"
     : "Widen — take over the column on the left";
   return (
-    <button onClick={onToggle} title={label} aria-label={label}
-      style={{ position: "absolute", left: -13, top, width: 26, height: 34,
-               display: "flex", alignItems: "center", justifyContent: "center",
-               background: "var(--paper-050)", cursor: "pointer",
-               border: "1px solid var(--paper-200)", borderRadius: 4,
-               color: "var(--teal-700)", padding: 0, zIndex: 2 }}>
-      <svg width="11" height="14" viewBox="0 0 11 14" fill="none"
-           stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"
-           strokeLinejoin="round" aria-hidden="true">
-        <path d={wide ? "M3.5 1.5 L9 7 L3.5 12.5" : "M7.5 1.5 L2 7 L7.5 12.5"} />
-      </svg>
-    </button>
+    // A zero-height sticky wrapper, not a sticky button: the button itself
+    // stays absolutely positioned (so it overhangs the left edge without
+    // taking up layout space), while this wrapper is what actually tracks
+    // the scroll — sticking at `top` once the document would otherwise
+    // carry it above that point, and releasing again once the (long)
+    // document below it runs out, exactly like any other sticky element.
+    <div style={{ position: "sticky", top, height: 0, zIndex: 2 }}>
+      <button onClick={onToggle} title={label} aria-label={label}
+        style={{ position: "absolute", left: -13, top: 0, width: 26, height: 34,
+                 display: "flex", alignItems: "center", justifyContent: "center",
+                 background: "var(--paper-050)", cursor: "pointer",
+                 border: "1px solid var(--paper-200)", borderRadius: 4,
+                 color: "var(--teal-700)", padding: 0 }}>
+        <svg width="11" height="14" viewBox="0 0 11 14" fill="none"
+             stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"
+             strokeLinejoin="round" aria-hidden="true">
+          <path d={wide ? "M3.5 1.5 L9 7 L3.5 12.5" : "M7.5 1.5 L2 7 L7.5 12.5"} />
+        </svg>
+      </button>
+    </div>
   );
 }
 
@@ -566,7 +603,7 @@ const VERDICT_ORDER = { "not-fit": 0, conditional: 1, unevidenced: 2, fit: 3 };
 const HAIR = "1px solid var(--paper-200)";
 const COLS = "1fr 1fr 1.25fr";
 
-function ScreenView({ screen, onMinimize, entityName, received,
+export function ScreenView({ screen, onMinimize, entityName, received,
                       wide, onToggleWide }) {
   const criteria = [...(screen.criteria || [])].sort(
     (a, b) => (VERDICT_ORDER[a.verdict] ?? 9) - (VERDICT_ORDER[b.verdict] ?? 9));
@@ -591,7 +628,7 @@ function ScreenView({ screen, onMinimize, entityName, received,
     // The handle overhangs the left edge, so it lives outside the clipped
     // panel rather than being cut in half by its overflow.
     <div style={{ position: "relative" }}>
-      <WidenHandle wide={wide} onToggle={onToggleWide} />
+      {onToggleWide && <WidenHandle wide={wide} onToggle={onToggleWide} />}
       <div style={{ background: "var(--paper-000)", border: HAIR, borderRadius: 6,
                     overflow: "hidden" }}>
       {/* Header */}
@@ -768,12 +805,12 @@ function ScreenView({ screen, onMinimize, entityName, received,
   );
 }
 
-function BriefingView({ data, keyQs = [], onToggleKey, onAddKey,
+export function BriefingView({ data, keyQs = [], onToggleKey, onAddKey,
                         entityName = "", onMinimize, wide, onToggleWide, style }) {
   const keySet = new Set(keyQs.map((k) => k.q));
   return (
     <div style={{ position: "relative", ...style }}>
-      <WidenHandle wide={wide} onToggle={onToggleWide} />
+      {onToggleWide && <WidenHandle wide={wide} onToggle={onToggleWide} />}
       <div style={{ background: "var(--paper-000)", border: HAIR, borderRadius: 6,
                     overflow: "hidden" }}>
       {/* Same shell as the screen above it: navy band, eyebrow, serif title —

@@ -13,10 +13,11 @@ from src.schemas import Attendee, CalendarEvent
 from tests.fakes import FakeClient
 
 
-def event(*attendees, subject="Catch-up"):
+def event(*attendees, subject="Catch-up", body_preview=""):
     return CalendarEvent(
         id="e1", subject=subject, start="2026-08-05T10:00:00", end="",
-        attendees=[Attendee(name=n, email=e) for n, e in attendees])
+        attendees=[Attendee(name=n, email=e) for n, e in attendees],
+        body_preview=body_preview)
 
 
 class TestWhoIsInternal:
@@ -73,6 +74,32 @@ class TestEventClassification:
         ev = event(("Ally", "ally@weybourne.co.uk"),
                    ("Amy Zhao", "amy@baifund.com"))
         assert mp.counterparty_from_event(ev) == ("Amy Zhao", "amy@baifund.com")
+
+    def test_a_booking_confirmation_is_not_internal_even_with_only_our_addresses(self):
+        """A Calendly-style invite: every structured attendee is our own
+        booking mailbox and colleagues, but the description names a real
+        outside customer — this is the Wilson Au / OQ Funds Management case."""
+        ev = event(("", "Tarenna@weybourne.co.uk"),
+                   ("", "Jinghan.Chen@weybourneholdings.com"),
+                   ("", "LiangJie.Choo@weybourneholdings.com"),
+                   body_preview="Customer Info\r\n--------------------\r\n"
+                                 "Name: Wilson Au\r\n"
+                                 "Email: wilson.au@oqfundsmanagement.com\r\n"
+                                 "Time Zone: China Standard Time")
+        assert not mp.event_is_internal(ev)
+        assert mp.counterparty_from_event(ev) == ("Wilson Au", "wilson.au@oqfundsmanagement.com")
+
+    def test_a_booked_customer_who_is_actually_one_of_ours_stays_internal(self):
+        ev = event(("", "Tarenna@weybourne.co.uk"),
+                   body_preview="Customer Info\r\n--------------------\r\n"
+                                 "Name: Ally Tan\r\nEmail: ally@weybourne.co.uk")
+        assert mp.event_is_internal(ev)
+
+    def test_an_unrelated_body_does_not_invent_a_customer(self):
+        ev = event(("Ally", "ally@weybourne.co.uk"),
+                   body_preview="Let's catch up on the fund review next week.")
+        assert mp.event_is_internal(ev)
+        assert mp.booking_customer(ev.body_preview) is None
 
 
 class FakeMail:

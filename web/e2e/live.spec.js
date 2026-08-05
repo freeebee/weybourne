@@ -21,6 +21,14 @@ test("the note taker loads with its controls present", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Start listening" })).toBeVisible();
 });
 
+test("the left pane always has a live-questions tab and a maximize control", async ({ page }) => {
+  await gotoLive(page);
+  await expect(page.getByRole("button", { name: /^LIVE QUESTIONS/ })).toBeVisible();
+  // The prep/deck tabs are conditional on a resolved manager thread having a
+  // saved prep — not asserted here, since a fresh session has none.
+  await expect(page.getByRole("button", { name: /^Maximize this pane|^Narrow this pane/ })).toBeVisible();
+});
+
 test("reopening a transcript that already has a note shows it with the questions minimized", async ({ page }) => {
   await gotoLive(page);
   const noted = page.locator(".spread", { hasText: "NOTE DRAFTED" }).first();
@@ -28,9 +36,9 @@ test("reopening a transcript that already has a note shows it with the questions
 
   await noted.getByRole("button", { name: "Reopen" }).click();
 
-  // The full questions panel (with its own MINIMIZE control) must NOT be
-  // showing — only the folded summary bar with SHOW.
-  await expect(page.getByText("QUESTIONS WORTH ASKING")).toHaveCount(0);
+  // The full questions/prep/deck tab panel (with its own MINIMIZE control)
+  // must NOT be showing — only the folded summary bar with SHOW.
+  await expect(page.getByRole("button", { name: /^LIVE QUESTIONS/ })).toHaveCount(0);
   await expect(page.getByText(/^QUESTIONS · \d+ OPEN · \d+ ANSWERED/)).toBeVisible();
   await expect(page.getByRole("button", { name: "SHOW" })).toBeVisible();
 
@@ -40,9 +48,9 @@ test("reopening a transcript that already has a note shows it with the questions
   await expect(page.getByRole("button", { name: "Write it again" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Cancel writing" })).toHaveCount(0);
 
-  // SHOW un-folds them again.
+  // SHOW un-folds them again, landing back on the live-questions tab.
   await page.getByRole("button", { name: "SHOW" }).click();
-  await expect(page.getByText("QUESTIONS WORTH ASKING")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^LIVE QUESTIONS/ })).toBeVisible();
 });
 
 test("the note draft renders as markdown, not raw text", async ({ page }) => {

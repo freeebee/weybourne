@@ -30,7 +30,7 @@ from src.config import REASONING_MODEL
 from src.connectors.notion_client import NotionConnector
 from src.features.dedupe import normalize_name
 from src.features.web_research import research_block
-from src.schemas import CalendarEvent, MeetingPrep
+from src.schemas import Attendee, CalendarEvent, MeetingPrep
 
 INTERNAL_DOMAIN = "weybourneholdings.com"
 
@@ -137,8 +137,43 @@ class PrepContext:
 # Counterparty resolution
 # --------------------------------------------------------------------------- #
 
+_CUSTOMER_INFO_RE = re.compile(r"customer\s*info", re.IGNORECASE)
+_BOOKING_NAME_RE = re.compile(r"^\s*name\s*:\s*(.+?)\s*$", re.IGNORECASE | re.MULTILINE)
+_BOOKING_EMAIL_RE = re.compile(r"^\s*email\s*:\s*(\S+@\S+?)\s*$", re.IGNORECASE | re.MULTILINE)
+
+
+def booking_customer(body: str) -> Optional[Attendee]:
+    """The real counterparty from a Calendly-style booking confirmation.
+
+    Some invitations come through a scheduling tool: the calendar's own
+    attendee list is just the shared booking mailbox (e.g. Tarenna@...), and
+    the person who actually booked the meeting is typed into the event
+    description instead, as a "Customer Info / Name: ... / Email: ..." block.
+    Missing this reads a genuinely external meeting as internal, because the
+    only address Graph exposes as an attendee is our own booking inbox.
+    """
+    header = _CUSTOMER_INFO_RE.search(body or "")
+    if not header:
+        return None
+    # The block is a few lines long — Name, Email, Time Zone — well before
+    # any later section (Booking Info, Custom Fields) could contribute a
+    # stray "Name:"/"Email:" line of its own.
+    window = body[header.end():header.end() + 400]
+    name_m = _BOOKING_NAME_RE.search(window)
+    email_m = _BOOKING_EMAIL_RE.search(window)
+    if not (name_m or email_m):
+        return None
+    return Attendee(name=name_m.group(1).strip() if name_m else "",
+                    email=email_m.group(1).strip().rstrip(".,;") if email_m else "")
+
+
 def external_attendees(event: CalendarEvent, internal_domain: str = INTERNAL_DOMAIN) -> list:
-    """Attendees who are not internal to Weybourne."""
+    """Attendees who are not internal to Weybourne.
+
+    Includes the booking-confirmation customer (see booking_customer) when
+    the structured attendee list doesn't already name them — a booking-tool
+    invite would otherwise look like it has no outside party at all.
+    """
     out = []
     for a in event.attendees:
         if not (a.email or "") and not a.name:
@@ -146,6 +181,12 @@ def external_attendees(event: CalendarEvent, internal_domain: str = INTERNAL_DOM
         if is_internal(a.email or "", a.name or ""):
             continue
         out.append(a)
+    booked = booking_customer(event.body_preview)
+    if booked and not is_internal(booked.email, booked.name):
+        already = any(booked.email and a.email
+                      and a.email.lower() == booked.email.lower() for a in out)
+        if not already:
+            out.insert(0, booked)
     return out
 
 
@@ -155,7 +196,9 @@ def event_is_internal(event: CalendarEvent) -> bool:
     An invitation with no attendee list is NOT called internal: a calendar
     entry someone typed for themselves ("GP meeting — Old Well Labs") is the
     commonest way a prep gets requested, and the name in the subject is the
-    counterparty.
+    counterparty. A booking-confirmation invite is not called internal
+    either, even when every structured attendee is one of ours — see
+    external_attendees, which already folds the booking customer in.
     """
     return bool(event.attendees) and not external_attendees(event)
 

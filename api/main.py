@@ -111,6 +111,16 @@ def _client():
     return llm.get_client()
 
 
+def _live_client():
+    """Same as _client(), but on the reserved live-meeting lane (src/llm.py)
+    — a tidy/read call is on a clock the user is watching, so it must never
+    sit queued behind however many prep or Felix calls happen to be running."""
+    ok, msg = llm.preflight()
+    if not ok:
+        raise HTTPException(status_code=503, detail=f"AI backend unavailable: {msg}")
+    return llm.get_client(pool="live")
+
+
 def _run(fn, *args, **kwargs):
     """Run a feature call, translating backend failures into HTTP errors."""
     try:
@@ -1068,7 +1078,9 @@ def save_draft(body: SaveDraftIn):
     if _graph.live:
         return {"result": _graph.create_reply_draft(body.message_id, body.body),
                 "live": True}
-    # Send tools are deliberately NOT in the allowlist — drafts only, ever.
+    # Send tools are deliberately NOT in the allowlist here — this action
+    # only ever drafts. Sending is /api/drafts/send, a separate endpoint the
+    # user reaches with its own explicit button and confirmation.
     _mcp_mail_action(
         f'Create a DRAFT reply (draft ONLY — never send) to the Outlook message '
         f'with id "{body.message_id}" using the outlook_create_reply_draft tool. '
@@ -1076,6 +1088,33 @@ def save_draft(body: SaveDraftIn):
         ["mcp__claude_ai_Microsoft_365__outlook_create_reply_draft"],
     )
     return {"result": {"saved": True}, "live": True}
+
+
+@app.post("/api/drafts/send")
+def send_reply(body: SaveDraftIn):
+    """Send the reply now. Unlike save_draft, this is a real, irreversible
+    send to the recipient — the frontend only reaches this endpoint from an
+    explicit Send button behind its own confirmation, never automatically.
+
+    With Graph credentials this uses Graph's reply endpoint, which sends
+    directly (requires the app registration to hold Mail.Send). Without
+    them, Graph has no single-step "send a reply" call to draft AND send
+    across an unattended MCP hop, so the instruction chains the two real
+    M365 tools: draft, then send that exact draft.
+    """
+    if _graph.live:
+        return {"result": _graph.send_reply(body.message_id, body.body), "live": True}
+    _mcp_mail_action(
+        f'Send a reply to the Outlook message with id "{body.message_id}". '
+        f'First create the reply draft with outlook_create_reply_draft, using '
+        f'this body verbatim. Then immediately send that exact draft with '
+        f'outlook_send_draft. This actually sends the email to the recipient — '
+        f'it is not a draft-only action. Do not alter the wording.\n\n'
+        f'Body:\n\n' + body.body,
+        ["mcp__claude_ai_Microsoft_365__outlook_create_reply_draft",
+         "mcp__claude_ai_Microsoft_365__outlook_send_draft"],
+    )
+    return {"result": {"sent": True}, "live": True}
 
 
 class DeleteIn(BaseModel):
@@ -1160,7 +1199,12 @@ def prep(body: PrepIn):
         _notion, counterparty_name=body.name, counterparty_email=body.email,
         company_name=body.company, event=event, research=None,
     )
-    _attach_research(ctx, body.name, body.company)
+    # ctx.company_name, not body.company — build_context already fell back to
+    # the email-domain guess when the form left company blank, and that
+    # derived name is what should drive the research query (see the note in
+    # start_prep_job on why searching the bare counterparty name instead can
+    # send the research after the wrong person).
+    _attach_research(ctx, body.name, ctx.company_name)
     if body.depth == "full":
         data, html_out = _run(build_briefing, _client(), ctx)
         return {"kind": "briefing", "entity": data.get("entity"), "html": html_out}
@@ -1358,17 +1402,26 @@ async def start_prep_job(
         else:
             # One research pass, before the fork — so the screen and the briefing
             # read the same facts, and so running one of them later reuses rather
-            # than repeats the searches.
+            # than repeats the searches. ctx.company_name — not the raw form
+            # field, which the calendar picker never fills in — so this
+            # searches the actual firm ("OQ Funds Management") rather than
+            # falling back to just the counterparty's name, which is exactly
+            # how a name that collides with an unrelated existing contact
+            # (e.g. two different people both called "Wilson Au") sends the
+            # research chasing the wrong person while the briefing's own
+            # live search (which has the email domain to reason from) finds
+            # the right firm anyway — leaving the screen looking blind to
+            # something the briefing plainly found.
             job["stages"].append({"label": "Background research",
                                   "detail": "checking for research already gathered "
                                             "on this firm"})
             _checkpoint(job)
-            job["stages"][-1]["detail"] = _attach_research(ctx, name, company)
+            job["stages"][-1]["detail"] = _attach_research(ctx, name, ctx.company_name)
         job["stages"].append({"label": "Context gathered",
                               "detail": f"{len(ctx.sources)} source(s) against {notion_note} · {deck_note}"})
 
         result: dict = {"kind": "prep", "entity": name,
-                        "email": email, "company": company,
+                        "email": email, "company": ctx.company_name,
                         "internal": internal}
 
         def run_screen():
@@ -1388,7 +1441,7 @@ async def start_prep_job(
                     "non_fit_points": [], "open_questions": [],
                 }
             entity = ExtractedEntity(
-                fund_name=name, company_name=company or "",
+                fund_name=name, company_name=ctx.company_name,
                 contact_email=email,
                 summary=(ctx.document_text[:600] or ctx.meeting_subject or name),
             )
@@ -1441,7 +1494,7 @@ async def start_prep_job(
             _checkpoint(job)
 
         job["stages"].append({"label": "Done", "detail": ""})
-        _save_prep(job, result)
+        _save_prep(job, result, deck_path=pdf_path)
         # Stamp the manager thread: resolve the counterparty against Notion
         # and record this prep, so the note taker (and the next prep) starts
         # with the linkage already made.
@@ -1449,11 +1502,11 @@ async def start_prep_job(
             entity_name = (result.get("briefing") or {}).get("entity") or name
             ent = ExtractedEntity(
                 contact_name="" if "@" in name else name,
-                contact_email=email, company_name=company or name, fund_name=name)
+                contact_email=email, company_name=ctx.company_name or name, fund_name=name)
             dec = dedupe_entity(ent, _notion.list_contacts(),
                                 _notion.list_companies(), _notion.list_funds())
             managers.upsert(
-                entity_name, aliases=[name, company, email], email=email,
+                entity_name, aliases=[name, ctx.company_name, email], email=email,
                 add_history={"kind": "prep", "id": job["id"], "label": job["label"]},
                 **_linked_fields(dec))
         except Exception:  # noqa: BLE001 - the thread is an enhancement
@@ -1519,7 +1572,7 @@ def live_tidy(body: TidyIn):
     (Haiku). The page shows this cleaned text, never the raw transcript."""
     if not body.raw.strip():
         return {"text": ""}
-    text = _run(tidy_transcript_chunk, _client(), body.raw, body.prev_tail,
+    text = _run(tidy_transcript_chunk, _live_client(), body.raw, body.prev_tail,
                 body.output_language, body.detected_language)
     return {"text": text}
 
@@ -1541,7 +1594,7 @@ def _buffer_from(text: str) -> TranscriptBuffer:
 
 @app.post("/api/live/read")
 def live_read(body: ReadIn):
-    parsed = _run(read_transcript_batch, _client(), _buffer_from(body.transcript),
+    parsed = _run(read_transcript_batch, _live_client(), _buffer_from(body.transcript),
                   body.open_items, body.context, body.prior_recaps, body.last_tail)
     return parsed
 
@@ -1676,18 +1729,29 @@ def transcript_delete(sid: str):
 # --------------------------------------------------------------------------- #
 
 PREPS_DIR = BASE / "data" / "preps"
+# The deck itself, not just the prep it produced — start_prep_job's upload
+# used to live only in a tempfile for the duration of the job, so the note
+# taker had nothing to show even for a prep built "from a deck". Kept
+# alongside the prep JSON, same id, so the two are trivially paired.
+PREP_DECKS_DIR = BASE / "data" / "prep_decks"
 
 
-def _save_prep(job: dict, result: dict) -> None:
+def _save_prep(job: dict, result: dict, deck_path: Optional[Path] = None) -> None:
     """Persist a completed prep. Failures never break the job itself."""
     try:
         PREPS_DIR.mkdir(parents=True, exist_ok=True)
+        has_deck = False
+        if deck_path is not None and deck_path.exists():
+            PREP_DECKS_DIR.mkdir(parents=True, exist_ok=True)
+            (PREP_DECKS_DIR / f"{job['id']}.pdf").write_bytes(deck_path.read_bytes())
+            has_deck = True
         record = {
             "id": job["id"],
             "name": result.get("entity") or job["label"],
             "label": job["label"],
             "created": time.strftime("%Y-%m-%d %H:%M"),
             "outputs": [k for k in ("briefing", "screen") if k in result],
+            "has_deck": has_deck,
             "result": result,
         }
         (PREPS_DIR / f"{job['id']}.json").write_text(
@@ -1705,7 +1769,8 @@ def list_preps():
                     key=lambda p: p.stat().st_mtime, reverse=True):
         try:
             d = json.loads(f.read_text(encoding="utf-8"))
-            out.append({k: d[k] for k in ("id", "name", "created", "outputs")})
+            out.append({k: d.get(k) for k in
+                       ("id", "name", "created", "outputs", "has_deck")})
         except Exception:  # noqa: BLE001
             continue
     return {"preps": out[:50]}
@@ -1719,12 +1784,23 @@ def get_prep(prep_id: str):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+@app.get("/api/preps/{prep_id}/deck")
+def get_prep_deck(prep_id: str):
+    if ".." in prep_id or "/" in prep_id:
+        raise HTTPException(status_code=404, detail="No such prep")
+    path = PREP_DECKS_DIR / f"{prep_id}.pdf"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="No deck attached to this prep")
+    return FileResponse(path, media_type="application/pdf")
+
+
 @app.delete("/api/preps/{prep_id}")
 def delete_prep(prep_id: str):
     path = PREPS_DIR / f"{prep_id}.json"
     if not path.exists() or ".." in prep_id or "/" in prep_id:
         raise HTTPException(status_code=404, detail="No such prep")
     path.unlink()
+    (PREP_DECKS_DIR / f"{prep_id}.pdf").unlink(missing_ok=True)
     return {"deleted": prep_id}
 
 

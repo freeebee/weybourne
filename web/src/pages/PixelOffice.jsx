@@ -460,6 +460,9 @@ function FlameFrame({ rows }) {
 function FelixMascot({ scene, x }) {
   const walking = scene.activity === "walk";
   const pair = FRAMES[scene.activity];
+  // Powered up, the wrench swings faster too — same two-frame swap, shorter
+  // hold per frame — matching the sprint speed that sells the power-up.
+  const swapMs = scene.activity === "fix" && scene.power ? ".26s" : pair?.[2];
   return (
     <div className={"px-felix" + (scene.power ? " powered" : "")}
       style={{ transform: `translate3d(${Math.round(x)}px, 0, 0)`,
@@ -481,11 +484,11 @@ function FelixMascot({ scene, x }) {
         {pair ? (
           <>
             <div className="px-frame"
-                 style={{ animation: `px-swapA ${pair[2]} steps(1) infinite` }}>
+                 style={{ animation: `px-swapA ${swapMs} steps(1) infinite` }}>
               <Mascot state={pair[0]} width={MASCOT_H} />
             </div>
             <div className="px-frame"
-                 style={{ animation: `px-swapB ${pair[2]} steps(1) infinite` }}>
+                 style={{ animation: `px-swapB ${swapMs} steps(1) infinite` }}>
               <Mascot state={pair[1]} width={MASCOT_H} />
             </div>
           </>

@@ -14,10 +14,12 @@ There are three modes, tried in order:
 3. **Sample data** — representative mock records, so the connector and every
    screen built on it work end to end with no credentials at all.
 
-Only read + draft operations are exposed. Nothing here sends mail or mutates a
-calendar; drafts are created for the user to review and send from Outlook. This
-is deliberate: the connector should never take an irreversible, outward-facing
-action on the user's behalf without an explicit, separate confirmation step.
+Read and draft operations are always available. Sending mail is also exposed
+(``send_reply``) but is deliberately its own method, separate from
+``create_reply_draft`` — nothing in this connector sends as a side effect of
+drafting, reading or screening a message. The API layer above only calls
+``send_reply`` from the one endpoint the user explicitly triggers with a
+confirmed, in-app Send action; nothing here mutates a calendar.
 """
 from __future__ import annotations
 
@@ -371,6 +373,19 @@ class GraphConnector:
             return {"id": f"draft-for-{message_id}", "status": "mock-created"}
         return self._post(
             f"/users/{self.user}/messages/{message_id}/createReply",
+            {"comment": comment},
+        )
+
+    def send_reply(self, message_id: str, comment: str) -> dict:
+        """Send a reply immediately — unlike create_reply_draft, this is not
+        reversible once Graph accepts it. Requires the app registration to
+        hold Mail.Send (application permission, admin-consented); the token
+        request itself needs no change since ``_access_token`` already asks
+        for ``.default`` and picks up whatever is granted."""
+        if not self.live:
+            return {"id": f"sent-for-{message_id}", "status": "mock-sent"}
+        return self._post(
+            f"/users/{self.user}/messages/{message_id}/reply",
             {"comment": comment},
         )
 

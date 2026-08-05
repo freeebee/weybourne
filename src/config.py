@@ -68,6 +68,17 @@ LLM_BACKEND = os.environ.get("LLM_BACKEND", "claude_cli")
 
 CLAUDE_CLI_PATH = os.environ.get("CLAUDE_CLI_PATH", "claude")
 CLAUDE_CLI_TIMEOUT = int(os.environ.get("CLAUDE_CLI_TIMEOUT", "600"))
+# Each CLI call is a real subprocess (a full Node.js process, its own web
+# searches). Queuing several jobs at once (several preps, a prep alongside
+# Felix) used to fire them all straight at the machine — under that
+# contention, calls that normally finish in 1-3 minutes could blow past
+# CLAUDE_CLI_TIMEOUT and the whole job failed. This caps how many CLI calls
+# run at once, app-wide; anything past the cap queues instead of contending.
+CLAUDE_CLI_MAX_CONCURRENT = int(os.environ.get("CLAUDE_CLI_MAX_CONCURRENT", "3"))
+# A separate, reserved lane for live-meeting tidy/read calls (see src/llm.py)
+# so they never queue behind a prep or a Felix run — those are the calls a
+# recording is actively waiting on second by second.
+CLAUDE_CLI_LIVE_CONCURRENT = int(os.environ.get("CLAUDE_CLI_LIVE_CONCURRENT", "1"))
 # Empty directory the CLI runs from, so it doesn't auto-load an unrelated
 # CLAUDE.md / .mcp.json / hooks into every call. See src/llm.py.
 CLAUDE_CLI_SCRATCH_DIR = os.environ.get("CLAUDE_CLI_SCRATCH_DIR")

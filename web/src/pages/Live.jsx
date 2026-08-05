@@ -6,7 +6,7 @@ import {
   Banner, Button, Card, ErrorNote, Field, Mascot, PageHeader, SearchSelect,
   SectionHead, fmtDate, fmtTime, inputStyle,
 } from "../ui.jsx";
-import { Markdown } from "./Prep.jsx";
+import { BriefingView, Markdown, ScreenView } from "./Prep.jsx";
 
 /* Calendar picker — a scrollable list rather than a native select, so past
    meetings are reachable too: scroll up for earlier days (tinted brown),
@@ -534,21 +534,83 @@ export default function Live() {
         </div>
       ) : (
       <div className="panes">
-        {/* Questions pane — always visible: the toggle only controls whether
-            reads ADD suggestions; sketching your own works either way. */}
-        <div style={{ flex: "1.4 1 440px", minWidth: "min(100%,320px)" }}>
-          <SectionHead label="QUESTIONS WORTH ASKING" right={
-            <span style={{ display: "inline-flex", gap: 12, alignItems: "baseline" }}>
-              {`${openItems.length} OPEN`}
+        {/* Left pane — tabbed: live questions, the meeting prep document for
+            whoever this session resolved to, and the deck attached to that
+            prep, if there is one. Widening it (and shrinking the transcript
+            pane opposite) is a separate, orthogonal control from MINIMIZE,
+            which tucks both panes away entirely. */}
+        <div style={{ flex: s.tabWide ? "3 1 640px" : "1.4 1 440px",
+                      minWidth: "min(100%,320px)", transition: "flex .15s ease" }}>
+          <div className="spread" style={{ marginBottom: 10, gap: 10, flexWrap: "wrap" }}>
+            <div className="row" style={{ gap: 6 }}>
+              {[
+                ["questions", `Live questions${openItems.length ? ` · ${openItems.length}` : ""}`],
+                ...(s.prepDoc ? [["prep", "Meeting prep"]] : []),
+                ...(s.prepDoc?.has_deck ? [["deck", "Deck"]] : []),
+              ].map(([key, label]) => (
+                <button key={key} onClick={() => live.setTab(key)}
+                  className="mono"
+                  style={{ background: s.tab === key ? "var(--ink-800)" : "var(--paper-000)",
+                           color: s.tab === key ? "var(--paper-050)" : "var(--stone-500)",
+                           border: "1px solid var(--paper-200)", borderRadius: 4,
+                           cursor: "pointer", padding: "5px 11px",
+                           fontSize: 10.5, letterSpacing: ".08em" }}>
+                  {label.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+              <button onClick={() => live.setTabWide(!s.tabWide)}
+                title={s.tabWide ? "Narrow — give the transcript its room back"
+                  : "Widen — take over the transcript column to read this in full"}
+                aria-label={s.tabWide ? "Narrow this pane" : "Maximize this pane"}
+                style={{ background: "var(--paper-000)", cursor: "pointer",
+                         border: "1px solid var(--paper-200)", borderRadius: 4,
+                         color: "var(--teal-700)", padding: "5px 8px",
+                         display: "flex", alignItems: "center" }}>
+                <svg width="11" height="14" viewBox="0 0 11 14" fill="none"
+                     stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"
+                     strokeLinejoin="round" aria-hidden="true">
+                  <path d={s.tabWide ? "M7.5 1.5 L2 7 L7.5 12.5" : "M3.5 1.5 L9 7 L3.5 12.5"} />
+                </svg>
+              </button>
               <button className="mono" onClick={() => setPanesMin(true)}
                 title="Tuck the questions and recaps away so the note below gets the room"
                 style={{ background: "none", border: "1px solid var(--paper-200)",
-                         borderRadius: 4, cursor: "pointer", padding: "2px 8px",
+                         borderRadius: 4, cursor: "pointer", padding: "5px 8px",
                          fontSize: 10, letterSpacing: ".1em", color: "var(--teal-700)" }}>
                 MINIMIZE
               </button>
-            </span>} />
+            </span>
+          </div>
 
+          {s.tab === "prep" && (
+            <div>
+              {s.prepDocLoading && !s.prepDoc && (
+                <p className="muted small">Loading the saved prep…</p>
+              )}
+              {s.prepDoc?.result?.briefing && (
+                <BriefingView data={s.prepDoc.result.briefing}
+                  entityName={s.prepDoc.result.briefing.entity || s.prepDoc.name || ""} />
+              )}
+              {s.prepDoc?.result?.screen && (
+                <div style={{ marginTop: s.prepDoc?.result?.briefing ? 20 : 0 }}>
+                  <ScreenView screen={s.prepDoc.result.screen}
+                    entityName={s.prepDoc.result.briefing?.entity || s.prepDoc.name || ""} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {s.tab === "deck" && s.prepDoc?.has_deck && (
+            <iframe title="Presentation deck"
+              src={`/api/preps/${encodeURIComponent(s.prepDoc.id)}/deck`}
+              style={{ width: "100%", height: "72vh", border: "1px solid var(--paper-200)",
+                       borderRadius: "var(--radius)", background: "var(--paper-000)" }} />
+          )}
+
+          {s.tab === "questions" && (
+          <>
           {/* Sketch — available before the meeting starts too, so key
               questions can be prepared in advance. */}
           <div className="row" style={{ marginBottom: 14 }}>
@@ -659,11 +721,15 @@ export default function Live() {
               ))}
             </div>
           )}
+          </>
+          )}
         </div>
 
-        {/* Right pane — audio check + what was said */}
-        <div style={{ flex: "1 1 300px", maxWidth: 420,
-                      minWidth: "min(100%,280px)" }}>
+        {/* Right pane — audio check + what was said. Shrinks (not hides) when
+            the left pane is maximized, so the transcript stays glanceable. */}
+        <div style={{ flex: s.tabWide ? "0.6 1 220px" : "1 1 300px",
+                      maxWidth: s.tabWide ? 300 : 420,
+                      minWidth: "min(100%,240px)", transition: "flex .15s ease" }}>
           {s.running && <ContextChip />}
           {/* Meeting context stays settable mid-recording — pick from the
               calendar, recent managers, or just type the name. */}

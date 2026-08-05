@@ -17,6 +17,10 @@ data/shared_inbox_snapshot.json
 # Saved meeting preps hold real counterparty analysis - never commit them.
 data/preps/
 
+# Decks uploaded for a meeting prep, kept so the note taker can show them
+# again during the meeting - never commit them.
+data/prep_decks/
+
 # Local Notion snapshot holds real workspace records - never commit it.
 data/notion_cache.json
 

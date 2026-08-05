@@ -48,11 +48,29 @@ import json
 import os
 import subprocess
 import tempfile
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
 from src import config
+
+# One gate shared by every background ClaudeCodeClient call — a prep's
+# briefing+screen pair, Felix's adjudication pool, a queued second prep.
+# Without it, queuing several jobs fires every one of their CLI calls at the
+# machine at once; each is a real subprocess, and under that contention calls
+# that normally finish in a couple of minutes can blow past CLAUDE_CLI_TIMEOUT.
+# Excess calls simply wait their turn instead of contending for the same CPU
+# and network.
+_cli_slot = threading.Semaphore(max(1, config.CLAUDE_CLI_MAX_CONCURRENT))
+
+# A live meeting's tidy/read calls are on a clock the user is watching in real
+# time — a recap or question suggestion arriving minutes late is a much worse
+# failure than the same delay on a background prep. This second, reserved
+# lane means a live call is never stuck queueing behind however many prep or
+# Felix calls happen to be running; it only ever contends with itself, which
+# the frontend already keeps to one call at a time (S.reading / tidyBusy).
+_live_slot = threading.Semaphore(max(1, config.CLAUDE_CLI_LIVE_CONCURRENT))
 
 
 # --------------------------------------------------------------------------- #
@@ -200,9 +218,12 @@ class ClaudeCodeClient:
     """Anthropic-shaped client backed by the Claude Code CLI (your Claude account)."""
 
     def __init__(self, cli_path: Optional[str] = None, timeout: Optional[int] = None,
-                 runner=None):
+                 runner=None, pool: str = "default"):
         self.cli_path = cli_path or config.CLAUDE_CLI_PATH
         self.timeout = timeout or config.CLAUDE_CLI_TIMEOUT
+        # "live" reserves the dedicated lane in _live_slot instead of queuing
+        # behind background job traffic in _cli_slot — see get_client(pool=).
+        self._slot = _live_slot if pool == "live" else _cli_slot
         # Injectable for tests so the suite never spawns the real CLI.
         self._runner = runner or self._run_subprocess
         self.messages = _Messages(self)
@@ -226,18 +247,22 @@ class ClaudeCodeClient:
             if i + 1 < len(argv):
                 prompt_input = argv.pop(i + 1)
         try:
-            return subprocess.run(
-                argv,
-                capture_output=True,
-                text=True,
-                # The CLI emits UTF-8; without this Windows decodes as cp1252
-                # and em-dashes arrive as "â€”" in every downstream surface.
-                encoding="utf-8",
-                errors="replace",
-                timeout=self.timeout,
-                input=prompt_input,  # also closes stdin, so the CLI never waits on it
-                cwd=str(_scratch_dir()),
-            )
+            # Held only around the actual process, not the (fast, local) path
+            # resolution above — a queued call waits here, not in line for
+            # something that was never going to contend for CPU anyway.
+            with self._slot:
+                return subprocess.run(
+                    argv,
+                    capture_output=True,
+                    text=True,
+                    # The CLI emits UTF-8; without this Windows decodes as cp1252
+                    # and em-dashes arrive as "â€”" in every downstream surface.
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=self.timeout,
+                    input=prompt_input,  # also closes stdin, so the CLI never waits on it
+                    cwd=str(_scratch_dir()),
+                )
         except FileNotFoundError as e:
             raise ClaudeCodeUnavailable(
                 f"Claude Code CLI not found at {self.cli_path!r}. Install Claude Code and "
@@ -391,12 +416,16 @@ def stream_text(prompt: str, system: str = "", model: Optional[str] = None,
 # Backend selection
 # --------------------------------------------------------------------------- #
 
-def get_client():
+def get_client(pool: str = "default"):
     """Return the configured model client, or None if none is usable.
 
     Returning None means "no AI backend available" and the UI shows demo mode.
     It never means "quietly billed something else": selecting the CLI backend and
     failing to reach it raises rather than falling back to the API.
+
+    ``pool="live"`` is for the live-meeting tidy/read calls — see the note on
+    _live_slot above. It only affects the CLI backend; the direct API client
+    has no subprocess to gate in the first place.
     """
     backend = (config.LLM_BACKEND or "claude_cli").strip().lower()
 
@@ -408,7 +437,7 @@ def get_client():
         return anthropic.Anthropic()
 
     if backend in ("claude_cli", "claude-cli", "cli", "claude"):
-        return ClaudeCodeClient()
+        return ClaudeCodeClient(pool=pool)
 
     raise ValueError(
         f"Unknown LLM_BACKEND {backend!r}. Use 'claude_cli' (your Claude account) or 'api'."

@@ -206,26 +206,38 @@ export function runScreen(msg) {
     setWork(msg.id, { screen });
   }).then(async () => {
     // The screen sharpens the drafts: if reply options already exist (or are
-    // still generating) without the verdict, refresh them once it lands.
+    // still generating) without the verdict, top up with a few more written
+    // with the verdict in mind — the options already drafted (and whatever
+    // the user was mid-editing) stay exactly as they are.
     const w = workOf(msg.id);
     if (w.screen && w.options && !w.draftsHadScreen) {
-      await genDrafts(msg);
+      await genDrafts(msg, { append: true });
       setWork(msg.id, {
-        notice: "Reply options sharpened with the preference screen verdict.",
+        notice: "A couple more reply options, sharpened with the preference "
+                + "screen verdict — your original drafts are still here too.",
       });
     }
   });
 }
 
-export function genDrafts(msg) {
+export function genDrafts(msg, { append = false } = {}) {
   const r = S.results[msg.id];
   return workCall(msg.id, "drafts", async (w) => {
     const res = await post("/api/drafts",
       { message: msg, entity: r.entity, screen: w.screen || null,
         dedupe: r.dedupe || null, slot_minutes: w.slotMinutes || 30 });
-    setWork(msg.id, { options: res.options, chosen: 0,
-                      draftBody: res.options[0]?.body || "",
-                      draftsHadScreen: !!w.screen });
+    // Appending (the screen topping up an existing batch) keeps every option
+    // already on screen — including whatever the user has since edited into
+    // draftBody — and just adds the new ones after. A plain regenerate (no
+    // append) replaces the batch outright, same as before.
+    const prior = append ? (w.options || []) : [];
+    const options = [...prior, ...res.options];
+    setWork(msg.id, {
+      options, chosen: prior.length,
+      sharpenedFrom: append && prior.length ? prior.length : undefined,
+      draftBody: res.options[0]?.body || "",
+      draftsHadScreen: !!w.screen,
+    });
   });
 }
 
@@ -349,6 +361,19 @@ export function saveDraft(msg) {
       notice: "Draft saved to Outlook — review and send it there."
         + (res.live ? "" : " (Demo mode — no draft was actually created.)"),
     });
+  });
+}
+
+/* A real, irreversible send. The confirmation lives at the call site (the
+   button), not here, so this stays a plain action other callers can trust
+   to actually send the moment it is invoked. Sent mail is handled mail — the
+   row leaves the queue, same as a forward or a delete. */
+export function sendReply(msg) {
+  return workCall(msg.id, "send", async (w) => {
+    await post("/api/drafts/send", { message_id: msg.id, body: w.draftBody });
+    removeRow(msg.id);
+    S.notice = "Reply sent.";
+    emit();
   });
 }
 
