@@ -117,6 +117,74 @@ class TestInvalidateCache:
         assert "funds" in n._disk_load() and "page_text" in n._disk_load()
 
 
+class TestDiskCacheInMemoryMirror:
+    """_disk_load used to re-read and re-parse the whole (multi-MB in the
+    live workspace) cache file on every call, including hits — get_page_text
+    alone calls it once per lookup, dozens of times in a single Felix run."""
+
+    def _conn(self, tmp_path, monkeypatch):
+        n = nc.NotionConnector()
+        monkeypatch.setattr(nc.NotionConnector, "_DISK_PATH", tmp_path / "cache.json")
+        return n
+
+    def test_the_file_is_read_from_disk_only_once(self, tmp_path, monkeypatch):
+        n = self._conn(tmp_path, monkeypatch)
+        n._disk_save({"contacts": {"records": [{"id": "a"}]}})
+        calls = []
+        real_read_text = type(n._DISK_PATH).read_text
+
+        def spy_read_text(self, *a, **k):
+            calls.append(1)
+            return real_read_text(self, *a, **k)
+
+        monkeypatch.setattr(type(n._DISK_PATH), "read_text", spy_read_text)
+        for _ in range(5):
+            n._disk_load()
+        assert calls == []   # already in memory from the _disk_save above — never re-read
+
+    def test_a_fresh_connector_still_reads_disk_once_then_caches(self, tmp_path, monkeypatch):
+        path = tmp_path / "cache.json"
+        monkeypatch.setattr(nc.NotionConnector, "_DISK_PATH", path)
+        n1 = nc.NotionConnector()
+        n1._disk_save({"contacts": {"records": [{"id": "a"}]}})
+
+        n2 = nc.NotionConnector()   # simulates a new process/instance
+        calls = []
+        real_read_text = type(path).read_text
+
+        def spy_read_text(self, *a, **k):
+            calls.append(1)
+            return real_read_text(self, *a, **k)
+
+        monkeypatch.setattr(type(path), "read_text", spy_read_text)
+        n2._disk_load()
+        n2._disk_load()
+        n2._disk_load()
+        assert len(calls) == 1   # the first load reads disk, the rest hit memory
+
+    def test_a_save_updates_the_in_memory_mirror_without_a_disk_read(self, tmp_path, monkeypatch):
+        n = self._conn(tmp_path, monkeypatch)
+        n._disk_load()   # establishes the (empty) in-memory mirror
+        n._disk_save({"contacts": {"records": [{"id": "new"}]}})
+        assert n._disk_load()["contacts"]["records"] == [{"id": "new"}]
+
+    def test_get_page_text_does_not_reread_disk_on_a_cache_hit(self, tmp_path, monkeypatch):
+        n = self._conn(tmp_path, monkeypatch)
+        n.live = True
+        n._disk_save({"page_text": {"p1": {"text": "hello", "at": 9999999999}}})
+        calls = []
+        real_read_text = type(n._DISK_PATH).read_text
+
+        def spy_read_text(self, *a, **k):
+            calls.append(1)
+            return real_read_text(self, *a, **k)
+
+        monkeypatch.setattr(type(n._DISK_PATH), "read_text", spy_read_text)
+        assert n.get_page_text("p1") == "hello"
+        assert n.get_page_text("p1") == "hello"
+        assert calls == []
+
+
 def test_a_collection_is_loaded_once_under_concurrent_readers(tmp_path, monkeypatch):
     """Two requests arriving together must not each start a minutes-long pull."""
     import threading

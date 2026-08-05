@@ -133,6 +133,16 @@ class NotionConnector:
         self._list_cache: dict = {}
         self._load_locks: dict = {}
         self._locks_guard = threading.Lock()
+        # In-memory mirror of notion_cache.json (~9MB) — _disk_load used to
+        # re-read and re-parse the whole file on every call, including cache
+        # HITS (get_page_text calls it once per lookup, dozens of times in a
+        # single Felix run). Populated on first load, kept in sync by
+        # _disk_save, and safe to share: every caller either only reads a
+        # sub-key or mutates the dict and calls _disk_save immediately after,
+        # so the in-memory copy is always what was (or is about to be)
+        # persisted, never stale relative to this process's own writes.
+        self._disk_cache: Optional[dict] = None
+        self._disk_cache_lock = threading.Lock()
 
     def _key_lock(self, key: str) -> threading.Lock:
         with self._locks_guard:
@@ -161,19 +171,27 @@ class NotionConnector:
 
     def _disk_load(self) -> dict:
         import json
-        try:
-            return json.loads(self._DISK_PATH.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001 - absent or corrupt → start fresh
-            return {}
+
+        with self._disk_cache_lock:
+            if self._disk_cache is not None:
+                return self._disk_cache
+            try:
+                self._disk_cache = json.loads(
+                    self._DISK_PATH.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001 - absent or corrupt → start fresh
+                self._disk_cache = {}
+            return self._disk_cache
 
     def _disk_save(self, store: dict) -> None:
         import json
-        try:
-            self._DISK_PATH.parent.mkdir(parents=True, exist_ok=True)
-            self._DISK_PATH.write_text(json.dumps(store, ensure_ascii=False),
-                                       encoding="utf-8")
-        except Exception:  # noqa: BLE001 - a failed save just means a re-pull later
-            pass
+        with self._disk_cache_lock:
+            self._disk_cache = store
+            try:
+                self._DISK_PATH.parent.mkdir(parents=True, exist_ok=True)
+                self._DISK_PATH.write_text(json.dumps(store, ensure_ascii=False),
+                                           encoding="utf-8")
+            except Exception:  # noqa: BLE001 - a failed save just means a re-pull later
+                pass
 
     def _collection(self, key: str, db_id: str, parse, model,
                     property_ids: Optional[list] = None) -> list:
