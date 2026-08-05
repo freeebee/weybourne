@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from src.config import REASONING_MODEL
-from src.connectors.notion_client import NotionConnector
+from src.connectors.notion_client import NotionConnector, page_title
 from src.features.dedupe import normalize_name
 from src.features.web_research import research_block
 from src.schemas import Attendee, CalendarEvent, MeetingPrep
@@ -237,9 +237,19 @@ def company_from_email_domain(email: str) -> str:
 # --------------------------------------------------------------------------- #
 
 def gather_notion_context(
-    notion: NotionConnector, counterparty: str, company: str
+    notion: NotionConnector, counterparty: str, company: str, max_notes: int = 12
 ) -> tuple[str, list[str]]:
-    """Pull any matching Funds / Companies / Contacts records as context text."""
+    """Pull any matching Funds / Companies / Contacts records, plus every
+    meeting note linked to (or naming) them, as context text.
+
+    Matching a Company/Fund/Contact record used to be where this stopped —
+    the actual meeting history sitting in the Notes database was never
+    looked at, so "no prior record" got reported for counterparties we had
+    met a dozen times. A note counts as relevant if it's related (Attendees /
+    Companies / Fund) to something matched below, OR its own title/summary
+    names the counterparty/company directly — the latter catches notes whose
+    relations were never filled in.
+    """
     lines: list[str] = []
     sources: list[str] = []
     target_names = {normalize_name(n) for n in (counterparty, company) if n}
@@ -248,17 +258,25 @@ def gather_notion_context(
         v = normalize_name(value)
         return bool(v) and any(t and (t in v or v in t) for t in target_names)
 
+    matched_contact_ids: set[str] = set()
+    matched_company_ids: set[str] = set()
+    matched_fund_ids: set[str] = set()
+
     try:
         for c in notion.list_contacts():
             if _hits(c.name) or (c.company and _hits(c.company)):
                 lines.append(f"Contact: {c.name} — {c.title or 'unknown title'} "
                              f"({c.type or 'no type'}), {c.email or 'no email'}")
                 sources.append(f"Notion Contacts: {c.name}")
+                if c.id:
+                    matched_contact_ids.add(c.id)
         for co in notion.list_companies():
             if _hits(co.name):
                 lines.append(f"Company: {co.name} — {co.description or 'no description'} "
                              f"[{co.city}, {co.country}]".strip())
                 sources.append(f"Notion Companies: {co.name}")
+                if co.id:
+                    matched_company_ids.add(co.id)
         for f in notion.list_funds():
             if _hits(f.name) or (f.company and _hits(f.company)):
                 lines.append(
@@ -268,6 +286,45 @@ def gather_notion_context(
                     f"{f.strategy_description}"
                 )
                 sources.append(f"Notion Funds: {f.name}")
+                if f.id:
+                    matched_fund_ids.add(f.id)
+
+        notes = [
+            n for n in notion.list_notes()
+            if matched_contact_ids & set(n.attendee_ids)
+            or matched_company_ids & set(n.company_ids)
+            or matched_fund_ids & set(n.fund_ids)
+            or _hits(n.name) or _hits(n.excerpt)
+        ]
+        notes.sort(key=lambda n: n.date, reverse=True)
+        if len(notes) > max_notes:
+            sources.append(f"({len(notes) - max_notes} older matching note(s) omitted)")
+        for n in notes[:max_notes]:
+            lines.append(f"Meeting note ({n.date or 'undated'}"
+                         f"{', ' + n.note_type if n.note_type else ''}): "
+                         f"{n.name} — {n.excerpt or 'no summary recorded'}")
+            sources.append(f"Notion Notes: {n.name}")
+
+        # Anything else in the workspace mentioning the name — deal memos,
+        # wiki pages, ad hoc docs — that live outside the three curated
+        # databases and the Notes database. This is Notion's own search, not
+        # a connected-sources search: it will not surface SharePoint/Outlook
+        # content, only Notion pages actually shared with the integration.
+        seen_ids = (matched_contact_ids | matched_company_ids | matched_fund_ids
+                    | {n.id for n in notes[:max_notes] if n.id})
+        query = (company or counterparty or "").strip()
+        if query:
+            for hit in notion.search(query, page_size=8):
+                pid = hit.get("id", "")
+                if not pid or pid in seen_ids:
+                    continue
+                title = page_title(hit)
+                if not title or not _hits(title):
+                    continue
+                seen_ids.add(pid)
+                url = hit.get("url", "")
+                lines.append(f"Notion page: {title}" + (f" ({url})" if url else ""))
+                sources.append(f"Notion search: {title}")
     except Exception as e:  # noqa: BLE001 - context gathering must not break prep
         lines.append(f"(Could not read Notion: {e})")
 

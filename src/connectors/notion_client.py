@@ -18,7 +18,7 @@ import time as _time
 from typing import Optional
 
 from src import config
-from src.schemas import CompanyRecord, ContactRecord, FundRecord
+from src.schemas import CompanyRecord, ContactRecord, FundRecord, NoteRecord
 
 
 class NotionPartialResult(Exception):
@@ -98,6 +98,13 @@ _SAMPLE_RECENT_NOTES = [
      "note_type": "Reference call", "attendees": "J. Chen", "url": "",
      "excerpt": "Former LP confirms the risk process is real; flagged turnover in the "
                 "quant team during 2024. Worth probing key-person cover."},
+]
+
+_SAMPLE_NOTES = [
+    NoteRecord(id="n1", name="Call with Piting Capital", note_type="GP Meeting",
+               date="2026-07-28", excerpt="Reviewed China A-share book; risk "
+               "process holds up.", attendee_ids=["c1"], company_ids=["co1"],
+               fund_ids=["f1"]),
 ]
 
 _SAMPLE_EXECUTION_ITEMS = [
@@ -351,8 +358,14 @@ class NotionConnector:
     def list_contacts(self) -> list[ContactRecord]:
         if not self.live or not config.NOTION_CONTACTS_DB:
             return list(_SAMPLE_CONTACTS)
-        return self._collection("contacts", config.NOTION_CONTACTS_DB,
-                                _contact_from_page, ContactRecord)
+        # Resolving "Employed By" here (rather than leaving it a bare relation
+        # id) is what lets meeting prep and dedupe's cross-corroboration match
+        # a contact to their employer by name — both already expect
+        # ContactRecord.company to hold one.
+        company_names = {c.id: c.name for c in self.list_companies() if c.id}
+        return self._collection(
+            "contacts", config.NOTION_CONTACTS_DB,
+            lambda p: _contact_from_page(p, company_names), ContactRecord)
 
     def list_companies(self) -> list[CompanyRecord]:
         if not self.live or not config.NOTION_COMPANIES_DB:
@@ -371,6 +384,16 @@ class NotionConnector:
         ])
         return self._collection("funds", config.NOTION_FUNDS_DB,
                                 _fund_from_page, FundRecord, property_ids=pids)
+
+    def list_notes(self) -> list[NoteRecord]:
+        """Every meeting note, with its relation ids to contacts/companies/
+        funds — the full-history counterpart to list_recent_notes' 7-day
+        window. Same disk-snapshot + delta-sync caching as the other
+        collections, so the first live pull is the slow one."""
+        if not self.live or not config.NOTION_NOTES_DB:
+            return list(_SAMPLE_NOTES)
+        return self._collection("notes", config.NOTION_NOTES_DB,
+                                _note_from_page, NoteRecord)
 
     # -- reads: page text (CHAO preference pages, notes) ----------------- #
 
@@ -421,6 +444,36 @@ class NotionConnector:
             if t in ("select", "multi_select", "status"):
                 out[name] = [o["name"] for o in prop.get(t, {}).get("options", [])]
         return out
+
+    def search(self, query: str, page_size: int = 10) -> list[dict]:
+        """Notion's own text search (POST /v1/search) — title and body content
+        across every page/database shared with this integration, not just the
+        Contacts/Companies/Funds/Notes databases the rest of this class reads.
+
+        This is the plain REST API: it reaches whatever is explicitly shared
+        with the integration token and nothing more. It does NOT reach
+        Microsoft 365 content indexed by Notion's own AI Connectors (Teams,
+        SharePoint) — that only surfaces through Notion's in-product search
+        and AI features, a separate, non-REST surface this token has no
+        access to. Callers should not treat a hit here as covering those
+        sources.
+        """
+        if not self.live or not (query or "").strip():
+            return []
+        import requests
+
+        try:
+            _throttle()
+            resp = requests.post(
+                f"{config.NOTION_BASE_URL}/search", headers=self._headers(),
+                json={"query": query, "page_size": page_size,
+                      "sort": {"direction": "descending",
+                               "timestamp": "last_edited_time"}},
+                timeout=30)
+            resp.raise_for_status()
+            return resp.json().get("results", [])
+        except Exception:  # noqa: BLE001 - supplementary, must not break prep
+            return []
 
     def refresh_page_text_cache(self) -> int:
         """Forget all cached page text (next read re-pulls). Returns count dropped."""
@@ -702,6 +755,18 @@ def _title(page: dict, name: str) -> str:
     return "".join(t.get("plain_text", "") for t in _prop(page, name).get("title", []))
 
 
+def page_title(page: dict) -> str:
+    """A page or database's own title without needing to know the title
+    property's name in advance — search results span whatever databases the
+    integration can see, each naming its title property differently."""
+    if page.get("object") == "database":
+        return "".join(t.get("plain_text", "") for t in page.get("title", []))
+    props = page.get("properties") or {}
+    return next(
+        ("".join(t.get("plain_text", "") for t in v.get("title", []))
+         for v in props.values() if v.get("type") == "title"), "")
+
+
 def _rich(page: dict, name: str) -> str:
     return "".join(t.get("plain_text", "") for t in _prop(page, name).get("rich_text", []))
 
@@ -787,13 +852,37 @@ def plain_value(payload: dict) -> tuple[str, object]:
     return t, ""
 
 
-def _contact_from_page(p: dict) -> ContactRecord:
+def _contact_from_page(p: dict, company_names: Optional[dict] = None) -> ContactRecord:
+    company_names = company_names or {}
+    employer_ids = relation_ids(p, "Employed By")
     return ContactRecord(
         id=p.get("id"),
         name=_title(p, "Name"),
         email=_email(p, "Email"),
         title=_rich(p, "Title") or _select(p, "Title"),
         type=_select(p, "Type"),
+        company="; ".join(dict.fromkeys(
+            company_names[i] for i in employer_ids if i in company_names)),
+    )
+
+
+# The Notes DB property name includes the glyph — kept in sync by hand with
+# notion_sync.COMPANIES_RELATION_PROP (importing it would be circular: this
+# module can't depend on a feature module that already depends on it).
+_NOTES_COMPANIES_RELATION_PROP = "\U0001f3e2 Companies"
+
+
+def _note_from_page(p: dict) -> NoteRecord:
+    return NoteRecord(
+        id=p.get("id"),
+        name=_title(p, "Name"),
+        note_type=_select(p, "Note Type"),
+        date=(_prop(p, "Date").get("date") or {}).get("start", "")
+             or p.get("last_edited_time", "")[:10],
+        excerpt=_rich(p, "Thoughts / Considerations"),
+        attendee_ids=relation_ids(p, "Attendees"),
+        company_ids=relation_ids(p, _NOTES_COMPANIES_RELATION_PROP),
+        fund_ids=relation_ids(p, "Fund"),
     )
 
 

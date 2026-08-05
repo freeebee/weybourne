@@ -159,6 +159,19 @@ class FundRecord(BaseModel):
     company: str = ""
 
 
+class NoteRecord(BaseModel):
+    id: Optional[str] = None
+    name: str = ""
+    note_type: str = ""
+    date: str = ""
+    excerpt: str = ""
+    # Relation ids, not names — resolving them is the caller's job, same as
+    # every other record here matched by id rather than a denormalised label.
+    attendee_ids: list[str] = Field(default_factory=list)
+    company_ids: list[str] = Field(default_factory=list)
+    fund_ids: list[str] = Field(default_factory=list)
+
+
 # --- Triage & entity extraction -------------------------------------------- #
 
 class ExtractedEntity(BaseModel):
