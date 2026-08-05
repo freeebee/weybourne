@@ -402,7 +402,14 @@ export default function Live() {
   // lives in the store: leaving the page and coming back must not reopen them
   // mid-draft, and SHOW is a decision that should stick.
   const panesMin = s.panesMin;
-  const setPanesMin = (on) => live.set({ panesMin: on });
+  // Folding the panes away removes a lot of page height in one go — without
+  // this the browser's own scroll clamping reads as "minimize threw me back
+  // to the top" even though nothing asked it to scroll anywhere.
+  const setPanesMin = (on) => {
+    const y = window.scrollY;
+    live.set({ panesMin: on });
+    requestAnimationFrame(() => window.scrollTo(0, y));
+  };
 
   const openItems = s.items.filter((it) => !it.answer);
   const answeredItems = s.items.filter((it) => it.answer);
@@ -541,7 +548,12 @@ export default function Live() {
             which tucks both panes away entirely. */}
         <div style={{ flex: s.tabWide ? "3 1 640px" : "1.4 1 440px",
                       minWidth: "min(100%,320px)", transition: "flex .15s ease" }}>
-          <div className="spread" style={{ marginBottom: 10, gap: 10, flexWrap: "wrap" }}>
+          {/* Floating: stays reachable while scrolled through a long prep
+              document or a long questions list, so getting back to the other
+              tab never means scrolling all the way back up first. */}
+          <div className="spread" style={{ marginBottom: 10, gap: 10, flexWrap: "wrap",
+                        position: "sticky", top: 0, zIndex: 20,
+                        background: "var(--paper-100)", padding: "6px 0" }}>
             <div className="row" style={{ gap: 6 }}>
               {[
                 ["questions", `Live questions${openItems.length ? ` · ${openItems.length}` : ""}`],
@@ -559,29 +571,20 @@ export default function Live() {
                 </button>
               ))}
             </div>
-            <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
-              <button onClick={() => live.setTabWide(!s.tabWide)}
-                title={s.tabWide ? "Narrow — give the transcript its room back"
-                  : "Widen — take over the transcript column to read this in full"}
-                aria-label={s.tabWide ? "Narrow this pane" : "Maximize this pane"}
-                style={{ background: "var(--paper-000)", cursor: "pointer",
-                         border: "1px solid var(--paper-200)", borderRadius: 4,
-                         color: "var(--teal-700)", padding: "5px 8px",
-                         display: "flex", alignItems: "center" }}>
-                <svg width="11" height="14" viewBox="0 0 11 14" fill="none"
-                     stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"
-                     strokeLinejoin="round" aria-hidden="true">
-                  <path d={s.tabWide ? "M7.5 1.5 L2 7 L7.5 12.5" : "M3.5 1.5 L9 7 L3.5 12.5"} />
-                </svg>
-              </button>
-              <button className="mono" onClick={() => setPanesMin(true)}
-                title="Tuck the questions and recaps away so the note below gets the room"
-                style={{ background: "none", border: "1px solid var(--paper-200)",
-                         borderRadius: 4, cursor: "pointer", padding: "5px 8px",
-                         fontSize: 10, letterSpacing: ".1em", color: "var(--teal-700)" }}>
-                MINIMIZE
-              </button>
-            </span>
+            <button onClick={() => live.setTabWide(!s.tabWide)}
+              title={s.tabWide ? "Narrow — give the transcript its room back"
+                : "Widen — take over the transcript column to read this in full"}
+              aria-label={s.tabWide ? "Narrow this pane" : "Maximize this pane"}
+              style={{ background: "var(--paper-000)", cursor: "pointer",
+                       border: "1px solid var(--paper-200)", borderRadius: 4,
+                       color: "var(--teal-700)", padding: "5px 8px",
+                       display: "flex", alignItems: "center" }}>
+              <svg width="11" height="14" viewBox="0 0 11 14" fill="none"
+                   stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"
+                   strokeLinejoin="round" aria-hidden="true">
+                <path d={s.tabWide ? "M7.5 1.5 L2 7 L7.5 12.5" : "M3.5 1.5 L9 7 L3.5 12.5"} />
+              </svg>
+            </button>
           </div>
 
           {s.tab === "prep" && (
@@ -812,6 +815,20 @@ export default function Live() {
               </details>
             </Card>
           )}
+
+          {/* MINIMIZE sits here, over the transcript, rather than up with the
+              tabs opposite — it folds this pane too, so reaching for it from
+              the questions/prep tab bar meant scrolling back up first, which
+              is what read as the minimize button "jumping to the top". */}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+            <button className="mono" onClick={() => setPanesMin(true)}
+              title="Tuck the questions and recaps away so the note below gets the room"
+              style={{ background: "none", border: "1px solid var(--paper-200)",
+                       borderRadius: 4, cursor: "pointer", padding: "5px 8px",
+                       fontSize: 10, letterSpacing: ".1em", color: "var(--teal-700)" }}>
+              MINIMIZE
+            </button>
+          </div>
 
           {/* Closing belongs over the transcript it closes, not up in the page
               actions where it read as leaving the app. */}

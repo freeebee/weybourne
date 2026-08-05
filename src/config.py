@@ -75,9 +75,10 @@ CLAUDE_CLI_TIMEOUT = int(os.environ.get("CLAUDE_CLI_TIMEOUT", "600"))
 # CLAUDE_CLI_TIMEOUT and the whole job failed. This caps how many CLI calls
 # run at once, app-wide; anything past the cap queues instead of contending.
 CLAUDE_CLI_MAX_CONCURRENT = int(os.environ.get("CLAUDE_CLI_MAX_CONCURRENT", "3"))
-# A separate, reserved lane for live-meeting tidy/read calls (see src/llm.py)
-# so they never queue behind a prep or a Felix run — those are the calls a
-# recording is actively waiting on second by second.
+# Capacity of EACH live-meeting lane (see src/llm.py's _live_tidy_slot /
+# _live_read_slot) — tidy and read get one lane apiece, both separate from
+# CLAUDE_CLI_MAX_CONCURRENT above, so neither a prep/Felix run nor the OTHER
+# live stream can ever make the recording wait on a recap or a question.
 CLAUDE_CLI_LIVE_CONCURRENT = int(os.environ.get("CLAUDE_CLI_LIVE_CONCURRENT", "1"))
 # Empty directory the CLI runs from, so it doesn't auto-load an unrelated
 # CLAUDE.md / .mcp.json / hooks into every call. See src/llm.py.

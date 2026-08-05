@@ -111,14 +111,16 @@ def _client():
     return llm.get_client()
 
 
-def _live_client():
-    """Same as _client(), but on the reserved live-meeting lane (src/llm.py)
-    — a tidy/read call is on a clock the user is watching, so it must never
-    sit queued behind however many prep or Felix calls happen to be running."""
+def _live_client(pool: str):
+    """Same as _client(), but on one of the reserved live-meeting lanes
+    (src/llm.py) — a tidy/read call is on a clock the user is watching, so it
+    must never sit queued behind however many prep or Felix calls happen to
+    be running. ``pool`` is "live-tidy" or "live-read" specifically (not a
+    shared "live" lane) so a backlog of one never starves the other."""
     ok, msg = llm.preflight()
     if not ok:
         raise HTTPException(status_code=503, detail=f"AI backend unavailable: {msg}")
-    return llm.get_client(pool="live")
+    return llm.get_client(pool=pool)
 
 
 def _run(fn, *args, **kwargs):
@@ -1572,7 +1574,7 @@ def live_tidy(body: TidyIn):
     (Haiku). The page shows this cleaned text, never the raw transcript."""
     if not body.raw.strip():
         return {"text": ""}
-    text = _run(tidy_transcript_chunk, _live_client(), body.raw, body.prev_tail,
+    text = _run(tidy_transcript_chunk, _live_client("live-tidy"), body.raw, body.prev_tail,
                 body.output_language, body.detected_language)
     return {"text": text}
 
@@ -1594,7 +1596,7 @@ def _buffer_from(text: str) -> TranscriptBuffer:
 
 @app.post("/api/live/read")
 def live_read(body: ReadIn):
-    parsed = _run(read_transcript_batch, _live_client(), _buffer_from(body.transcript),
+    parsed = _run(read_transcript_batch, _live_client("live-read"), _buffer_from(body.transcript),
                   body.open_items, body.context, body.prior_recaps, body.last_tail)
     return parsed
 

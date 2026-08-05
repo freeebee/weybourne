@@ -912,8 +912,21 @@ export function BriefingView({ data, keyQs = [], onToggleKey, onAddKey,
         ) : (
           <>
             {data.ledger?.length > 0 && (
+              // table-layout:fixed + explicit column shares, not the browser's
+              // content-fit default — with 8 columns (one of them free text)
+              // the auto layout demanded far more width than a narrow
+              // container (the note taker's side panel, or this page before
+              // it's widened) has, so it either overflowed or squeezed every
+              // column to nothing. Fixed shares mean it actually fits, with
+              // the free-text columns wrapping instead of forcing the table
+              // wider than its box.
               <div style={{ overflowX: "auto", marginBottom: 14 }}>
-                <table className="wb">
+                <table className="wb" style={{ tableLayout: "fixed", minWidth: 560 }}>
+                  <colgroup>
+                    {[13, 13, 9, 9, 7, 7, 7, 35].map((pct, i) => (
+                      <col key={i} style={{ width: `${pct}%` }} />
+                    ))}
+                  </colgroup>
                   <thead><tr>
                     {["Company", "Fund · sector", "Entry", "Cost", "Own.", "MoIC", "IRR", "Business"]
                       .map((h) => <th key={h}>{h}</th>)}

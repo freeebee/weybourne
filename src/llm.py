@@ -66,11 +66,22 @@ _cli_slot = threading.Semaphore(max(1, config.CLAUDE_CLI_MAX_CONCURRENT))
 
 # A live meeting's tidy/read calls are on a clock the user is watching in real
 # time — a recap or question suggestion arriving minutes late is a much worse
-# failure than the same delay on a background prep. This second, reserved
-# lane means a live call is never stuck queueing behind however many prep or
-# Felix calls happen to be running; it only ever contends with itself, which
-# the frontend already keeps to one call at a time (S.reading / tidyBusy).
-_live_slot = threading.Semaphore(max(1, config.CLAUDE_CLI_LIVE_CONCURRENT))
+# failure than the same delay on a background prep. These reserved lanes mean
+# a live call is never stuck queueing behind however many prep or Felix calls
+# happen to be running.
+#
+# Tidy and read are DIFFERENT lanes, not one shared "live" lane: tidy fires
+# roughly every CHUNK_MS (8s) for as long as there is new speech, and each
+# call pays the same real CLI-subprocess startup cost as everything else
+# (measured on this machine: ~10-15s of process spawn before the model even
+# sees the prompt, dwarfing the ~2-3s the model itself takes). A steady drum
+# of tidy calls is therefore very often "busy" — if read shared that slot it
+# could be starved for minutes behind a tidy queue that never fully drains,
+# which is exactly the "summary comes out every 5 minutes instead of 30
+# seconds" symptom this was meant to fix, not cause. Each stream gets its own
+# slot so tidy backing up never blocks read, and vice versa.
+_live_tidy_slot = threading.Semaphore(max(1, config.CLAUDE_CLI_LIVE_CONCURRENT))
+_live_read_slot = threading.Semaphore(max(1, config.CLAUDE_CLI_LIVE_CONCURRENT))
 
 
 # --------------------------------------------------------------------------- #
@@ -221,9 +232,11 @@ class ClaudeCodeClient:
                  runner=None, pool: str = "default"):
         self.cli_path = cli_path or config.CLAUDE_CLI_PATH
         self.timeout = timeout or config.CLAUDE_CLI_TIMEOUT
-        # "live" reserves the dedicated lane in _live_slot instead of queuing
-        # behind background job traffic in _cli_slot — see get_client(pool=).
-        self._slot = _live_slot if pool == "live" else _cli_slot
+        # "live-tidy" / "live-read" reserve their own dedicated lane instead
+        # of queuing behind background job traffic on _cli_slot, and instead
+        # of queuing behind EACH OTHER — see the note above _live_tidy_slot.
+        self._slot = {"live-tidy": _live_tidy_slot,
+                      "live-read": _live_read_slot}.get(pool, _cli_slot)
         # Injectable for tests so the suite never spawns the real CLI.
         self._runner = runner or self._run_subprocess
         self.messages = _Messages(self)
@@ -423,9 +436,10 @@ def get_client(pool: str = "default"):
     It never means "quietly billed something else": selecting the CLI backend and
     failing to reach it raises rather than falling back to the API.
 
-    ``pool="live"`` is for the live-meeting tidy/read calls — see the note on
-    _live_slot above. It only affects the CLI backend; the direct API client
-    has no subprocess to gate in the first place.
+    ``pool="live-tidy"`` / ``pool="live-read"`` are for the live-meeting
+    calls — see the note on _live_tidy_slot above. Only affects the CLI
+    backend; the direct API client has no subprocess to gate in the first
+    place.
     """
     backend = (config.LLM_BACKEND or "claude_cli").strip().lower()
 
