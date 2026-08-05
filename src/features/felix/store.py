@@ -313,6 +313,47 @@ def save_adjudication_verdict(a_id: str, b_id: str, fp_a: str, fp_b: str,
         json.dumps({"pairs": cache}, indent=1), encoding="utf-8")
 
 
+# -- web-research cache ------------------------------------------------------ #
+# Separate from the cheap-adjudication cache above: a DEFINITIVE web verdict
+# (duplicate/distinct) is already permanent via resolve_pair, so only the
+# INCONCLUSIVE ("unsure") ones are worth remembering here — otherwise a pair
+# the web could not settle gets re-searched, at full cost, on every single
+# research run until it happens to resolve, even when neither record has
+# changed since the last (equally inconclusive) search.
+
+def load_research_cache(base: Optional[Path] = None) -> dict:
+    root = base or FELIX_DIR
+    path = root / "research_cache.json"
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("pairs", {})
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def cached_research(a_id: str, b_id: str, fp_a: str, fp_b: str,
+                    base: Optional[Path] = None) -> Optional[dict]:
+    """The cached web-research result for this pair, or None if there is no
+    entry or either fingerprint has since changed."""
+    entry = load_research_cache(base).get(pair_key(a_id, b_id))
+    if not entry or {entry.get("fp_a"), entry.get("fp_b")} != {fp_a, fp_b}:
+        return None
+    return entry.get("result")
+
+
+def save_research_verdict(a_id: str, b_id: str, fp_a: str, fp_b: str,
+                          result: dict, base: Optional[Path] = None) -> None:
+    root = base or FELIX_DIR
+    root.mkdir(parents=True, exist_ok=True)
+    cache = load_research_cache(base)
+    cache[pair_key(a_id, b_id)] = {
+        "fp_a": fp_a, "fp_b": fp_b, "result": result,
+        "at": datetime.now().isoformat(timespec="seconds")}
+    (root / "research_cache.json").write_text(
+        json.dumps({"pairs": cache}, indent=1), encoding="utf-8")
+
+
 # -- config ----------------------------------------------------------------- #
 
 # Felix runs live and on demand. There is no dry-run mode to enable and no

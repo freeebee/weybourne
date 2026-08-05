@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -820,11 +821,6 @@ def _felix_run(job: dict, notion, client, options: RunOptions,
                          + (f"same name, but {why}. " if why else "")
                          + verdict["reason"][:200])
         to_research = []
-    if to_research and research_budget > 0:
-        _stage(job, "Researching online",
-               f"{min(len(to_research), research_budget)} look-alike pair(s)")
-        checkpoint()
-
     def _pair_detail(a: dict, b: dict, web_check: str = "") -> str:
         """Side-by-side of both records — same evidence a merge row carries,
         so a possible-duplicate can be judged without opening Notion."""
@@ -833,27 +829,63 @@ def _felix_run(job: dict, notion, client, options: RunOptions,
                              detect.plan_merge_transfers(surv, losers[0]),
                              names_by_id, notes_by_id, web_check)
 
+    # A pair the web already called "unsure" is free to re-serve from cache
+    # (no search needed — nothing has changed) and does not touch the
+    # research budget; only pairs that actually need a fresh search do.
+    # Whatever a definitive verdict (duplicate/distinct) checks is never
+    # cached here — that goes straight to the permanent resolved_pairs store
+    # below, same as always.
+    cache_hits: list[tuple] = []
+    needs_search: list[tuple] = []
     for p, verdict in to_research:
-        pair_detail = _pair_detail(p["a"], p["b"], "not yet web-checked")
-        if research_budget <= 0:
-            # Out of budget: never merge on similarity alone — flag it and let
-            # a later run do the search.
-            record_recommendation(
-                p["a"], "(possible duplicate)",
-                f"may duplicate '{p['b']['name']}' — "
-                + (f"same name, but {p['contested']}. " if p.get("contested") else "")
-                + f"{verdict['reason'][:600]} "
-                "(queued for web research on a later run)",
-                source=f"name similarity {p['score']}, not yet web-checked",
-                detail=pair_detail)
-            continue
-        research_budget -= 1
+        fp_a, fp_b = detect.card_fingerprint(p["a"]), detect.card_fingerprint(p["b"])
+        cached = store.cached_research(p["a"]["id"], p["b"]["id"], fp_a, fp_b, base)
+        if cached is not None:
+            cache_hits.append((p, verdict, cached))
+        else:
+            needs_search.append((p, verdict, fp_a, fp_b))
+
+    to_process = needs_search[:research_budget] if research_budget > 0 else []
+    deferred_for_later = needs_search[len(to_process):]
+    research_budget -= len(to_process)
+
+    if to_process:
+        _stage(job, "Researching online", f"{len(to_process)} look-alike pair(s)")
+        checkpoint()
+
+    def _run_one_research(item):
+        p, verdict, fp_a, fp_b = item
         try:
             r = research.research_duplicate(client, p["a"], p["b"], names_by_id)
         except Exception:  # noqa: BLE001
             r = {"verdict": "unsure", "confidence": "low",
                  "explanation": "the research call failed", "evidence": "",
                  "employer_check": ""}
+        if r.get("verdict") == "unsure":
+            store.save_research_verdict(p["a"]["id"], p["b"]["id"], fp_a, fp_b, r, base)
+        return p, verdict, r
+
+    fresh_results: list[tuple] = []
+    if to_process:
+        # A handful of independent web searches — worth overlapping rather
+        # than waiting on each in turn. Matches the CLI concurrency headroom
+        # measured for this app (see CLAUDE_CLI_MAX_CONCURRENT).
+        with ThreadPoolExecutor(max_workers=min(5, len(to_process))) as pool:
+            fresh_results = list(pool.map(_run_one_research, to_process))
+
+    for p, verdict in [(p, v) for p, v, _, _ in deferred_for_later]:
+        # Out of budget: never merge on similarity alone — flag it and let a
+        # later run do the search.
+        record_recommendation(
+            p["a"], "(possible duplicate)",
+            f"may duplicate '{p['b']['name']}' — "
+            + (f"same name, but {p['contested']}. " if p.get("contested") else "")
+            + f"{verdict['reason'][:600]} "
+            "(queued for web research on a later run)",
+            source=f"name similarity {p['score']}, not yet web-checked",
+            detail=_pair_detail(p["a"], p["b"], "not yet web-checked"))
+
+    for p, verdict, r in cache_hits + fresh_results:
         emp = (r.get("employer_check") or "").strip()
         emp_txt = f" Employers: {emp[:300]}" if emp else ""
         _v = r.get("verdict", "unsure")
@@ -996,23 +1028,35 @@ def _felix_run(job: dict, notion, client, options: RunOptions,
                 for w in wanted:
                     defer_to_web("fund_tags", card, w["property"])
             targets = []
-        if targets:
+        # Budget spent up front (not one target at a time) so the searches
+        # that fit inside it can run concurrently instead of waiting on each
+        # other in turn; whatever doesn't fit is silently dropped, same as
+        # today — there is no pending-research entry for this category.
+        targets_to_process = targets[:research_budget] if research_budget > 0 else []
+        research_budget -= len(targets_to_process)
+        if targets_to_process:
             _stage(job, "Researching fund classifications",
-                   f"{min(len(targets), research_budget)} fund(s)")
+                   f"{len(targets_to_process)} fund(s)")
             checkpoint()
-        for card, wanted in targets:
-            if research_budget <= 0:
-                break
-            research_budget -= 1
+
+        def _run_fund_research(item):
+            card, wanted = item
             comp_rel = (card["relations"].get("Company")
                         or card["relations"].get("Company Name") or [])
             company = names_by_id.get(comp_rel[0], "") if comp_rel else \
                 str(card["plain"].get("Company Name") or "")
             try:
-                found = research.research_fund_fields(client, card, wanted,
-                                                      company)
+                found = research.research_fund_fields(client, card, wanted, company)
             except Exception:  # noqa: BLE001
                 found = []
+            return card, found
+
+        fund_results: list[tuple] = []
+        if targets_to_process:
+            with ThreadPoolExecutor(max_workers=min(5, len(targets_to_process))) as pool:
+                fund_results = list(pool.map(_run_fund_research, targets_to_process))
+
+        for card, found in fund_results:
             for pr in found:
                 # These are multi-selects in the live workspace; the payload
                 # type comes from the record itself rather than an assumption.

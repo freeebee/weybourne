@@ -100,6 +100,39 @@ class TestAdjudicationCache:
         assert hit["verdict"] == "distinct"
 
 
+class TestResearchCache:
+    """Web-research results, cached separately from the cheap-adjudication
+    cache above — only inconclusive verdicts are worth saving here (a
+    definitive one is already permanent via resolve_pair)."""
+
+    def test_no_entry_is_a_cache_miss(self, tmp_path):
+        assert store.cached_research("a", "b", "fp1", "fp2", base=tmp_path) is None
+
+    def test_unchanged_fingerprints_hit_and_return_the_full_result(self, tmp_path):
+        result = {"verdict": "unsure", "confidence": "low",
+                  "explanation": "no definitive online record either way",
+                  "evidence": "", "employer_check": ""}
+        store.save_research_verdict("a", "b", "fp1", "fp2", result, base=tmp_path)
+        assert store.cached_research("a", "b", "fp1", "fp2", base=tmp_path) == result
+
+    def test_order_of_a_and_b_does_not_matter(self, tmp_path):
+        result = {"verdict": "unsure"}
+        store.save_research_verdict("a", "b", "fp1", "fp2", result, base=tmp_path)
+        assert store.cached_research("b", "a", "fp2", "fp1", base=tmp_path) == result
+
+    def test_a_changed_fingerprint_is_a_miss(self, tmp_path):
+        store.save_research_verdict("a", "b", "fp1", "fp2", {"verdict": "unsure"},
+                                    base=tmp_path)
+        assert store.cached_research("a", "b", "fp1-new", "fp2", base=tmp_path) is None
+
+    def test_independent_of_the_adjudication_cache(self, tmp_path):
+        # Different files — a cheap-adjudication cache hit must not satisfy
+        # a research-cache lookup for the same pair, or vice versa.
+        store.save_adjudication_verdict("a", "b", "fp1", "fp2", "unsure",
+                                        base=tmp_path)
+        assert store.cached_research("a", "b", "fp1", "fp2", base=tmp_path) is None
+
+
 def test_stats_aggregates(tmp_path):
     store.save_run(RunRecord(run_id="run1", started="2026-08-03T09:00:00",
                              status="done", dry_run=False), base=tmp_path)
