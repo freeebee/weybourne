@@ -246,30 +246,17 @@ function TranscriptLibrary() {
   );
 }
 
-/* Languages the cleaned transcript can be written in, and friendly names for
-   the codes whisper detects. */
-const OUTPUT_LANGS = ["English", "Chinese", "French", "German", "Spanish", "Italian",
-  "Japanese", "Korean", "Portuguese", "Dutch", "Hindi", "Arabic"];
-
-const LANG_NAMES = {
-  en: "English", zh: "Chinese", yue: "Cantonese", es: "Spanish", fr: "French",
-  de: "German", it: "Italian", ja: "Japanese", ko: "Korean", pt: "Portuguese",
-  nl: "Dutch", ru: "Russian", hi: "Hindi", ar: "Arabic", id: "Indonesian",
-  ms: "Malay", ta: "Tamil", th: "Thai", vi: "Vietnamese", tr: "Turkish",
-  pl: "Polish", sv: "Swedish", da: "Danish", no: "Norwegian", fi: "Finnish",
-  he: "Hebrew", uk: "Ukrainian", cs: "Czech", el: "Greek", ro: "Romanian",
-  hu: "Hungarian", tl: "Tagalog",
-};
+/* The two languages the room is ever in. Anything else whisper thinks it hears
+   is a mis-detection, and the transcript is always written in English. */
+const LANG_NAMES = { en: "English", zh: "Chinese" };
 const langName = (code) => LANG_NAMES[code] || (code || "").toUpperCase();
 
-/* The cleaned-up live transcript, sentence by sentence — whisper hears any
-   language, Haiku tidies it into the chosen output language. The chip shows
-   what is being heard and what is being written; click it to change the
-   output language mid-meeting. */
+/* The cleaned-up live transcript, sentence by sentence — whisper hears English
+   or Mandarin, Haiku tidies it into English either way. The chip says which of
+   the two is being heard. */
 function LiveTranscript() {
   const s = live.S;
   const boxRef = React.useRef(null);
-  const [pickLang, setPickLang] = React.useState(false);
 
   React.useEffect(() => {
     const el = boxRef.current;
@@ -284,22 +271,16 @@ function LiveTranscript() {
       <SectionHead label="LIVE TRANSCRIPT"
         right={`${`${s.transcript} ${s.rawPending}`.trim().split(/\s+/).filter(Boolean).length} WORDS${
           s.tidyPending > 0 ? " · CLEANING" : ""}`} />
-      <button className="mono" onClick={() => setPickLang(!pickLang)}
-        title="Auto-detected spoken language and the language the transcript is written in — click to change the output"
-        style={{ background: "var(--paper-000)", border: "1px solid var(--paper-200)",
-                 borderRadius: 4, cursor: "pointer", padding: "4px 10px",
-                 fontSize: 10.5, letterSpacing: ".08em", marginBottom: 8,
-                 color: "var(--teal-700)" }}>
+      <span className="mono"
+        title="English and Mandarin are the only languages recognised; the transcript is written in English either way"
+        style={{ display: "inline-block", background: "var(--paper-000)",
+                 border: "1px solid var(--paper-200)", borderRadius: 4,
+                 padding: "4px 10px", fontSize: 10.5, letterSpacing: ".08em",
+                 marginBottom: 8, color: "var(--teal-700)" }}>
         HEARING {s.detectedLang ? langName(s.detectedLang).toUpperCase() : "—"}
         {s.detectedLang && s.detectedProb ? ` ${Math.round(s.detectedProb * 100)}%` : ""}
-        {" · WRITING "}{s.outputLang.toUpperCase()} ▾
-      </button>
-      {pickLang && (
-        <select value={s.outputLang} style={{ ...inputStyle, marginBottom: 8 }}
-          onChange={(e) => { live.set({ outputLang: e.target.value }); setPickLang(false); }}>
-          {OUTPUT_LANGS.map((l) => <option key={l} value={l}>{l}</option>)}
-        </select>
-      )}
+        {" · WRITING ENGLISH"}
+      </span>
       <Card style={{ padding: "12px 14px" }}>
         <div ref={boxRef} style={{ maxHeight: 240, overflowY: "auto" }}>
           {!s.entries.length && !s.rawPending && (
@@ -469,12 +450,6 @@ export default function Live() {
                 {devices.map((d, i) => (
                   <option key={d.deviceId} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>
                 ))}
-              </select>
-            </Field>
-            <Field label="TRANSCRIPT LANGUAGE" style={{ flex: "1 1 180px" }}
-              hint="Speech in any language is auto-detected; the transcript is cleaned up and written in this language.">
-              <select value={s.outputLang} onChange={(e) => live.set({ outputLang: e.target.value })} style={inputStyle}>
-                {OUTPUT_LANGS.map((l) => <option key={l} value={l}>{l}</option>)}
               </select>
             </Field>
             <Field label="READ EVERY" style={{ flex: "0 1 140px" }}

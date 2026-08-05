@@ -13,7 +13,10 @@ export const S = {
   questions: true,   // live question suggestions — toggleable; recaps always run
   manager: null,     // the loaded manager thread (entity, Notion links, history)
   cadence: 30,       // seconds between reads — 30 / 45 / 60, user-selectable
-  outputLang: "English",          // the transcript is cleaned INTO this language
+  // The transcript is always written in English: Mandarin is translated as it
+  // is cleaned up, so one meeting reads as one document and everything
+  // downstream (recaps, questions, the note) works off English.
+  outputLang: "English",
   detectedLang: "", detectedProb: 0,   // what whisper heard on the last chunk
   tidyPending: 0,    // chunks transcribed but still being cleaned up by Haiku
   rawPending: "",    // heard and already on screen, not yet cleaned up
@@ -169,7 +172,12 @@ async function pumpTidy() {
       output_language: S.outputLang,
       detected_language: S.detectedLang,
     });
-    text = (r.text ?? raw);
+    // An empty cleanup claims the chunk held no speech. When whisper heard
+    // actual words that claim is wrong, and taking it at face value deleted
+    // them: the words showed on screen in grey, then vanished, and because a
+    // read needs a transcript the recaps and questions stopped with them.
+    // Rough text beats missing text.
+    text = (r.text ?? "").trim() || raw;
   } catch { /* keep the raw text — better rough than missing */ }
   tidyBusy = false;
   S.tidyPending = tidyQueue.length;
@@ -193,17 +201,21 @@ function tidyDrained() {
 // ---- read loop ------------------------------------------------------------ //
 
 export async function performRead() {
-  if (S.reading || !S.transcript.trim()) return;
+  // Normally the tidied transcript; if the cleanup is failing or backed up,
+  // read the rough text rather than skipping the read entirely — no recap at
+  // all is worse than a recap off slightly rough wording.
+  const text = S.transcript.trim() || S.rawPending.trim();
+  if (S.reading || !text) return;
   S.reading = true; S.busy = "read"; emit();
   try {
     const parsed = await post("/api/live/read", {
-      transcript: S.transcript,
+      transcript: text,
       open_items: S.items.filter((it) => !it.answer).map((it) => ({ id: it.id, q: it.q })),
       context: context(),
       prior_recaps: S.batches.slice(0, 3).map((b) => b.recap).filter(Boolean).join(" | "),
       last_tail: S.lastTail,
     });
-    S.lastTail = S.transcript.slice(-240);
+    S.lastTail = text.slice(-240);   // where this read got to, whatever it read
     S.unreadWords = 0; S.lastReadAt = Date.now(); S.reads++;
     if (parsed.answered?.length) {
       S.items = S.items.map((it) => {

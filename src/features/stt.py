@@ -21,6 +21,12 @@ _transcribe_lock = threading.Lock()
 
 MODEL_SIZE = os.environ.get("WHISPER_MODEL", "base")
 
+# Weybourne's meetings are in English or Mandarin, and nothing else. Whisper's
+# open detection routinely mishears accented English as Welsh, Dutch or Korean
+# on a short chunk and then transcribes it as gibberish in that language.
+# Constraining the choice to these two removes that failure mode entirely.
+ALLOWED_LANGUAGES = ("en", "zh")
+
 
 def _get_model():
     global _model
@@ -31,12 +37,19 @@ def _get_model():
     return _model
 
 
+def _better_of_allowed(info) -> str:
+    """Whichever of English and Mandarin whisper thought more likely."""
+    probs = dict(getattr(info, "all_language_probs", None) or [])
+    return max(ALLOWED_LANGUAGES, key=lambda code: probs.get(code, 0.0))
+
+
 def transcribe_wav(wav_bytes: bytes, language: str = "") -> dict:
     """Transcribe a recorded audio segment.
 
     Returns {"text", "language", "language_probability"}. ``language`` pins the
-    input language (skips per-chunk detection); empty or "auto" lets whisper
-    detect it, so multilingual meetings come through in whatever was spoken.
+    input language; empty or "auto" lets whisper detect it. Detection is
+    constrained to ALLOWED_LANGUAGES — anything else it thinks it hears is
+    re-read as whichever of the two scored higher.
 
     Raises RuntimeError with an actionable message when the backend is missing.
     """
@@ -49,8 +62,11 @@ def transcribe_wav(wav_bytes: bytes, language: str = "") -> dict:
         ) from e
 
     pin = (language or os.environ.get("WHISPER_LANGUAGE", "")).strip().lower()
-    with _transcribe_lock:
-        segments, info = model.transcribe(
+    if pin not in ALLOWED_LANGUAGES:
+        pin = ""          # "auto", blank, or anything we do not accept
+
+    def _run(lang: str):
+        return model.transcribe(
             io.BytesIO(wav_bytes),
             vad_filter=True,
             # Defaults are tuned for long recordings and are far too aggressive
@@ -63,9 +79,16 @@ def transcribe_wav(wav_bytes: bytes, language: str = "") -> dict:
             # few points of accuracy. Greedy decoding (beam 1) is 2-3x faster
             # than the default beam of 5.
             beam_size=1,
-            language=pin if pin and pin != "auto" else None,
+            language=lang or None,
             condition_on_previous_text=False,
         )
+
+    with _transcribe_lock:
+        segments, info = _run(pin)
+        # `segments` is lazy, so a detection we reject costs nothing but the
+        # detection itself — the decode never runs.
+        if not pin and (getattr(info, "language", "") or "") not in ALLOWED_LANGUAGES:
+            segments, info = _run(_better_of_allowed(info))
         text = " ".join(seg.text.strip() for seg in segments).strip()
     return {
         "text": text,
