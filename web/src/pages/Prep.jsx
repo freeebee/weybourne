@@ -639,7 +639,7 @@ export function ScreenView({ screen, onMinimize, entityName, received,
           <div style={eyebrow({ color: "var(--teal-300)" })}>
             {(screen.sleeve || "").toUpperCase()} · SCREENING
           </div>
-          <div style={{ font: "300 28px/1.15 var(--serif)", color: "var(--paper-050)",
+          <div style={{ font: "300 20px/1.2 var(--serif)", color: "var(--paper-050)",
                         marginTop: 6 }}>
             {entityName || "This opportunity"}
           </div>
@@ -683,7 +683,7 @@ export function ScreenView({ screen, onMinimize, entityName, received,
       <div style={{ background: "var(--paper-050)", padding: "22px 28px",
                     borderBottom: HAIR }}>
         <div style={eyebrow({ color: "var(--stone-500)" })}>VERDICT</div>
-        <p style={{ font: "300 21px/1.45 var(--serif)", color: "var(--ink-800)",
+        <p style={{ font: "400 16px/1.55 var(--serif)", color: "var(--ink-800)",
                     margin: "8px 0 0", maxWidth: 1000, textWrap: "pretty" }}>
           {screen.summary}
         </p>
@@ -823,7 +823,7 @@ export function BriefingView({ data, keyQs = [], onToggleKey, onAddKey,
                         textTransform: "uppercase", color: "var(--teal-300)" }}>
             BRIEF · {(data.entity || entityName).toUpperCase()}
           </div>
-          <div style={{ font: "300 28px/1.2 var(--serif)", color: "var(--paper-050)",
+          <div style={{ font: "300 20px/1.25 var(--serif)", color: "var(--paper-050)",
                         marginTop: 6, maxWidth: "34ch" }}>
             {data.descriptor}
           </div>
