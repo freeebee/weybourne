@@ -20,16 +20,6 @@ _model = None
 _transcribe_lock = threading.Lock()
 
 MODEL_SIZE = os.environ.get("WHISPER_MODEL", "base")
-# 0 = ctranslate2 picks its own thread count. Benchmarked on this machine
-# (22 logical processors) with a representative ~15s spoken clip: forcing
-# 6, 8, 10 or 16 threads was consistently SLOWER than the default (roughly
-# 7-9s vs ~4.2s avg) — more threads fighting over a workload this small
-# costs more in synchronisation/cache contention than it gains in
-# parallelism. Left at auto; override here only after benchmarking again on
-# the actual target machine, not by assuming more cores helps.
-WHISPER_CPU_THREADS = int(os.environ.get("WHISPER_CPU_THREADS", "0"))
-# "cpu" today; override to "cuda" on a machine with a supported GPU.
-WHISPER_DEVICE = os.environ.get("WHISPER_DEVICE", "cpu")
 
 # Weybourne's meetings are in English or Mandarin, and nothing else. Whisper's
 # open detection routinely mishears accented English as Welsh, Dutch or Korean
@@ -43,8 +33,11 @@ def _get_model():
     if _model is None:
         from faster_whisper import WhisperModel
 
-        _model = WhisperModel(MODEL_SIZE, device=WHISPER_DEVICE, compute_type="int8",
-                             cpu_threads=WHISPER_CPU_THREADS)
+        # cpu_threads left at its default (ctranslate2 auto-tunes it) —
+        # benchmarked forcing 6/8/10/16 threads on this machine and every
+        # one was slower than auto (~7-9s vs ~4.2s avg on a representative
+        # clip), so there is no override here to reach for.
+        _model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8")
     return _model
 
 
