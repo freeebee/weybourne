@@ -74,7 +74,14 @@ CLAUDE_CLI_TIMEOUT = int(os.environ.get("CLAUDE_CLI_TIMEOUT", "600"))
 # contention, calls that normally finish in 1-3 minutes could blow past
 # CLAUDE_CLI_TIMEOUT and the whole job failed. This caps how many CLI calls
 # run at once, app-wide; anything past the cap queues instead of contending.
-CLAUDE_CLI_MAX_CONCURRENT = int(os.environ.get("CLAUDE_CLI_MAX_CONCURRENT", "3"))
+# 5 (up from the original 3) is based on a direct measurement on this
+# machine: 6 concurrent Opus-tier (prep-shaped) calls showed no per-call
+# slowdown versus 3, and 9 concurrent Haiku-tier (triage-shaped) calls ran
+# with zero failures. Not tested: mixed concurrent load across different
+# features at once (this app's actual worst case) or prep calls with
+# WebSearch/WebFetch enabled, which add real network variance. Lower this if
+# timeouts start showing up under real combined load.
+CLAUDE_CLI_MAX_CONCURRENT = int(os.environ.get("CLAUDE_CLI_MAX_CONCURRENT", "5"))
 # Capacity of EACH live-meeting lane (see src/llm.py's _live_tidy_slot /
 # _live_read_slot) — tidy and read get one lane apiece, both separate from
 # CLAUDE_CLI_MAX_CONCURRENT above, so neither a prep/Felix run nor the OTHER

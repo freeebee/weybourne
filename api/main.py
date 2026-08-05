@@ -45,7 +45,7 @@ from src.features.felix.models import RunOptions as FelixRunOptions
 from src.features.felix.run import felix_run
 from src.features.dedupe import dedupe_entity, domain_of, match_company, match_contact
 from src.features.draft_reply import generate_draft_options
-from src.features.inbox_triage import triage_email
+from src.features.inbox_triage import TRIAGE_BATCH_SIZE, triage_email, triage_email_batch
 from src.features.meeting_prep import (
     build_context,
     counterparty_from_event,
@@ -268,13 +268,22 @@ def _linked_fields(decisions: dict) -> dict:
     return fields
 
 
-def _triage_one(client, msg: EmailMessage, progress=None) -> dict:
+def _triage_one(client, msg: EmailMessage, progress=None,
+                pre_classified: InvestmentTriage | None = None) -> dict:
+    """The dedupe/adjudicate/Notion-proposal pipeline for one email, given
+    its classification. ``pre_classified`` lets the bulk triage job supply a
+    result from triage_email_batch (several emails classified in one CLI
+    call) instead of paying for a fresh classify call here — everything
+    below the classify step (dedupe, review-band adjudication, proposals) is
+    inherently per-email (each checks THIS email's entity against Notion)
+    and stays that way; only the classify step batches."""
     def say(what: str):
         if progress:
             progress(what)
 
     say(f"Reading “{msg.subject[:50]}”")
-    result: InvestmentTriage = triage_email(client, msg)
+    result: InvestmentTriage = (pre_classified if pre_classified is not None
+                                else triage_email(client, msg))
     out = result.model_dump()
     # Dedupe runs for every email, not only investment-relevant ones — knowing
     # whether the sender is already in Notion matters for a personal catch-up
@@ -387,27 +396,57 @@ def start_triage_job(body: TriageJobIn):
         job["partial"] = {}
         t_start = time.time()
 
-        def one(msg: EmailMessage):
-            job["current"] = msg.subject[:80]
-            try:
-                return msg.id, _triage_one(
-                    client, msg,
-                    progress=lambda what: job.__setitem__("current", what[:90]))
-            except (llm.ClaudeCodeAuthError, llm.ClaudeCodeRateLimited):
-                raise   # backend-level: stop the whole batch with a clear error
-            except Exception as e:  # noqa: BLE001 - one bad message shouldn't stop the rest
-                return msg.id, {"error": str(e)[:200]}
+        def one_batch(batch: list[EmailMessage]) -> dict:
+            """Classify + run the dedupe/adjudicate/proposal pipeline for one
+            batch. A single leftover message (the last partial batch) skips
+            triage_email_batch entirely — nothing to batch it with. A failed
+            or malformed batch call (bad ids, a parse error) falls back to
+            classifying its emails one at a time rather than losing or
+            misattributing the whole batch's results."""
+            if len(batch) == 1:
+                msg = batch[0]
+                job["current"] = msg.subject[:80]
+                try:
+                    return {msg.id: _triage_one(
+                        client, msg,
+                        progress=lambda what: job.__setitem__("current", what[:90]))}
+                except (llm.ClaudeCodeAuthError, llm.ClaudeCodeRateLimited):
+                    raise   # backend-level: stop the whole job with a clear error
+                except Exception as e:  # noqa: BLE001 - one bad message shouldn't stop the rest
+                    return {msg.id: {"error": str(e)[:200]}}
 
-        # Each triage is its own CLI process, so running three at once is a
+            job["current"] = f"{len(batch)} messages"
+            try:
+                classified = triage_email_batch(client, batch)
+            except (llm.ClaudeCodeAuthError, llm.ClaudeCodeRateLimited):
+                raise
+            except Exception:  # noqa: BLE001 - fall back to one-by-one below
+                classified = {}
+
+            out: dict[str, dict] = {}
+            for msg in batch:
+                try:
+                    out[msg.id] = _triage_one(
+                        client, msg, pre_classified=classified.get(msg.id),
+                        progress=lambda what: job.__setitem__("current", what[:90]))
+                except (llm.ClaudeCodeAuthError, llm.ClaudeCodeRateLimited):
+                    raise
+                except Exception as e:  # noqa: BLE001 - one bad message shouldn't stop the rest
+                    out[msg.id] = {"error": str(e)[:200]}
+            return out
+
+        batches = [msgs[i:i + TRIAGE_BATCH_SIZE] for i in range(0, len(msgs), TRIAGE_BATCH_SIZE)]
+        # Several emails per CLI call (classify) plus, when needed, a per-email
+        # adjudication call — running several batches at once is still a
         # straight wall-clock win with no extra memory pressure to speak of.
-        with ThreadPoolExecutor(max_workers=3) as pool:
-            futures = [pool.submit(one, m) for m in msgs]
+        with ThreadPoolExecutor(max_workers=config.CLAUDE_CLI_MAX_CONCURRENT) as pool:
+            futures = [pool.submit(one_batch, b) for b in batches]
             try:
                 for fut in as_completed(futures):
                     _checkpoint(job)
-                    mid, res = fut.result()
-                    job["partial"][mid] = res
-                    job["done"] += 1
+                    results = fut.result()
+                    job["partial"].update(results)
+                    job["done"] += len(results)
                     avg = (time.time() - t_start) / job["done"]
                     job["eta_override"] = int(
                         job["elapsed"] + avg * (len(msgs) - job["done"]))

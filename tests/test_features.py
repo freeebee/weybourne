@@ -5,7 +5,7 @@ import pytest
 
 from src.features import notion_sync, track_record
 from src.features.draft_reply import _fallback_options, generate_draft_options
-from src.features.inbox_triage import triage_email
+from src.features.inbox_triage import triage_email, triage_email_batch
 from src.features.meeting_prep import (
     company_from_email_domain,
     counterparty_from_event,
@@ -73,6 +73,72 @@ class TestTriage:
     def test_refusal_is_handled(self):
         client = FakeClient(handler=lambda **_: FakeResponse(content=[], stop_reason="refusal"))
         assert triage_email(client, EMAIL).category == "refused"
+
+
+EMAIL2 = EmailMessage(
+    id="m2", subject="Portfolio update", sender_name="Alex Chen",
+    sender_email="alex@examplefund.com", received="2026-07-30T09:00:00",
+    body="Quick update on the portfolio, nothing new to decide on.",
+)
+
+
+def _batch_result(msg_id: int, **overrides) -> dict:
+    result = {"id": msg_id, **TRIAGE_PAYLOAD}
+    result.update(overrides)
+    return result
+
+
+class TestTriageBatch:
+    """The bulk "Triage All" job's own lever: several emails classified in
+    ONE call, matched back up by an id the model must echo exactly."""
+
+    def test_classifies_each_email_and_keys_the_result_by_message_id(self):
+        payload = {"results": [
+            _batch_result(0),
+            _batch_result(1, is_investment=False, category="Not relevant",
+                         rationale="A routine update, no new opportunity."),
+        ]}
+        out = triage_email_batch(FakeClient(payload), [EMAIL, EMAIL2])
+        assert out["m1"].entity.fund_name == "Cendana Capital Fund VII"
+        assert out["m2"].is_investment is False
+
+    def test_every_email_goes_in_one_call_not_one_per_email(self):
+        client = FakeClient({"results": [_batch_result(0), _batch_result(1)]})
+        triage_email_batch(client, [EMAIL, EMAIL2])
+        assert len(client.calls) == 1
+        prompt = client.calls[0]["messages"][0]["content"]
+        assert "=== EMAIL 0 ===" in prompt
+        assert "=== EMAIL 1 ===" in prompt
+        assert "Cendana Capital Fund VII" in prompt
+        assert "Portfolio update" in prompt
+
+    def test_a_missing_id_raises_rather_than_silently_dropping_that_email(self):
+        # Only id 0 came back; id 1 (EMAIL2) is missing entirely.
+        client = FakeClient({"results": [_batch_result(0)]})
+        with pytest.raises(ValueError):
+            triage_email_batch(client, [EMAIL, EMAIL2])
+
+    def test_an_unrequested_id_raises_rather_than_silently_misattributing(self):
+        # id 5 doesn't correspond to any email that was actually sent.
+        client = FakeClient({"results": [_batch_result(0), _batch_result(5)]})
+        with pytest.raises(ValueError):
+            triage_email_batch(client, [EMAIL, EMAIL2])
+
+    def test_a_duplicated_id_raises(self):
+        client = FakeClient({"results": [_batch_result(0), _batch_result(0)]})
+        with pytest.raises(ValueError):
+            triage_email_batch(client, [EMAIL, EMAIL2])
+
+    def test_backfills_from_the_sender_same_as_the_single_email_path(self):
+        out = triage_email_batch(FakeClient({"results": [_batch_result(0)]}), [EMAIL])
+        assert out["m1"].entity.contact_email == "katie.courtney@cendanacapital.com"
+        assert out["m1"].entity.company_domain == "cendanacapital.com"
+
+    def test_a_single_leftover_email_still_works_through_the_batch_function(self):
+        # api/main.py's job skips triage_email_batch for a lone leftover
+        # message, but the function itself must still handle n=1 correctly.
+        out = triage_email_batch(FakeClient({"results": [_batch_result(0)]}), [EMAIL])
+        assert out["m1"].entity.fund_name == "Cendana Capital Fund VII"
 
 
 class TestPreferenceScreen:

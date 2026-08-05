@@ -110,21 +110,39 @@ def _default_entity_from_email(email: EmailMessage) -> ExtractedEntity:
     )
 
 
-def triage_email(client, email: EmailMessage) -> InvestmentTriage:
-    """Classify + extract for a single email. Returns a validated InvestmentTriage."""
-    content = (
+def _email_block(email: EmailMessage) -> str:
+    return (
         f"From: {email.sender_name} <{email.sender_email}>\n"
         f"Subject: {email.subject}\n"
         f"Received: {email.received}\n"
         f"Has attachments: {email.has_attachments}\n\n"
         f"{email.body or email.body_preview}"
     )
+
+
+def _backfill_from_sender(triage: InvestmentTriage, email: EmailMessage) -> InvestmentTriage:
+    """Backfill from the sender for EVERY email, relevant or not — even a
+    personal catch-up should still be checkable against the Notion contacts
+    and answerable with a drafted reply."""
+    if not triage.entity.contact_name and email.sender_name:
+        triage.entity.contact_name = email.sender_name
+    if not triage.entity.contact_email and email.sender_email:
+        triage.entity.contact_email = email.sender_email
+    if not triage.entity.company_domain and "@" in email.sender_email:
+        triage.entity.company_domain = email.sender_email.split("@", 1)[1].lower()
+    # NOTE: never backfill summary with the subject line — it leaks into Notion
+    # Description fields and reads as nonsense. Blank is better than wrong.
+    return triage
+
+
+def triage_email(client, email: EmailMessage) -> InvestmentTriage:
+    """Classify + extract for a single email. Returns a validated InvestmentTriage."""
     response = client.messages.create(
         model=FAST_MODEL,
         max_tokens=1500,
         system=TRIAGE_SYSTEM_PROMPT,
         output_config={"format": {"type": "json_schema", "schema": TRIAGE_SCHEMA}},
-        messages=[{"role": "user", "content": content}],
+        messages=[{"role": "user", "content": _email_block(email)}],
     )
     if getattr(response, "stop_reason", None) == "refusal":
         return InvestmentTriage(message_id=email.id, category="refused",
@@ -138,15 +156,90 @@ def triage_email(client, email: EmailMessage) -> InvestmentTriage:
                                 rationale="could not parse classifier output",
                                 entity=_default_entity_from_email(email))
     triage = InvestmentTriage.model_validate({**parsed, "message_id": email.id})
-    # Backfill from the sender for EVERY email, relevant or not — even a
-    # personal catch-up should still be checkable against the Notion contacts
-    # and answerable with a drafted reply.
-    if not triage.entity.contact_name and email.sender_name:
-        triage.entity.contact_name = email.sender_name
-    if not triage.entity.contact_email and email.sender_email:
-        triage.entity.contact_email = email.sender_email
-    if not triage.entity.company_domain and "@" in email.sender_email:
-        triage.entity.company_domain = email.sender_email.split("@", 1)[1].lower()
-    # NOTE: never backfill summary with the subject line — it leaks into Notion
-    # Description fields and reads as nonsense. Blank is better than wrong.
-    return triage
+    return _backfill_from_sender(triage, email)
+
+
+# --------------------------------------------------------------------------- #
+# Batched classification — the bulk "Triage All" job's own lever, not a win
+# for a single ad-hoc /api/triage call (there is nothing to batch it with).
+#
+# Every fresh CLI spawn pays ~5-6s of process bootstrap that has nothing to
+# do with the prompt (measured directly — see LIVE_PERSISTENT_SESSIONS in
+# src/config.py for the same finding applied to the live meeting). Batching
+# several emails into ONE call cuts that tax by roughly the batch size for
+# the bulk job, without any of the persistent-session complexity: this is
+# still a single one-shot call, thrown away right after, with no memory
+# carried into the NEXT batch.
+#
+# The risk it does carry is different in kind, not degree: within one call,
+# could the model attribute email A's fact to email B? Guarded against by a
+# simple integer id per email that the model must echo back exactly once —
+# see triage_email_batch's id round-trip check below. A batch that fails
+# that check (or fails to parse at all) raises, and the caller
+# (api/main.py's triage job) falls back to triage_email one at a time for
+# just that batch, so a malformed batch degrades to today's behaviour for
+# those few emails rather than silently misattributing or losing results.
+# --------------------------------------------------------------------------- #
+
+TRIAGE_BATCH_SIZE = 5
+
+_BATCH_ITEM_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "integer",
+               "description": "The EMAIL id this result is for, from its \"=== EMAIL <id> "
+                              "===\" header — echoed back exactly, not renumbered."},
+        **TRIAGE_SCHEMA["properties"],
+    },
+    "required": ["id", *TRIAGE_SCHEMA["required"]],
+    "additionalProperties": False,
+}
+
+BATCH_TRIAGE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "results": {"type": "array", "items": _BATCH_ITEM_SCHEMA},
+    },
+    "required": ["results"],
+    "additionalProperties": False,
+}
+
+BATCH_TRIAGE_SYSTEM_SUFFIX = """
+
+You will be given several emails at once, each headed "=== EMAIL <id> ===". Classify EACH \
+one independently on its own merits — never let one email's content, sender or figures \
+influence another's classification or extracted entity. Return exactly one result per email \
+in the "results" array, each carrying the exact integer "id" from its header. Every id given \
+must appear exactly once — no id skipped, none invented, none repeated."""
+
+
+def triage_email_batch(client, emails: list[EmailMessage]) -> dict[str, InvestmentTriage]:
+    """Classify + extract for several emails in ONE call. Returns a dict keyed
+    by email.id. Raises ValueError if the model's ids don't exactly match
+    what was sent — the caller is expected to catch this and fall back to
+    triage_email one at a time for this batch."""
+    user = "\n\n".join(f"=== EMAIL {i} ===\n{_email_block(e)}" for i, e in enumerate(emails))
+    response = client.messages.create(
+        model=FAST_MODEL,
+        max_tokens=1500 * len(emails),
+        system=TRIAGE_SYSTEM_PROMPT + BATCH_TRIAGE_SYSTEM_SUFFIX,
+        output_config={"format": {"type": "json_schema", "schema": BATCH_TRIAGE_SCHEMA}},
+        messages=[{"role": "user", "content": user}],
+    )
+    raw = next((b.text for b in response.content if getattr(b, "type", None) == "text"), "")
+    results = json.loads(raw).get("results", [])
+
+    expected_ids = set(range(len(emails)))
+    seen_ids = [r.get("id") for r in results]
+    if set(seen_ids) != expected_ids or len(seen_ids) != len(expected_ids):
+        raise ValueError(
+            f"batch triage id mismatch: expected {sorted(expected_ids)}, got {seen_ids}")
+
+    by_id = {r["id"]: r for r in results}
+    out: dict[str, InvestmentTriage] = {}
+    for i, email in enumerate(emails):
+        item = dict(by_id[i])
+        item.pop("id", None)
+        triage = InvestmentTriage.model_validate({**item, "message_id": email.id})
+        out[email.id] = _backfill_from_sender(triage, email)
+    return out
