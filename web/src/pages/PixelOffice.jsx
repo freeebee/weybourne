@@ -15,10 +15,15 @@ import { Mascot } from "../ui.jsx";
 
 /* -- design space ---------------------------------------------------------- */
 export const SCENE_W = 1600;
-export const SCENE_H = 430;
-const FLOOR_Y = 300;          // where the wall stops and the boards start
-const PLAQUE_Y = 348;         // brass labels sit below the walk line
-const MASCOT_H = 116;
+// The room shrunk to take up less of the page: furniture and Felix are drawn
+// at FURNITURE_SCALE of their original size (each station's mat keeps its
+// original footprint, so the smaller pieces sit with visible room around
+// them rather than crowding it), which let the room itself get shorter too.
+const FURNITURE_SCALE = 0.75;
+export const SCENE_H = 315;
+const FLOOR_Y = 225;           // where the wall stops and the boards start
+const PLAQUE_Y = FLOOR_Y + 48; // brass labels sit below the walk line
+const MASCOT_H = Math.round(116 * FURNITURE_SCALE);
 
 /* Station order is the reference's order, left to right, and doubles as the
    patrol route. `x` is the centre in design pixels. */
@@ -332,10 +337,20 @@ function WallArt() {
 function OfficeStation({ station, active, selected, onSelect }) {
   const art = ART[station.id];
   const half = Math.round(art.w / 2) + 26;
+  // Furniture is drawn at its full original size (feet on y=0, spanning local
+  // x 0..art.w) and then scaled down around its own centre — (art.w/2, 0) —
+  // so it shrinks in place rather than sliding off toward its left edge.
+  // Scaling around a point P by factor s is translate(P - s*P) scale(s); with
+  // P=(art.w/2, 0) the y-term drops out, so feet stay exactly on the floor.
+  const cx = art.w / 2;
+  const anchorX = station.x + art.ox + cx * (1 - FURNITURE_SCALE);
   return (
     <g>
       {/* floor mat — a hint that the station has its own patch of floor, not
-          a slab: at full contrast the row of them read as a shelf. */}
+          a slab: at full contrast the row of them read as a shelf. Kept at the
+          furniture's full-size footprint on purpose: the shrunk piece then
+          sits with visible breathing room around it instead of crowding its
+          neighbours. */}
       {R(station.x - half, FLOOR_Y + 6, half * 2, 26,
          selected ? C.mat : "#C1A176")}
       {R(station.x - half, FLOOR_Y + 6, half * 2, 2,
@@ -343,8 +358,8 @@ function OfficeStation({ station, active, selected, onSelect }) {
       {/* Two groups on purpose: a CSS transform on an SVG element REPLACES
           its transform attribute, so animating the same node that carries
           the translate would fling the furniture to the top-left corner. The
-          outer group places it; the inner one is free to shake. */}
-      <g transform={`translate(${station.x + art.ox} ${FLOOR_Y})`}>
+          outer group places AND scales it; the inner one is free to shake. */}
+      <g transform={`translate(${anchorX} ${FLOOR_Y}) scale(${FURNITURE_SCALE})`}>
         <g className={active ? "px-station-active" : undefined}>
           {art.draw}
         </g>
@@ -543,7 +558,7 @@ function CleanupHud({ stats }) {
       <div className="px-hud-counts">
         {items.map(([k, v, label]) => (
           <span key={k} className="px-hud-item" title={label}>
-            <svg viewBox="0 0 10 10" width="20" shapeRendering="crispEdges"
+            <svg viewBox="0 0 10 10" width="16" shapeRendering="crispEdges"
                  aria-hidden="true">{HUD_ICON[k]}</svg>
             <b>{(v ?? 0).toLocaleString()}</b>
             <span className="px-sr">{label}</span>
@@ -576,8 +591,10 @@ export default function PixelOfficeScene({ scene, stats, onSelect }) {
   const station = STATION_BY_ID[scene.zone] || STATIONS[0];
   // Felix works ON the station, so he stands close enough that his raised
   // wrench lands inside it. Clear of the furniture he looked like a bystander
-  // watching it shake by itself.
-  const felixX = Math.round(station.x + (ART[station.id].w / 2) - 40);
+  // watching it shake by itself. Scaled by the same factor the furniture
+  // shrank by, so he still closes the same relative distance to it.
+  const felixX = Math.round(station.x
+    + (ART[station.id].w / 2) * FURNITURE_SCALE - 40 * FURNITURE_SCALE);
 
   return (
     <div className="px-office" ref={wrapRef}
@@ -599,7 +616,9 @@ export default function PixelOfficeScene({ scene, stats, onSelect }) {
           {R(0, FLOOR_Y, SCENE_W, SCENE_H - FLOOR_Y, C.floor)}
           {Array.from({ length: 14 }, (_, i) =>
             R(i * 116, FLOOR_Y, 3, SCENE_H - FLOOR_Y, C.board, `p${i}`))}
-          {[18, 52, 96].map((y) =>
+          {/* Plank groove lines — offsets scaled to fit the shorter floor
+              (it used to run 130px deep; now it's 90). */}
+          {[12, 36, 66].map((y) =>
             R(0, FLOOR_Y + y, SCENE_W, 2, C.board, `g${y}`))}
           {R(0, SCENE_H - 22, SCENE_W, 3, C.floorDark)}
           {STATIONS.map((st) => (

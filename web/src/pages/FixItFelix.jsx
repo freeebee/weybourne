@@ -376,11 +376,19 @@ const EASY_TYPES = ["fix_formatting", "fix_icon", "fix_relation"];
 const isEasyFix = (c) => c.confidence === "High"
   && EASY_TYPES.includes(c.change_type);
 
+/* A row can join a bulk approval only while it is still an open question —
+   once decided (or already written to Notion) there is nothing left to queue. */
+const isAwaiting = (c) => c.review_status === "Awaiting Review";
+
 function ReviewTable({ s }) {
   const f = s.changesFilter;
   const [bulkDone, setBulkDone] = React.useState(0);
   const [bulkTotal, setBulkTotal] = React.useState(0);
-  const setF = (patch) => fx.fetchChanges({ ...f, ...patch });
+  // Multi-select for approving several findings at once. A Set of change_ids
+  // rather than page state per row, so it survives re-renders as new events
+  // stream in without needing to touch every ChangeRow.
+  const [picked, setPicked] = React.useState(() => new Set());
+  const setF = (patch) => { setPicked(new Set()); fx.fetchChanges({ ...f, ...patch }); };
   const sel = (key, opts) => (
     <select value={f[key] || ""} style={{ ...inputStyle, width: "auto", padding: "5px 8px" }}
       onChange={(e) => setF({ [key]: e.target.value })}>
@@ -397,6 +405,25 @@ function ReviewTable({ s }) {
       ? all.filter((c) => !isEasyFix(c) && c.execution_status !== "Applied")
     : f.review === "done" ? all.filter((c) => c.execution_status === "Applied")
     : all;
+  // A row that scrolled out of view (superseded, applied elsewhere, filtered
+  // away) drops out of the selection rather than queueing a decision on
+  // something no longer on screen.
+  const selectableIds = new Set(rows.filter(isAwaiting).map((c) => c.change_id));
+  React.useEffect(() => {
+    setPicked((p) => {
+      const next = new Set([...p].filter((id) => selectableIds.has(id)));
+      return next.size === p.size ? p : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows.map((c) => c.change_id).join(",")]);
+  const togglePick = (id) => setPicked((p) => {
+    const next = new Set(p);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const allPicked = selectableIds.size > 0 && picked.size === selectableIds.size;
+  const toggleAll = () => setPicked(allPicked ? new Set() : new Set(selectableIds));
+
   const fixAll = async () => {
     const list = [...rows];
     setBulkTotal(list.length); setBulkDone(0);
@@ -405,6 +432,19 @@ function ReviewTable({ s }) {
       setBulkDone((n) => n + 1);
     }
     setBulkTotal(0);
+  };
+  // The picked rows, in the order they are currently shown — queued one at a
+  // time (fx.review already serialises via S.busy) so Felix's dash-and-fix
+  // theatrics land in the same order you approved them in.
+  const runOnPicked = async (action) => {
+    const list = rows.filter((c) => picked.has(c.change_id));
+    setBulkTotal(list.length); setBulkDone(0);
+    for (const c of list) {
+      await fx.review(c.change_id, action);
+      setBulkDone((n) => n + 1);
+    }
+    setBulkTotal(0);
+    setPicked(new Set());
   };
   return (
     <div style={{ marginTop: 22 }}>
@@ -431,11 +471,49 @@ function ReviewTable({ s }) {
           lot; each one stays individually undoable.
         </p>
       )}
+      {selectableIds.size > 0 && (
+        <div className="row" style={{ marginBottom: 10, gap: 10,
+                     padding: "8px 11px", background: "var(--paper-050)",
+                     border: "1px solid var(--paper-200)", borderRadius: 4,
+                     alignItems: "center" }}>
+          <label className="row" style={{ gap: 6, cursor: "pointer",
+                                          alignItems: "center" }}>
+            <input type="checkbox" checked={allPicked} onChange={toggleAll}
+              style={{ width: 15, height: 15, cursor: "pointer" }} />
+            <span className="mono" style={{ fontSize: 10.5, letterSpacing: ".08em",
+                  color: "var(--stone-500)" }}>
+              SELECT ALL {selectableIds.size} SHOWN
+            </span>
+          </label>
+          {picked.size > 0 && (
+            <>
+              <span className="mono" style={{ fontSize: 10.5, letterSpacing: ".08em",
+                    color: "var(--teal-700)" }}>
+                {picked.size} SELECTED
+              </span>
+              <Button variant="dark" disabled={bulkTotal > 0}
+                onClick={() => runOnPicked("approve")}>
+                {bulkTotal > 0 ? `Approving ${bulkDone}/${bulkTotal}…`
+                  : `Approve ${picked.size}`}
+              </Button>
+              <Button variant="ghost" disabled={bulkTotal > 0}
+                onClick={() => runOnPicked("dismiss")}>
+                Discard {picked.size}
+              </Button>
+            </>
+          )}
+        </div>
+      )}
       {rows.length === 0 && (
         <p className="muted small">Nothing waiting — run Felix, or switch the
           view to see easy fixes or past decisions.</p>
       )}
-      {rows.map((c) => <ChangeRow key={c.change_id} c={c} s={s} />)}
+      {rows.map((c) => (
+        <ChangeRow key={c.change_id} c={c} s={s}
+          checked={picked.has(c.change_id)}
+          onToggleCheck={isAwaiting(c) ? togglePick : undefined}
+          bulkBusy={bulkTotal > 0} />
+      ))}
     </div>
   );
 }
@@ -511,7 +589,7 @@ function ValueEdit({ c, edit, onChange }) {
   );
 }
 
-function ChangeRow({ c, s }) {
+function ChangeRow({ c, s, checked, onToggleCheck, bulkBusy }) {
   const [keepId, setKeepId] = React.useState("");
   // The reviewer's own wording or tags. null until they touch it, so an
   // untouched row approves exactly what Felix planned.
@@ -526,10 +604,22 @@ function ChangeRow({ c, s }) {
   // A distinct verdict is not a merge proposal, so there is nothing to pick.
   const canPick = isDup && awaiting && !applied
     && !(c.reason || "").includes("DISTINCT");
-  // Either decision locks the row, but only the pressed button spins.
-  const rowBusy = (s.busy || "").startsWith(`review-${c.change_id}-`);
+  // Either decision locks the row, but only the pressed button spins. While a
+  // bulk approval is running every row locks — an individual click landing
+  // mid-queue would race the queue's own call on the same row.
+  const rowBusy = (s.busy || "").startsWith(`review-${c.change_id}-`) || bulkBusy;
   return (
-          <Card style={{ padding: "13px 16px", marginBottom: 8 }}>
+          <Card style={{ padding: "13px 16px", marginBottom: 8, display: "flex", gap: 10 }}>
+            {/* Only an untouched, awaiting row can join a bulk approval —
+                queueing one still mid-edit would silently discard the edit. */}
+            {onToggleCheck && (
+              <input type="checkbox" checked={!!checked} disabled={bulkBusy}
+                onChange={() => onToggleCheck(c.change_id)}
+                aria-label={`Select ${c.record_name || "this row"} for bulk approval`}
+                style={{ marginTop: 3, flex: "none", width: 15, height: 15,
+                         cursor: bulkBusy ? "default" : "pointer" }} />
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
             <div className="spread" style={{ gap: 10, flexWrap: "wrap" }}>
               {/* The field is part of the identity of the row: one contact
                   can have a Title proposal approved and a Description
@@ -619,6 +709,7 @@ function ChangeRow({ c, s }) {
               {c.undo_result && (
                 <span className="muted" style={{ fontSize: "12px" }}>{c.undo_result}</span>
               )}
+            </div>
             </div>
           </Card>
   );

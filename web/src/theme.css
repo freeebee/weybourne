@@ -89,12 +89,14 @@ button{font-family:var(--sans)}
 .px-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
   overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
-/* Felix walks on integer pixel positions along the floor line. The travel
-   time is set per-render from the scene (slow when idling, quick when powered
-   up), so only the easing lives here. */
-.px-felix{position:absolute;bottom:130px;left:0;width:116px;
+/* Felix walks on integer pixel positions along the floor line. bottom/width
+   match the scene's shrunk MASCOT_H and floor gap (PixelOffice.jsx) — the
+   room got shorter, so he did too. The travel time is set per-render from
+   the scene (slow when idling, quick when powered up), so only the easing
+   lives here. */
+.px-felix{position:absolute;bottom:90px;left:0;width:87px;
   transition:transform 1.5s cubic-bezier(.35,.05,.25,1);will-change:transform}
-.px-felix-body{position:relative;height:116px;image-rendering:pixelated;z-index:1}
+.px-felix-body{position:relative;height:87px;image-rendering:pixelated;z-index:1}
 .px-felix-body.walking{animation:px-step .42s steps(2) infinite}
 .px-felix.powered .px-felix-body.walking{animation-duration:.22s}
 .px-felix.powered{filter:drop-shadow(0 0 10px rgba(226,88,34,.6))}
@@ -102,7 +104,7 @@ button{font-family:var(--sans)}
 /* The fire engulfs him: it sits behind the sprite, overshoots his shoulders,
    and rises half a body-height above his head so the licks clear him rather
    than stopping at his hat. */
-.px-flames{position:absolute;left:-20px;right:-20px;bottom:-13px;top:-66px;
+.px-flames{position:absolute;left:-15px;right:-15px;bottom:-10px;top:-50px;
   z-index:0;pointer-events:none;opacity:.95}
 .px-flame{width:100%;height:100%;display:block}
 @keyframes px-step{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
@@ -124,27 +126,29 @@ button{font-family:var(--sans)}
   font:700 20px/1 var(--mono);letter-spacing:.22em;text-indent:.22em;
   animation:fx-power 2.8s steps(24) forwards}
 
-/* ---- the HUD under the room ---------------------------------------------- */
-.px-hudrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;
-  align-items:stretch;margin:12px 0 18px}
-.px-console{display:flex;align-items:center;gap:14px;padding:14px 18px;
-  background:var(--ink-800);border:3px solid var(--brass-500);border-radius:4px;
+/* ---- the HUD under the room ------------------------------------------------
+   Both boxes shrunk to match the smaller room above them: less padding,
+   smaller type, a tighter LED and icons. */
+.px-hudrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;
+  align-items:stretch;margin:9px 0 14px}
+.px-console{display:flex;align-items:center;gap:10px;padding:8px 13px;
+  background:var(--ink-800);border:2px solid var(--brass-500);border-radius:4px;
   box-shadow:inset 0 0 0 2px rgba(255,255,255,.06)}
-.px-led{width:11px;height:11px;border-radius:50%;flex:none;
+.px-led{width:9px;height:9px;border-radius:50%;flex:none;
   background:#3B5468;box-shadow:0 0 0 2px rgba(0,0,0,.35) inset}
 .px-led.on{background:#5BE0A8;animation:px-blink 1.6s steps(2) infinite}
 @keyframes px-blink{0%,100%{opacity:1}50%{opacity:.35}}
-.px-console-text{font:500 15px/1.3 var(--mono);letter-spacing:.14em;
+.px-console-text{font:500 12px/1.3 var(--mono);letter-spacing:.12em;
   color:var(--teal-300)}
-.px-hud{display:flex;align-items:center;gap:18px;flex-wrap:wrap;
-  padding:12px 18px;background:var(--paper-000);
-  border:3px solid var(--brass-500);border-radius:4px}
-.px-hud-title{font:500 10px/1.4 var(--mono);letter-spacing:.14em;
+.px-hud{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:8px 13px;background:var(--paper-000);
+  border:2px solid var(--brass-500);border-radius:4px}
+.px-hud-title{font:500 9px/1.4 var(--mono);letter-spacing:.12em;
   color:var(--stone-500)}
-.px-hud-counts{display:flex;gap:10px;flex-wrap:wrap}
-.px-hud-item{display:inline-flex;gap:8px;align-items:center;padding:5px 11px;
+.px-hud-counts{display:flex;gap:7px;flex-wrap:wrap}
+.px-hud-item{display:inline-flex;gap:6px;align-items:center;padding:3px 8px;
   background:var(--paper-050);border:1px solid var(--paper-200);border-radius:3px}
-.px-hud-item b{font-size:19px;color:var(--ink-700);font-variant-numeric:tabular-nums}
+.px-hud-item b{font-size:15px;color:var(--ink-700);font-variant-numeric:tabular-nums}
 .px-hud-item svg{image-rendering:pixelated}
 
 /* ---- narrow fallback ------------------------------------------------------ */
@@ -156,7 +160,7 @@ button{font-family:var(--sans)}
   color:var(--teal-700)}
 @media (max-width: 780px){
   .px-hudrow{grid-template-columns:minmax(0,1fr)}
-  .px-console-text{font-size:12.5px;letter-spacing:.1em}
+  .px-console-text{font-size:11px;letter-spacing:.1em}
 }
 @media (prefers-reduced-motion: reduce){
   .px-felix{transition:none}
