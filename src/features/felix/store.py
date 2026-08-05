@@ -266,6 +266,53 @@ def resolve_pair(a: str, b: str, decision: str,
         json.dumps({"pairs": pairs}, indent=1), encoding="utf-8")
 
 
+# -- cheap-LLM adjudication cache -------------------------------------------- #
+# Distinct from resolved_pairs above: a resolved pair is a USER or WEB
+# decision — permanent until someone reopens it. This cache is just the
+# CHEAP (non-web) model's classification of a pair, reused only as long as
+# NEITHER record has changed since (see detect.card_fingerprint) — a
+# "distinct" verdict here is a soft skip, not a permanent one, and
+# "duplicate"/"unsure" entries still need the exact same web verification or
+# human approval a fresh verdict of that kind would; only the classification
+# CALL is skipped, never the safety gate downstream of it.
+
+def load_adjudication_cache(base: Optional[Path] = None) -> dict:
+    root = base or FELIX_DIR
+    path = root / "adjudication_cache.json"
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("pairs", {})
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def cached_verdict(a_id: str, b_id: str, fp_a: str, fp_b: str,
+                   base: Optional[Path] = None) -> Optional[dict]:
+    """The cached entry for this pair, or None if there is no entry or
+    either fingerprint no longer matches (one side was edited since — the
+    cache is stale and the pair needs adjudicating again). The fingerprint
+    check is order-independent: which record was "a" or "b" can differ
+    between scans depending on Notion's pagination order."""
+    entry = load_adjudication_cache(base).get(pair_key(a_id, b_id))
+    if not entry or {entry.get("fp_a"), entry.get("fp_b")} != {fp_a, fp_b}:
+        return None
+    return entry
+
+
+def save_adjudication_verdict(a_id: str, b_id: str, fp_a: str, fp_b: str,
+                              verdict: str, reason: str = "",
+                              base: Optional[Path] = None) -> None:
+    root = base or FELIX_DIR
+    root.mkdir(parents=True, exist_ok=True)
+    cache = load_adjudication_cache(base)
+    cache[pair_key(a_id, b_id)] = {
+        "fp_a": fp_a, "fp_b": fp_b, "verdict": verdict, "reason": reason,
+        "at": datetime.now().isoformat(timespec="seconds")}
+    (root / "adjudication_cache.json").write_text(
+        json.dumps({"pairs": cache}, indent=1), encoding="utf-8")
+
+
 # -- config ----------------------------------------------------------------- #
 
 # Felix runs live and on demand. There is no dry-run mode to enable and no

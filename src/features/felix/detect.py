@@ -12,6 +12,8 @@ dies there as a recommendation.
 """
 from __future__ import annotations
 
+import hashlib
+
 from src.connectors.notion_client import plain_value, relation_ids
 from src.features.dedupe import _name_score, _squash, domain_of
 
@@ -97,6 +99,29 @@ def card_from_page(page: dict, db: str) -> dict:
 
 def _empty(value) -> bool:
     return value in ("", None, [], False) if not isinstance(value, bool) else False
+
+
+def card_fingerprint(card: dict) -> str:
+    """A stable hash of the fields that matter for duplicate adjudication —
+    name, email, filled property values, and relations. Used to tell whether
+    a cached adjudication verdict for a pair is still good: if neither
+    record's fingerprint has changed since the verdict was cached, there is
+    nothing new for the model to see. Deliberately NOT based on
+    last_edited_time — that ticks on any edit, including ones (an icon, an
+    unrelated field) that have no bearing on whether two records are the
+    same entity, which would invalidate the cache far more than necessary.
+    """
+    parts = [card.get("name", ""), card.get("email", "")]
+    for k in sorted(card.get("plain", {})):
+        v = card["plain"][k]
+        if not _empty(v):
+            parts.append(f"{k}={v}")
+    for k in sorted(card.get("relations", {})):
+        ids = card["relations"][k]
+        if ids:
+            parts.append(f"{k}=" + ",".join(sorted(ids)))
+    blob = "|".join(str(p) for p in parts)
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:16]
 
 
 def filled_count(card: dict) -> int:

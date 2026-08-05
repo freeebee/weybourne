@@ -33,6 +33,37 @@ class TestCards:
         assert c["title_prop"] == "Name"
 
 
+class TestFingerprint:
+    """card_fingerprint gates the adjudication cache: unchanged fingerprint
+    means the cached verdict is still good, so this is what actually decides
+    whether a pair gets re-adjudicated or skipped."""
+
+    def test_identical_cards_fingerprint_the_same(self):
+        a = card("a", name="Allan Fife", email="allan@fife.com")
+        b = card("b", name="Allan Fife", email="allan@fife.com")
+        assert detect.card_fingerprint(a) == detect.card_fingerprint(b)
+
+    def test_a_changed_name_changes_the_fingerprint(self):
+        a = card("a", name="Allan Fife", email="allan@fife.com")
+        b = card("a", name="Alan Fife", email="allan@fife.com")
+        assert detect.card_fingerprint(a) != detect.card_fingerprint(b)
+
+    def test_a_changed_relation_changes_the_fingerprint(self):
+        a = card("a", name="Allan Fife", relations={"Employed By": ["co1"]})
+        b = card("a", name="Allan Fife", relations={"Employed By": ["co2"]})
+        assert detect.card_fingerprint(a) != detect.card_fingerprint(b)
+
+    def test_last_edited_time_alone_does_not_change_it(self):
+        # An icon tweak or an unrelated field bumps last_edited_time but must
+        # not, by itself, invalidate a cached adjudication verdict — the
+        # fingerprint is deliberately NOT built from it.
+        a = card("a", name="Allan Fife", email="allan@fife.com",
+                created="2026-01-01T00:00:00.000Z")
+        b = card("a", name="Allan Fife", email="allan@fife.com",
+                created="2026-06-01T00:00:00.000Z")
+        assert detect.card_fingerprint(a) == detect.card_fingerprint(b)
+
+
 class TestExactDuplicates:
     def test_same_email_grouped(self):
         cards = [card("a", name="Allan Fife", email="a@fife.com"),

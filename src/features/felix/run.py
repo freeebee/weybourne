@@ -711,6 +711,26 @@ def _felix_run(job: dict, notion, client, options: RunOptions,
                 continue                # already queued as a contested name
             p["db"] = key
             fuzzy_all.append(p)
+
+    # Pairs the cheap model has already classified, reused as long as
+    # neither record has changed since (store.cached_verdict checks the
+    # fingerprints). A cached "distinct" is settled and stays quiet, same as
+    # a resolved pair; "duplicate"/"unsure" go straight into the same
+    # research queue a fresh verdict of that kind would, without spending
+    # another CLI call to re-derive what is already known.
+    to_research: list[tuple] = []
+    still_uncached: list[dict] = []
+    for p in fuzzy_all:
+        fp_a, fp_b = detect.card_fingerprint(p["a"]), detect.card_fingerprint(p["b"])
+        cached = store.cached_verdict(p["a"]["id"], p["b"]["id"], fp_a, fp_b, base)
+        if cached is None:
+            still_uncached.append(p)
+        elif cached["verdict"] != "distinct":
+            to_research.append((p, {"verdict": cached["verdict"],
+                                    "reason": cached.get("reason", "")
+                                             or "cached from an earlier run"}))
+    fuzzy_all = still_uncached
+
     # The cap applies here too, not just to what gets WRITTEN: adjudicating a
     # pair the run has no room left to act on is a wasted CLI call. Trimmed
     # to remaining findings headroom (worst case, one finding per pair) —
@@ -727,12 +747,18 @@ def _felix_run(job: dict, notion, client, options: RunOptions,
     # EVERY look-alike pair goes to web research before anything is proposed:
     # a name score plus a model opinion is not evidence that two people are
     # the same person, and it cannot tell a shared name from a job move.
-    to_research: list[tuple] = []
     for verdict in adjudicate.adjudicate_duplicates(
             client, fuzzy_all, max_calls=max(1, options.max_llm_calls // 2)):
-        if verdict["verdict"] in ("duplicate", "unsure"):
-            to_research.append((verdict["pair"], verdict))
-        elif verdict["verdict"] == "deferred":
+        p = verdict["pair"]
+        v = verdict["verdict"]
+        if v in ("duplicate", "distinct", "unsure"):
+            store.save_adjudication_verdict(
+                p["a"]["id"], p["b"]["id"],
+                detect.card_fingerprint(p["a"]), detect.card_fingerprint(p["b"]),
+                v, verdict.get("reason", ""), base)
+        if v in ("duplicate", "unsure"):
+            to_research.append((p, verdict))
+        elif v == "deferred":
             counts["deferred"] += 1
 
     # An ordinary run spends nothing on the web: it lists what it could not

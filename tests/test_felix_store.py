@@ -57,6 +57,49 @@ def test_config_defaults_and_merge(tmp_path):
     assert store.load_config(base=tmp_path)["live_enabled"] is False
 
 
+class TestAdjudicationCache:
+    """Distinct from resolved_pairs: this is the cheap model's classification
+    of a pair, good only as long as neither record's fingerprint changed."""
+
+    def test_no_entry_is_a_cache_miss(self, tmp_path):
+        assert store.cached_verdict("a", "b", "fp1", "fp2", base=tmp_path) is None
+
+    def test_unchanged_fingerprints_hit(self, tmp_path):
+        store.save_adjudication_verdict("a", "b", "fp1", "fp2", "distinct",
+                                        "different employers", base=tmp_path)
+        hit = store.cached_verdict("a", "b", "fp1", "fp2", base=tmp_path)
+        assert hit is not None
+        assert hit["verdict"] == "distinct"
+        assert hit["reason"] == "different employers"
+
+    def test_order_of_a_and_b_does_not_matter(self, tmp_path):
+        # Notion pagination order can put either record first on a later
+        # scan — the cache must not treat that as a different pair.
+        store.save_adjudication_verdict("a", "b", "fp1", "fp2", "distinct",
+                                        base=tmp_path)
+        assert store.cached_verdict("b", "a", "fp2", "fp1", base=tmp_path) is not None
+
+    def test_a_changed_fingerprint_is_a_miss(self, tmp_path):
+        store.save_adjudication_verdict("a", "b", "fp1", "fp2", "distinct",
+                                        base=tmp_path)
+        # "a" was edited since — its fingerprint moved to fp1-new.
+        assert store.cached_verdict("a", "b", "fp1-new", "fp2", base=tmp_path) is None
+
+    def test_a_different_pair_with_the_same_fingerprints_is_still_a_miss(self, tmp_path):
+        store.save_adjudication_verdict("a", "b", "fp1", "fp2", "distinct",
+                                        base=tmp_path)
+        assert store.cached_verdict("a", "c", "fp1", "fp2", base=tmp_path) is None
+
+    def test_saving_again_overwrites_the_old_verdict(self, tmp_path):
+        store.save_adjudication_verdict("a", "b", "fp1", "fp2", "unsure",
+                                        base=tmp_path)
+        store.save_adjudication_verdict("a", "b", "fp1-new", "fp2", "distinct",
+                                        base=tmp_path)
+        assert store.cached_verdict("a", "b", "fp1", "fp2", base=tmp_path) is None
+        hit = store.cached_verdict("a", "b", "fp1-new", "fp2", base=tmp_path)
+        assert hit["verdict"] == "distinct"
+
+
 def test_stats_aggregates(tmp_path):
     store.save_run(RunRecord(run_id="run1", started="2026-08-03T09:00:00",
                              status="done", dry_run=False), base=tmp_path)
