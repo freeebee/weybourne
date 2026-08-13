@@ -1,0 +1,1571 @@
+<title>Alembic &amp; Ash</title>
+<style>
+  /* ---------------------------------------------------------------
+     Alembic & Ash — a night apothecary. Single committed dark world:
+     soot ground, copper instruments, tallow light. Every colour is
+     painted explicitly so the page holds on any host background.
+     --------------------------------------------------------------- */
+
+  :root {
+    --soot:      #14110f;
+    --pitch:     #1d1916;
+    --pitch-hi:  #262019;
+    --ash:       #3a312a;
+    --smoke:     #8a7c6d;
+    --tallow:    #e8ddc8;
+    --tallow-dim:#bfb3a0;
+    --copper:    #b87333;
+    --copper-lo: #7d4e22;
+    --copper-hi: #e0a05c;
+    --verdigris: #4a7c6f;
+    --blood:     #b2402c;
+    --gold:      #d9a441;
+
+    --ember:   #e2542c;
+    --tide:    #3b8fd4;
+    --verdant: #5aa457;
+    --umbra:   #8257c9;
+
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", "URW Palladio L", Georgia, serif;
+    --sans:  "Segoe UI", Roboto, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --mono:  ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+
+    --rule: 1px solid var(--ash);
+    --pad: 14px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--soot);
+    color: var(--tallow);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  /* ambient room glow, tinted by the brew */
+  #room {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background: radial-gradient(60% 50% at 50% 42%, rgba(184,115,51,0.10), rgba(20,17,15,0) 70%);
+    transition: background 900ms linear;
+  }
+
+  #app {
+    position: relative;
+    z-index: 1;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 18px 18px 40px;
+  }
+
+  /* ---------- shared type roles ---------- */
+
+  .label {
+    font-family: var(--serif);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--copper);
+    margin: 0;
+  }
+  .num {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+  }
+  h1, h2, h3 { font-family: var(--serif); font-weight: 600; text-wrap: balance; margin: 0; }
+
+  /* ---------- top bar ---------- */
+
+  header.bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 16px;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--copper-lo);
+  }
+  header.bar h1 {
+    font-size: 25px;
+    letter-spacing: 0.02em;
+    color: var(--tallow);
+  }
+  header.bar h1 span { color: var(--copper); }
+  .stats { display: flex; gap: 18px; margin-left: auto; align-items: baseline; }
+  .stat { display: flex; align-items: baseline; gap: 6px; }
+  .stat .v { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 16px; color: var(--tallow); }
+  .stat.coin .v { color: var(--gold); }
+  .bar-actions { display: flex; gap: 8px; }
+
+  /* ---------- buttons ---------- */
+
+  button {
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--tallow);
+    background: var(--pitch-hi);
+    border: 1px solid var(--ash);
+    border-radius: 2px;
+    padding: 6px 11px;
+    cursor: pointer;
+    transition: background 120ms, border-color 120ms, color 120ms;
+  }
+  button:hover:not(:disabled) { background: var(--ash); border-color: var(--copper-lo); }
+  button:focus-visible { outline: 2px solid var(--copper-hi); outline-offset: 2px; }
+  button:disabled { opacity: 0.35; cursor: not-allowed; }
+  button.primary {
+    background: var(--copper-lo);
+    border-color: var(--copper);
+    color: #fff3e2;
+  }
+  button.primary:hover:not(:disabled) { background: var(--copper); }
+  button.ghost { background: transparent; }
+  button.danger:hover:not(:disabled) { border-color: var(--blood); color: #f0b6ab; }
+
+  /* ---------- bench layout ---------- */
+
+  .bench {
+    display: grid;
+    grid-template-columns: 290px minmax(340px, 1fr) 300px;
+    gap: 16px;
+    align-items: start;
+  }
+  @media (max-width: 1020px) {
+    .bench { grid-template-columns: 1fr 1fr; }
+    .col-mid { order: -1; grid-column: 1 / -1; }
+  }
+  @media (max-width: 700px) {
+    .bench { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--pitch);
+    border: var(--rule);
+    border-radius: 3px;
+    padding: var(--pad);
+  }
+  .panel + .panel { margin-top: 14px; }
+  .panel-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--ash);
+  }
+  .panel-head .count { font-family: var(--mono); font-size: 11px; color: var(--smoke); }
+  .empty { color: var(--smoke); font-size: 12.5px; font-style: italic; margin: 4px 0; }
+
+  /* ---------- commissions ---------- */
+
+  .order {
+    border: 1px solid var(--ash);
+    border-left: 3px solid var(--copper-lo);
+    border-radius: 2px;
+    padding: 9px 10px;
+    margin-bottom: 9px;
+    background: var(--pitch-hi);
+  }
+  .order.ready { border-left-color: var(--verdigris); }
+  .order.urgent { border-left-color: var(--blood); }
+  .order .who { font-family: var(--serif); font-size: 14.5px; color: var(--tallow); }
+  .order .want { font-size: 12.5px; color: var(--tallow-dim); margin-top: 1px; }
+  .order .want b { color: var(--copper-hi); font-weight: 600; }
+  .order .terms {
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: 8px; margin-top: 7px;
+    font-family: var(--mono); font-size: 11.5px; color: var(--smoke);
+    font-variant-numeric: tabular-nums;
+  }
+  .order .act { margin-top: 7px; }
+  .order .act button { width: 100%; }
+  .order .terms .fee { color: var(--gold); }
+  .order .terms .days.short { color: var(--blood); }
+  .order button { padding: 3px 8px; font-size: 12px; }
+  .picker { margin-top: 8px; border-top: 1px dashed var(--ash); padding-top: 7px; display: grid; gap: 5px; }
+  .picker button { text-align: left; display: flex; justify-content: space-between; gap: 10px; }
+
+  /* ---------- formula ---------- */
+
+  .formula-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .formula-head h2 { font-size: 19px; }
+  .formula-sub { font-size: 12.5px; color: var(--smoke); font-style: italic; }
+
+  .recipe-grid { display: grid; gap: 6px; }
+  .recipe-row {
+    display: flex; align-items: center; gap: 9px;
+    width: 100%; text-align: left;
+    padding: 7px 9px;
+  }
+  .recipe-row .rname { font-family: var(--serif); font-size: 14px; flex: 1; }
+  .recipe-row .rprice { font-family: var(--mono); font-size: 11.5px; color: var(--gold); }
+  .recipe-row.locked { opacity: 0.4; }
+  .recipe-row.locked .rprice { color: var(--smoke); }
+
+  /* essence chips */
+  .chips { display: flex; gap: 3px; align-items: center; }
+  .chip { width: 9px; height: 9px; border-radius: 1px; opacity: 0.28; }
+  .chip.on { opacity: 1; }
+
+  /* ---------- cauldron ---------- */
+
+  .cauldron-wrap { position: relative; display: flex; justify-content: center; margin: 6px 0 2px; }
+  canvas#pot { display: block; width: 100%; max-width: 320px; height: auto; }
+  .boil-warn {
+    position: absolute; inset: -6px;
+    border: 1px solid var(--blood); border-radius: 4px;
+    opacity: 0; pointer-events: none;
+  }
+  .boil-warn.on { animation: pulse 700ms ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 0.15; } 50% { opacity: 0.75; } }
+
+  /* ---------- gauges ---------- */
+
+  .gauges { display: grid; gap: 10px; margin-top: 10px; }
+  .gauge .grow { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }
+  .gauge .gval { font-family: var(--mono); font-size: 11.5px; color: var(--tallow-dim); font-variant-numeric: tabular-nums; }
+  .track {
+    position: relative;
+    height: 9px;
+    background: var(--soot);
+    border: 1px solid var(--ash);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .fill { position: absolute; inset: 0 auto 0 0; width: 0%; transition: width 90ms linear; }
+  .fill.temp { background: linear-gradient(90deg, #7d4e22, var(--ember)); }
+  .fill.turb { background: linear-gradient(90deg, var(--copper-lo), var(--blood)); }
+  .fill.inf  { background: linear-gradient(90deg, var(--verdigris), #6fc0a4); }
+  .band {
+    position: absolute; top: 0; bottom: 0;
+    background: rgba(111,192,164,0.22);
+    border-left: 1px solid var(--verdigris);
+    border-right: 1px solid var(--verdigris);
+  }
+  .needle { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--tallow); }
+
+  /* essence balance readout */
+  .balance { display: grid; gap: 5px; margin-top: 12px; }
+  .bal-row { display: grid; grid-template-columns: 62px 1fr; gap: 8px; align-items: center; }
+  .bal-row .bname { font-family: var(--serif); font-size: 10.5px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--tallow-dim); }
+  .bal-track { position: relative; height: 7px; background: var(--soot); border: 1px solid var(--ash); border-radius: 2px; overflow: hidden; }
+  .bal-fill { position: absolute; inset: 0 auto 0 0; width: 0%; transition: width 140ms linear; }
+  .bal-target { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--tallow); opacity: 0.85; }
+
+  /* ---------- controls ---------- */
+
+  .controls { margin-top: 14px; display: grid; gap: 10px; }
+  .heat-rail { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+  .heat-rail button { padding: 6px 2px; font-size: 11.5px; letter-spacing: 0.05em; }
+  .heat-rail button.on { background: var(--copper-lo); border-color: var(--copper-hi); color: #fff3e2; }
+  .act-rail { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .keyhint { font-family: var(--mono); font-size: 10px; color: var(--smoke); opacity: 0.8; }
+  .primary .keyhint { color: #f3d9b8; opacity: 0.7; }
+
+  /* ---------- larder ---------- */
+
+  .larder { display: grid; gap: 5px; max-height: 340px; overflow-y: auto; padding-right: 3px; }
+  @media (max-width: 700px) {
+    /* stacked layout already scrolls — an inner scrollbox just clips rows */
+    .larder { max-height: none; overflow-y: visible; padding-right: 0; }
+  }
+  .jar {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    padding: 6px 8px;
+  }
+  .jar .jname { font-family: var(--serif); font-size: 13px; line-height: 1.25; }
+  .jar .jpot { font-family: var(--mono); font-size: 10.5px; color: var(--smoke); }
+  .jar .jqty { font-family: var(--mono); font-size: 12px; color: var(--tallow-dim); min-width: 20px; text-align: right; }
+  .jar .jqty.zero { color: var(--ash); }
+
+  /* ---------- shelf ---------- */
+
+  .vial {
+    display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center;
+    border-bottom: 1px dashed var(--ash); padding: 6px 0;
+  }
+  .vial:last-child { border-bottom: none; }
+  .vial .vname { font-family: var(--serif); font-size: 13px; }
+  .vial .vq { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; font-family: var(--serif); }
+  .vial button { padding: 3px 7px; font-size: 11.5px; }
+
+  .q0 { color: #7c6a5e; } .q1 { color: #9a8b6f; } .q2 { color: var(--tallow-dim); }
+  .q3 { color: var(--verdigris); } .q4 { color: var(--copper-hi); } .q5 { color: var(--gold); }
+
+  /* ---------- ledger ---------- */
+
+  .ledger { max-height: 140px; overflow-y: auto; }
+  .ledger p { margin: 0 0 4px; font-size: 12.5px; color: var(--tallow-dim); }
+  .ledger p .d { font-family: var(--mono); font-size: 10.5px; color: var(--smoke); margin-right: 6px; }
+  .ledger p.good { color: #8fc9b4; }
+  .ledger p.bad { color: #d99384; }
+
+  /* ---------- modal ---------- */
+
+  .scrim {
+    position: fixed; inset: 0; z-index: 20;
+    background: rgba(10,8,7,0.78);
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 40px 16px;
+    overflow-y: auto;
+  }
+  .scrim[hidden] { display: none; }
+  .modal {
+    background: var(--pitch);
+    border: 1px solid var(--copper-lo);
+    border-radius: 3px;
+    padding: 20px;
+    max-width: 620px;
+    width: 100%;
+  }
+  .modal h2 { font-size: 21px; margin-bottom: 4px; }
+  .modal .lede { color: var(--tallow-dim); font-size: 13px; margin: 0 0 16px; }
+  .modal-close { display: flex; justify-content: flex-end; margin-top: 18px; }
+  .market-row {
+    display: grid; grid-template-columns: 1fr auto auto auto auto;
+    gap: 10px; align-items: center;
+    padding: 7px 0; border-bottom: 1px dashed var(--ash);
+  }
+  .market-row:last-of-type { border-bottom: none; }
+  .market-row .mname { font-family: var(--serif); font-size: 13.5px; }
+  .market-row .mblurb { font-size: 11.5px; color: var(--smoke); font-style: italic; }
+  .market-row .mprice { font-family: var(--mono); font-size: 12.5px; color: var(--gold); font-variant-numeric: tabular-nums; }
+  .market-row .mprice.sale { color: var(--verdigris); }
+  .market-row .mstock { font-family: var(--mono); font-size: 11px; color: var(--smoke); }
+  .market-row button { padding: 3px 8px; font-size: 11.5px; }
+
+  .rules h3 { font-size: 14px; color: var(--copper-hi); margin: 14px 0 4px; }
+  .rules p { font-size: 13px; color: var(--tallow-dim); margin: 0 0 6px; max-width: 62ch; }
+  .rules ul { margin: 0 0 6px; padding-left: 18px; }
+  .rules li { font-size: 13px; color: var(--tallow-dim); margin-bottom: 3px; }
+  .rules b { color: var(--tallow); font-weight: 600; }
+
+  /* verdict card */
+  .verdict { text-align: center; }
+  .verdict .tier { font-family: var(--serif); font-size: 34px; letter-spacing: 0.03em; margin: 6px 0 2px; }
+  .verdict .score { font-family: var(--mono); font-size: 13px; color: var(--smoke); }
+  .breakdown { display: grid; gap: 6px; margin: 18px auto 0; max-width: 340px; text-align: left; }
+  .bd-row { display: grid; grid-template-columns: 96px 1fr 44px; gap: 8px; align-items: center; font-size: 12px; }
+  .bd-row .bl { color: var(--tallow-dim); }
+  .bd-row .bv { font-family: var(--mono); font-size: 11.5px; text-align: right; color: var(--tallow-dim); font-variant-numeric: tabular-nums; }
+  .bd-row .bv.minus { color: #d99384; }
+  .bd-track { height: 6px; background: var(--soot); border: 1px solid var(--ash); border-radius: 2px; overflow: hidden; }
+  .bd-fill { height: 100%; background: var(--copper); }
+  .bd-fill.neg { background: var(--blood); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+  }
+</style>
+
+<div id="room"></div>
+
+<div id="app">
+  <header class="bar">
+    <h1>Alembic &amp; <span>Ash</span></h1>
+    <div class="stats">
+      <div class="stat"><span class="label">Day</span><span class="v" id="s-day">1</span></div>
+      <div class="stat coin"><span class="label">Coin</span><span class="v" id="s-gold">0</span></div>
+      <div class="stat"><span class="label">Standing</span><span class="v" id="s-rep">0</span></div>
+    </div>
+    <div class="bar-actions">
+      <button id="btn-market">Market</button>
+      <button id="btn-help" class="ghost">Rules</button>
+      <button id="btn-day" class="primary">Close shop</button>
+    </div>
+  </header>
+
+  <div class="bench">
+    <!-- LEFT: commissions + ledger -->
+    <div class="col-left">
+      <section class="panel">
+        <div class="panel-head">
+          <h2 class="label">Commissions</h2>
+          <span class="count" id="order-count"></span>
+        </div>
+        <div id="orders"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2 class="label">Ledger</h2></div>
+        <div class="ledger" id="ledger" aria-live="polite"></div>
+      </section>
+    </div>
+
+    <!-- MIDDLE: the cauldron -->
+    <div class="col-mid">
+      <section class="panel">
+        <div id="stage-idle">
+          <div class="panel-head">
+            <h2 class="label">Set the formula</h2>
+            <span class="count">Pick what you're brewing</span>
+          </div>
+          <div class="recipe-grid" id="recipes"></div>
+        </div>
+
+        <div id="stage-brew" hidden>
+          <div class="formula-head">
+            <h2 id="f-name">—</h2>
+            <span class="formula-sub" id="f-sub"></span>
+          </div>
+
+          <div class="cauldron-wrap">
+            <canvas id="pot" width="640" height="440" aria-label="The cauldron"></canvas>
+            <div class="boil-warn" id="boilwarn"></div>
+          </div>
+
+          <div class="gauges">
+            <div class="gauge">
+              <div class="grow"><span class="label">Heat</span><span class="gval" id="g-temp">18°</span></div>
+              <div class="track"><div class="fill temp" id="f-temp"></div><div class="band" id="b-temp"></div><div class="needle" id="n-temp"></div></div>
+            </div>
+            <div class="gauge">
+              <div class="grow"><span class="label">Turbulence</span><span class="gval" id="g-turb">0%</span></div>
+              <div class="track"><div class="fill turb" id="f-turb"></div></div>
+            </div>
+            <div class="gauge">
+              <div class="grow"><span class="label">Infusion</span><span class="gval" id="g-inf">0%</span></div>
+              <div class="track"><div class="fill inf" id="f-inf"></div></div>
+            </div>
+          </div>
+
+          <div class="balance" id="balance"></div>
+
+          <div class="controls">
+            <div>
+              <div class="grow" style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+                <span class="label">Fire</span><span class="keyhint">keys 1–5</span>
+              </div>
+              <div class="heat-rail" id="heat"></div>
+            </div>
+            <div class="act-rail">
+              <button id="btn-stir">Stir <span class="keyhint">space</span></button>
+              <button id="btn-bottle" class="primary">Bottle <span class="keyhint">B</span></button>
+              <button id="btn-dump" class="danger ghost">Dump</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- RIGHT: larder + shelf -->
+    <div class="col-right">
+      <section class="panel">
+        <div class="panel-head">
+          <h2 class="label">Larder</h2>
+          <span class="count" id="larder-hint"></span>
+        </div>
+        <div class="larder" id="larder"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2 class="label">Shelf</h2>
+          <span class="count" id="shelf-count"></span>
+        </div>
+        <div id="shelf"></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- market -->
+<div class="scrim" id="market-scrim" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Market">
+    <h2>The Thursday Market</h2>
+    <p class="lede">Prices drift each day and the stalls only carry so much. Buy deep when something's cheap.</p>
+    <div id="market-list"></div>
+    <div class="modal-close"><button data-close="market-scrim" class="primary">Back to the bench</button></div>
+  </div>
+</div>
+
+<!-- verdict -->
+<div class="scrim" id="verdict-scrim" hidden>
+  <div class="modal verdict" role="dialog" aria-modal="true" aria-label="Result">
+    <p class="label" id="v-recipe"></p>
+    <p class="tier" id="v-tier"></p>
+    <p class="score" id="v-score"></p>
+    <div class="breakdown" id="v-breakdown"></div>
+    <div class="modal-close" style="justify-content:center;"><button data-close="verdict-scrim" class="primary">To the shelf</button></div>
+  </div>
+</div>
+
+<!-- rules -->
+<div class="scrim" id="help-scrim" hidden>
+  <div class="modal rules" role="dialog" aria-modal="true" aria-label="Rules">
+    <h2>How brewing works</h2>
+    <p class="lede">Every potion is judged on three things. Get all three right and you make a Masterwork.</p>
+
+    <h3>1 &middot; The balance</h3>
+    <p>Each ingredient carries four essences — <b>Ember</b>, <b>Tide</b>, <b>Verdant</b>, <b>Umbra</b>. A formula wants them in a particular <em>ratio</em>, shown as white ticks on the balance bars. Match the ratio, not the amounts.</p>
+
+    <h3>2 &middot; The potency</h3>
+    <p>Ingredients also carry potency, which simply adds up. The formula names a target — overshoot and the draught is harsh, undershoot and it's watery. A little Spring Water shifts balance without adding much potency; Crystal Dust adds potency without shifting balance.</p>
+
+    <h3>3 &middot; The infusion</h3>
+    <p>Hold the heat inside the formula's green band and infusion fills — fastest dead centre. Outside the band it slips backwards. At 100% the brew is ready; every second past that <b>scorches</b> it, so bottle promptly.</p>
+
+    <h3>Turbulence</h3>
+    <p>Hot cauldrons churn, and every ingredient you drop in churns them more. <b>Stir</b> to settle it. Let turbulence reach 100% and the pot boils over — you lose infusion and the mark stays on the potion.</p>
+
+    <h3>The day</h3>
+    <ul>
+      <li>Commissions expire. Miss one and your standing suffers.</li>
+      <li>Closing shop costs <b>6 coin</b> in coal and candles, restocks the market, and brings new custom.</li>
+      <li>Standing unlocks better formulas — and better-paying clients.</li>
+      <li>Anything on the shelf can be sold to a passing pedlar for about half what a commission would pay.</li>
+    </ul>
+
+    <h3>Keys</h3>
+    <p><b>1–5</b> set the fire &middot; <b>Space</b> stirs &middot; <b>B</b> bottles &middot; <b>Esc</b> closes a window.</p>
+
+    <div class="modal-close">
+      <button id="btn-reset" class="ghost danger">Start over</button>
+      <button data-close="help-scrim" class="primary" style="margin-left:8px;">Back to the bench</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // =============================================================
+  // Data
+  // =============================================================
+
+  const ESSENCE = [
+    { name: "Ember",   color: "#e2542c" },
+    { name: "Tide",    color: "#3b8fd4" },
+    { name: "Verdant", color: "#5aa457" },
+    { name: "Umbra",   color: "#8257c9" },
+  ];
+
+  // ess = [ember, tide, verdant, umbra], pot = potency, cost = base price
+  const INGREDIENTS = [
+    { id: "spring",  name: "Spring Water",  ess: [0,2,0,0], pot: 1, cost: 3,  blurb: "Shifts the balance, adds almost nothing" },
+    { id: "sprig",   name: "Green Sprig",   ess: [0,1,4,0], pot: 2, cost: 4,  blurb: "Cheap, mild, everywhere" },
+    { id: "firecap", name: "Fire Cap",      ess: [4,0,1,0], pot: 3, cost: 6,  blurb: "Pops if you look at it wrong" },
+    { id: "moondew", name: "Moon Dew",      ess: [0,4,1,1], pot: 3, cost: 7,  blurb: "Gathered before first light" },
+    { id: "raven",   name: "Raven Quill",   ess: [1,0,0,3], pot: 3, cost: 7,  blurb: "Ground fine, smells of iron" },
+    { id: "honey",   name: "Honey Fern",    ess: [1,2,4,0], pot: 3, cost: 9,  blurb: "Sweet, sticky, forgiving" },
+    { id: "ashroot", name: "Ashroot",       ess: [3,0,2,1], pot: 4, cost: 9,  blurb: "Pulled from burnt ground" },
+    { id: "kelp",    name: "Kelp Silk",     ess: [0,3,3,0], pot: 4, cost: 10, blurb: "Still tastes of the harbour" },
+    { id: "crystal", name: "Crystal Dust",  ess: [1,1,1,1], pot: 5, cost: 12, blurb: "Pure potency, no bias" },
+    { id: "night",   name: "Nightshade",    ess: [0,1,1,4], pot: 5, cost: 13, blurb: "Handle with the tongs" },
+    { id: "cinder",  name: "Cinder Pepper", ess: [5,0,0,1], pot: 5, cost: 14, blurb: "Dried over a forge" },
+    { id: "lotus",   name: "Frost Lotus",   ess: [0,5,1,0], pot: 5, cost: 15, blurb: "Cold to the touch, always" },
+    { id: "mandrake",name: "Mandrake Root", ess: [1,0,5,1], pot: 6, cost: 18, blurb: "Screams. Worth it" },
+    { id: "emberglass", name: "Ember Glass",ess: [5,0,0,0], pot: 6, cost: 20, blurb: "Ember and nothing else" },
+    { id: "void",    name: "Void Salt",     ess: [1,1,0,5], pot: 7, cost: 22, blurb: "Scraped from a dry lake" },
+  ];
+  const ING = Object.fromEntries(INGREDIENTS.map(i => [i.id, i]));
+
+  const RECIPES = [
+    { id: "salve",   name: "Woundwort Salve",    target: [0,1,3,0], pot: 9,  band: [36,54], price: 34,  rep: 0,  note: "Every apprentice's first" },
+    { id: "kindle",  name: "Kindling Tonic",     target: [3,0,1,0], pot: 11, band: [72,90], price: 42,  rep: 0,  note: "Brewed hot, drunk hotter" },
+    { id: "tide",    name: "Tidecaller's Flask", target: [0,3,1,0], pot: 12, band: [30,48], price: 46,  rep: 0,  note: "Wants a cool pot" },
+    { id: "clarity", name: "Draught of Clarity", target: [1,2,1,0], pot: 13, band: [52,68], price: 58,  rep: 6,  note: "Three essences, no shadow" },
+    { id: "shadow",  name: "Shadowstep Elixir",  target: [0,1,1,3], pot: 15, band: [48,66], price: 70,  rep: 12, note: "Umbra-led, quietly" },
+    { id: "vigor",   name: "Philter of Vigor",   target: [1,1,3,0], pot: 16, band: [54,72], price: 78,  rep: 20, note: "Green at heart" },
+    { id: "sleep",   name: "Dreamless Sleep",    target: [0,2,1,2], pot: 14, band: [26,46], price: 74,  rep: 20, note: "Barely a simmer" },
+    { id: "wildfire",name: "Wildfire Charge",    target: [4,0,0,1], pot: 20, band: [84,100], price: 110, rep: 32, note: "A narrow band, and a hot one" },
+    { id: "balance", name: "Elixir of Balance",  target: [1,1,1,1], pot: 18, band: [50,66], price: 120, rep: 44, note: "All four, evenly" },
+    { id: "panacea", name: "Grand Panacea",      target: [1,2,3,1], pot: 24, band: [56,74], price: 165, rep: 60, note: "The work of a lifetime" },
+  ];
+  const REC = Object.fromEntries(RECIPES.map(r => [r.id, r]));
+
+  const TIERS = [
+    { min: 0,  name: "Ruined",     mult: 0.20 },
+    { min: 30, name: "Crude",      mult: 0.60 },
+    { min: 50, name: "Common",     mult: 1.00 },
+    { min: 68, name: "Fine",       mult: 1.40 },
+    { min: 82, name: "Superb",     mult: 2.00 },
+    { min: 93, name: "Masterwork", mult: 2.90 },
+  ];
+
+  const HEATS = [
+    { name: "Out",     target: 18 },
+    { name: "Low",     target: 42 },
+    { name: "Steady",  target: 62 },
+    { name: "High",    target: 82 },
+    { name: "Roaring", target: 104 },
+  ];
+
+  const CUSTOMERS = [
+    ["Marta Quill",        "the road warden"],
+    ["Brother Ovid",       "of the almshouse"],
+    ["Hesper Crane",       "keeps the lighthouse"],
+    ["Old Tam",            "digs the north field"],
+    ["Yusra Vane",         "duellist, unretired"],
+    ["The Widow Ash",      "asks no questions"],
+    ["Cormac Reed",        "boatwright"],
+    ["Sister Lienne",      "walks the fever wards"],
+    ["Gil the Younger",    "smells of gunpowder"],
+    ["Odile Marsh",        "cartographer"],
+    ["Sergeant Bray",      "the garrison"],
+    ["Pell",               "won't give a surname"],
+    ["Anneke Foss",        "glassblower"],
+    ["The Reeve",          "pays late, pays well"],
+    ["Tobin Lark",         "apprentice, elsewhere"],
+    ["Madame Sorrel",      "the long house"],
+  ];
+
+  const SAVE_KEY = "alembic-ash-v1";
+  const UPKEEP = 6;
+  const MAX_INGREDIENTS = 12;
+
+  // =============================================================
+  // State
+  // =============================================================
+
+  let S = null;      // persistent game state
+  let brew = null;   // live brew, not persisted
+  let expandedOrder = null;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function freshState() {
+    return {
+      day: 1,
+      gold: 65,
+      rep: 0,
+      inv: { sprig: 5, firecap: 4, moondew: 4, spring: 6, honey: 3, ashroot: 2, kelp: 2 },
+      orders: [],
+      stock: [],
+      market: {},
+      log: [],
+      known: RECIPES.filter(r => r.rep === 0).map(r => r.id),
+      nextId: 1,
+    };
+  }
+
+  function save() {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* private mode; play on */ }
+  }
+  function load() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return null;
+      const s = JSON.parse(raw);
+      if (!s || typeof s.day !== "number" || !s.inv) return null;
+      // drop anything referencing content this build no longer has
+      s.orders = (s.orders || []).filter(o => REC[o.rid]);
+      s.stock = (s.stock || []).filter(v => REC[v.rid]);
+      for (const k of Object.keys(s.inv)) if (!ING[k]) delete s.inv[k];
+      return s;
+    } catch (e) { return null; }
+  }
+
+  // =============================================================
+  // Small helpers
+  // =============================================================
+
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const randInt = (a, b) => Math.floor(rand(a, b + 1));
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+  const sum = arr => arr.reduce((a, b) => a + b, 0);
+
+  function tierOf(score) {
+    let t = TIERS[0];
+    for (const c of TIERS) if (score >= c.min) t = c;
+    return t;
+  }
+  const tierIndex = t => TIERS.indexOf(t);
+
+  function unlocked() { return RECIPES.filter(r => S.rep >= r.rep); }
+
+  function pushLog(text, kind) {
+    S.log.push({ d: S.day, text, kind: kind || "" });
+    if (S.log.length > 60) S.log.shift();
+    renderLedger();
+  }
+
+  /** Blend the four essence colours by weight; returns {r,g,b}. */
+  function essenceColor(vec) {
+    const total = sum(vec);
+    if (total <= 0) return { r: 74, g: 78, b: 66 };
+    let r = 0, g = 0, b = 0;
+    vec.forEach((w, i) => {
+      const hex = ESSENCE[i].color;
+      r += parseInt(hex.slice(1, 3), 16) * w;
+      g += parseInt(hex.slice(3, 5), 16) * w;
+      b += parseInt(hex.slice(5, 7), 16) * w;
+    });
+    return { r: r / total, g: g / total, b: b / total };
+  }
+  const rgb = (c, a) => `rgba(${c.r|0},${c.g|0},${c.b|0},${a === undefined ? 1 : a})`;
+
+  // =============================================================
+  // Brewing
+  // =============================================================
+
+  function startBrew(rid) {
+    const r = REC[rid];
+    brew = {
+      rid,
+      essence: [0, 0, 0, 0],
+      potency: 0,
+      added: [],
+      temp: 18,
+      heat: 0,
+      turbulence: 0,
+      infusion: 0,
+      scorch: 0,
+      spikes: 0,
+      offBand: 0,
+      bandTime: 0,
+      elapsed: 0,
+      lastStir: -9,
+      boiling: false,
+      started: false,   // true once the pot has first reached the band
+    };
+    pushLog(`Set the pot for ${r.name}.`);
+    renderStage();
+    renderLarder();
+  }
+
+  function addIngredient(id) {
+    if (!brew) return;
+    if (brew.added.length >= MAX_INGREDIENTS) { pushLog("The pot won't take another thing.", "bad"); return; }
+    if ((S.inv[id] || 0) <= 0) return;
+    const ing = ING[id];
+    S.inv[id]--;
+    brew.added.push(id);
+    for (let i = 0; i < 4; i++) brew.essence[i] += ing.ess[i];
+    brew.potency += ing.pot;
+    // cold matter shocks the pot and stirs it up
+    brew.temp = Math.max(10, brew.temp - (4 + ing.pot * 0.7));
+    brew.turbulence = clamp(brew.turbulence + 6 + ing.pot * 1.2, 0, 99);
+    splash(ing);
+    save();
+    renderLarder();
+    renderBalance();
+  }
+
+  function setHeat(n) {
+    if (!brew) return;
+    brew.heat = clamp(n, 0, 4);
+    renderHeatRail();
+  }
+
+  function stir() {
+    if (!brew) return;
+    if (brew.elapsed - brew.lastStir < 0.7) return;
+    brew.lastStir = brew.elapsed;
+    brew.turbulence = Math.max(0, brew.turbulence - 26);
+    brew.temp = Math.max(10, brew.temp - 1.5);
+    for (let i = 0; i < 8; i++) spawnBubble(true);
+  }
+
+  function tick(dt) {
+    if (!brew) return;
+    const r = REC[brew.rid];
+    brew.elapsed += dt;
+
+    // --- temperature seeks the fire's target
+    const target = HEATS[brew.heat].target;
+    brew.temp += (target - brew.temp) * clamp(dt * 0.42, 0, 1);
+
+    // --- turbulence: hot pots churn, crowded pots churn more
+    const heatFactor = Math.pow(Math.max(0, brew.temp) / 100, 2);
+    const crowd = 1 + brew.added.length * 0.06;
+    brew.turbulence += (heatFactor * 15 * crowd - 3.2) * dt;
+    brew.turbulence = Math.max(0, brew.turbulence);
+
+    if (brew.turbulence >= 100) {
+      brew.spikes++;
+      brew.turbulence = 45;
+      brew.infusion = Math.max(0, brew.infusion - 12);
+      brew.temp = Math.max(10, brew.temp - 8);
+      for (let i = 0; i < 22; i++) spawnBubble(true);
+      pushLog("The pot boiled over.", "bad");
+    }
+    brew.boiling = brew.turbulence > 78;
+
+    // --- infusion: only inside the band, best dead centre
+    const [lo, hi] = r.band;
+    if (brew.temp >= lo && brew.temp <= hi) {
+      brew.started = true;
+      brew.bandTime += dt;
+      const centre = (lo + hi) / 2;
+      const half = (hi - lo) / 2;
+      const closeness = 1 - Math.abs(brew.temp - centre) / half;
+      if (brew.infusion < 100) {
+        brew.infusion = Math.min(100, brew.infusion + dt * 10 * (0.55 + 0.45 * closeness));
+      } else {
+        brew.scorch += dt * 4;
+      }
+    } else {
+      // heating up isn't drifting — only count time lost after the first
+      // time the pot actually reached the band
+      if (brew.started) brew.offBand += dt;
+      brew.infusion = Math.max(0, brew.infusion - dt * 1.5);
+    }
+  }
+
+  function judge() {
+    const r = REC[brew.rid];
+    const a = brew.essence, b = r.target;
+    const dot = a.reduce((s, v, i) => s + v * b[i], 0);
+    const magA = Math.hypot(...a), magB = Math.hypot(...b);
+    const cos = (magA && magB) ? dot / (magA * magB) : 0;
+
+    // ratio has to be close before it counts for anything
+    const essScore = clamp((cos - 0.72) / 0.28, 0, 1);
+    const potFit = clamp(1 - Math.abs(brew.potency - r.pot) / (r.pot * 0.55), 0, 1);
+    const infScore = clamp(brew.infusion / 100, 0, 1);
+
+    const raw = 100 * (0.38 * essScore + 0.24 * potFit + 0.38 * infScore);
+    const workTime = brew.offBand + brew.bandTime;
+    const offRatio = workTime > 0 ? brew.offBand / workTime : 0;
+    const pBoil = brew.spikes * 10;
+    const pScorch = Math.min(28, brew.scorch * 0.9);
+    const pDrift = Math.min(14, offRatio * 18);
+    const score = clamp(raw - pBoil - pScorch - pDrift, 0, 100);
+
+    return {
+      score, essScore, potFit, infScore,
+      pBoil, pScorch, pDrift,
+      cos, potency: brew.potency, tier: tierOf(score),
+    };
+  }
+
+  function bottle() {
+    if (!brew || brew.added.length === 0) return;
+    const r = REC[brew.rid];
+    const v = judge();
+    S.stock.push({ uid: S.nextId++, rid: brew.rid, score: Math.round(v.score), tier: tierIndex(v.tier) });
+    pushLog(`Bottled ${r.name} — ${v.tier.name}.`, v.score >= 68 ? "good" : v.score < 30 ? "bad" : "");
+    showVerdict(r, v);
+    brew = null;
+    save();
+    renderStage(); renderLarder(); renderShelf(); renderOrders();
+  }
+
+  function dump() {
+    if (!brew) return;
+    pushLog("Poured the lot down the drain.", "bad");
+    brew = null;
+    save();
+    renderStage(); renderLarder();
+  }
+
+  // =============================================================
+  // Economy
+  // =============================================================
+
+  function rollMarket() {
+    const m = {};
+    for (const ing of INGREDIENTS) {
+      const factor = rand(0.75, 1.3);
+      m[ing.id] = {
+        price: Math.max(1, Math.round(ing.cost * factor)),
+        stock: randInt(3, 9),
+        sale: factor < 0.87,
+      };
+    }
+    S.market = m;
+  }
+
+  function buy(id, qty) {
+    const m = S.market[id];
+    if (!m) return;
+    const n = Math.min(qty, m.stock, Math.floor(S.gold / m.price));
+    if (n <= 0) return;
+    S.gold -= n * m.price;
+    m.stock -= n;
+    S.inv[id] = (S.inv[id] || 0) + n;
+    save();
+    renderMarket(); renderTop(); renderLarder();
+  }
+
+  function makeOrder() {
+    const pool = unlocked();
+    // lean towards the better formulas as standing grows
+    const weighted = [];
+    pool.forEach(r => {
+      const w = 1 + Math.floor(r.rep / 10) * (S.rep >= 20 ? 2 : 0);
+      for (let i = 0; i < Math.max(1, w); i++) weighted.push(r);
+    });
+    const r = pick(weighted);
+
+    let minTier = 2; // Common
+    if (S.rep > 10 && Math.random() < 0.28) minTier = 3;
+    if (S.rep > 30 && Math.random() < 0.16) minTier = 4;
+
+    const [who, of] = pick(CUSTOMERS);
+    return {
+      id: S.nextId++,
+      who, of,
+      rid: r.id,
+      minTier,
+      fee: Math.round(r.price * rand(0.85, 1.2) * (1 + (minTier - 2) * 0.15)),
+      days: randInt(2, 4),
+    };
+  }
+
+  function deliver(orderId, uid) {
+    const oi = S.orders.findIndex(o => o.id === orderId);
+    const vi = S.stock.findIndex(v => v.uid === uid);
+    if (oi < 0 || vi < 0) return;
+    const o = S.orders[oi], v = S.stock[vi];
+    if (v.rid !== o.rid || v.tier < o.minTier) return;
+
+    const pay = Math.round(o.fee * TIERS[v.tier].mult);
+    const repGain = [0, 0, 1, 2, 4, 6][v.tier];
+    S.gold += pay;
+    S.rep += repGain;
+    S.stock.splice(vi, 1);
+    S.orders.splice(oi, 1);
+    expandedOrder = null;
+
+    pushLog(`${o.who} paid ${pay} for a ${TIERS[v.tier].name} ${REC[o.rid].name}.`, "good");
+    checkUnlocks();
+    save();
+    renderTop(); renderOrders(); renderShelf(); renderStage();
+  }
+
+  function sellVial(uid) {
+    const vi = S.stock.findIndex(v => v.uid === uid);
+    if (vi < 0) return;
+    const v = S.stock[vi];
+    const pay = Math.max(1, Math.round(REC[v.rid].price * TIERS[v.tier].mult * 0.55));
+    S.gold += pay;
+    S.stock.splice(vi, 1);
+    pushLog(`Sold a ${TIERS[v.tier].name} ${REC[v.rid].name} to a pedlar for ${pay}.`);
+    save();
+    renderTop(); renderShelf(); renderOrders();
+  }
+
+  function checkUnlocks() {
+    if (!S.known) S.known = RECIPES.filter(r => r.rep === 0).map(r => r.id);
+    for (const r of RECIPES) {
+      if (S.rep >= r.rep && !S.known.includes(r.id)) {
+        S.known.push(r.id);
+        pushLog(`Learned the ${r.name}.`, "good");
+      }
+    }
+  }
+
+  /**
+   * Two-step confirmation on a button. Sandboxed frames can swallow
+   * window.confirm entirely, so the warning lives in the button itself.
+   */
+  const armed = {};
+  function armConfirm(btnId, warnLabel) {
+    const b = $(btnId);
+    if (armed[btnId]) { clearTimeout(armed[btnId].timer); delete armed[btnId]; b.textContent = b.dataset.label; return true; }
+    b.dataset.label = b.dataset.label || b.textContent;
+    b.textContent = warnLabel;
+    armed[btnId] = { timer: setTimeout(() => { b.textContent = b.dataset.label; delete armed[btnId]; }, 4000) };
+    return false;
+  }
+
+  function endDay() {
+    if (brew && !armConfirm("btn-day", "Wastes the pot — again to confirm")) return;
+    brew = null;
+
+    S.gold -= UPKEEP;
+    if (S.gold < 0) {
+      S.gold = 0;
+      S.rep = Math.max(0, S.rep - 1);
+      pushLog("Couldn't cover the coal. Word gets round.", "bad");
+    }
+
+    // commissions age out
+    const kept = [];
+    for (const o of S.orders) {
+      o.days--;
+      if (o.days <= 0) {
+        S.rep = Math.max(0, S.rep - 3);
+        pushLog(`${o.who} gave up waiting.`, "bad");
+      } else kept.push(o);
+    }
+    S.orders = kept;
+
+    S.day++;
+    rollMarket();
+
+    let n = 1 + (S.rep > 15 ? 1 : 0) + (Math.random() < 0.5 ? 1 : 0);
+    while (n-- > 0 && S.orders.length < 6) {
+      const o = makeOrder();
+      S.orders.push(o);
+      pushLog(`${o.who} wants a ${REC[o.rid].name}.`);
+    }
+
+    // never let the shop reach a state with no coin and nothing to brew with
+    const haveStuff = Object.values(S.inv).some(n => n > 0);
+    const cheapest = Math.min(...INGREDIENTS.map(i => S.market[i.id].price));
+    if (!haveStuff && S.gold < cheapest && !S.stock.length) {
+      S.gold += 20;
+      pushLog("An old debt came back — 20 coin, and no questions.", "good");
+    }
+
+    checkUnlocks();
+    expandedOrder = null;
+    save();
+    renderAll();
+  }
+
+  // =============================================================
+  // Cauldron canvas
+  // =============================================================
+
+  const cv = document.getElementById("pot");
+  const cx2 = cv.getContext("2d");
+  let bubbles = [];
+  const CW = 640, CH = 440;
+
+  function fitCanvas() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = CW * dpr;
+    cv.height = CH * dpr;
+    cx2.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  fitCanvas();
+  window.addEventListener("resize", fitCanvas);
+
+  function fillFraction() {
+    if (!brew) return 0;
+    return clamp(0.30 + brew.added.length * 0.05, 0.30, 0.85);
+  }
+
+  // pot interior as a path, so liquid and bubbles can be clipped to it
+  // A cubic with both control points at `depth` bottoms out at 0.75*depth,
+  // so the real interior floor is well above top+depth. Everything that
+  // fills or floats has to use INNER_BOTTOM, not depth.
+  const POT = { cx: 320, top: 118, rw: 176, depth: 302 };
+  const INNER_BOTTOM = POT.top + POT.depth * 0.75;
+  const INNER_TOP = POT.top + 14;
+  const surfaceAt = frac => INNER_BOTTOM - frac * (INNER_BOTTOM - INNER_TOP);
+  function potPath(inset) {
+    const i = inset || 0;
+    const p = new Path2D();
+    p.moveTo(POT.cx - POT.rw + i, POT.top + i);
+    p.bezierCurveTo(
+      POT.cx - POT.rw + i, POT.top + POT.depth - i,
+      POT.cx + POT.rw - i, POT.top + POT.depth - i,
+      POT.cx + POT.rw - i, POT.top + i
+    );
+    p.closePath();
+    return p;
+  }
+
+  function spawnBubble(burst) {
+    if (bubbles.length > (reduceMotion ? 30 : 130)) return;
+    const surfaceY = surfaceAt(fillFraction());
+    bubbles.push({
+      x: POT.cx + rand(-POT.rw * 0.55, POT.rw * 0.55),
+      y: INNER_BOTTOM - 10,
+      r: rand(2, burst ? 9 : 6.5),
+      vy: rand(28, 78) * (burst ? 1.7 : 1),
+      wob: rand(0, Math.PI * 2),
+      surfaceY,
+    });
+  }
+
+  function splash(ing) {
+    const c = essenceColor(ing.ess);
+    for (let i = 0; i < 14; i++) {
+      bubbles.push({
+        x: POT.cx + rand(-46, 46),
+        y: INNER_BOTTOM - rand(10, 60),
+        r: rand(3, 8),
+        vy: rand(40, 110),
+        wob: rand(0, 6.28),
+        surfaceY: surfaceAt(fillFraction()),
+        tint: c,
+      });
+    }
+  }
+
+  let lastFrame = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastFrame) / 1000);
+    lastFrame = now;
+
+    if (brew) {
+      tick(dt);
+      updateGauges();
+      // bubbles rise faster and thicker the hotter it is
+      const rate = Math.max(0, (brew.temp - 22) / 100) * (reduceMotion ? 8 : 34) * (0.4 + brew.turbulence / 100);
+      if (Math.random() < rate * dt) spawnBubble(false);
+      if (Math.random() < rate * dt) spawnBubble(false);
+    }
+
+    draw(now / 1000, dt);
+    requestAnimationFrame(frame);
+  }
+
+  function draw(t, dt) {
+    cx2.clearRect(0, 0, CW, CH);
+    const frac = fillFraction();
+    const col = brew ? essenceColor(brew.essence) : { r: 60, g: 62, b: 55 };
+    const heatN = brew ? clamp(brew.temp / 105, 0, 1) : 0;
+
+    // --- hearth glow under the pot
+    if (brew && brew.heat > 0) {
+      const g = cx2.createRadialGradient(POT.cx, INNER_BOTTOM + 26, 4, POT.cx, INNER_BOTTOM + 26, 200);
+      const flick = reduceMotion ? 1 : 0.85 + Math.sin(t * 9) * 0.08 + Math.sin(t * 21) * 0.05;
+      g.addColorStop(0, `rgba(226,84,44,${0.42 * heatN * flick})`);
+      g.addColorStop(0.5, `rgba(184,115,51,${0.16 * heatN * flick})`);
+      g.addColorStop(1, "rgba(20,17,15,0)");
+      cx2.fillStyle = g;
+      cx2.fillRect(0, POT.top, CW, CH - POT.top);
+    }
+
+    // --- liquid glow spilling over the rim
+    if (brew && brew.added.length) {
+      const g2 = cx2.createRadialGradient(POT.cx, POT.top + 20, 10, POT.cx, POT.top + 20, 230);
+      g2.addColorStop(0, rgb(col, 0.30 + heatN * 0.22));
+      g2.addColorStop(1, "rgba(20,17,15,0)");
+      cx2.fillStyle = g2;
+      cx2.fillRect(0, 0, CW, CH);
+    }
+
+    // --- legs
+    cx2.strokeStyle = "#0e0c0b";
+    cx2.lineWidth = 13;
+    cx2.lineCap = "round";
+    [-95, 0, 95].forEach(dx => {
+      cx2.beginPath();
+      cx2.moveTo(POT.cx + dx, INNER_BOTTOM - 24);
+      cx2.lineTo(POT.cx + dx * 1.28, INNER_BOTTOM + 46);
+      cx2.stroke();
+    });
+
+    // --- pot body
+    cx2.fillStyle = "#100e0d";
+    cx2.fill(potPath(0));
+    cx2.strokeStyle = "#2a2320";
+    cx2.lineWidth = 3;
+    cx2.stroke(potPath(0));
+
+    // --- liquid, clipped to the interior
+    cx2.save();
+    cx2.clip(potPath(6));
+
+    if (brew && brew.added.length) {
+      const surfaceY = surfaceAt(frac);
+      const wobble = reduceMotion ? 0 : (2 + (brew.turbulence / 100) * 9);
+
+      cx2.beginPath();
+      cx2.moveTo(POT.cx - POT.rw, CH);
+      cx2.lineTo(POT.cx - POT.rw, surfaceY);
+      for (let x = -POT.rw; x <= POT.rw; x += 8) {
+        const y = surfaceY
+          + Math.sin(t * 2.4 + x * 0.035) * wobble
+          + Math.sin(t * 5.7 + x * 0.018) * wobble * 0.5;
+        cx2.lineTo(POT.cx + x, y);
+      }
+      cx2.lineTo(POT.cx + POT.rw, CH);
+      cx2.closePath();
+
+      const lg = cx2.createLinearGradient(0, surfaceY, 0, INNER_BOTTOM);
+      const bright = 0.55 + heatN * 0.45;
+      lg.addColorStop(0, `rgba(${Math.min(255, col.r * bright + 40)|0},${Math.min(255, col.g * bright + 34)|0},${Math.min(255, col.b * bright + 30)|0},0.97)`);
+      lg.addColorStop(1, `rgba(${col.r * 0.30|0},${col.g * 0.30|0},${col.b * 0.30|0},0.99)`);
+      cx2.fillStyle = lg;
+      cx2.fill();
+
+      // surface sheen
+      cx2.strokeStyle = rgb(col, 0.55 + heatN * 0.4);
+      cx2.lineWidth = 2.5;
+      cx2.stroke();
+
+      // the liquid lights itself from just under the surface
+      const inner = cx2.createRadialGradient(POT.cx, surfaceY + 8, 6, POT.cx, surfaceY + 8, 190);
+      inner.addColorStop(0, rgb(col, 0.40 + heatN * 0.30));
+      inner.addColorStop(1, rgb(col, 0));
+      cx2.fillStyle = inner;
+      cx2.fillRect(POT.cx - POT.rw, surfaceY - 30, POT.rw * 2, INNER_BOTTOM - surfaceY + 40);
+
+      // bubbles
+      for (let i = bubbles.length - 1; i >= 0; i--) {
+        const b = bubbles[i];
+        b.y -= b.vy * dt;
+        b.wob += dt * 3;
+        b.x += Math.sin(b.wob) * 14 * dt;
+        if (b.y <= b.surfaceY) { bubbles.splice(i, 1); continue; }
+        const bc = b.tint || col;
+        cx2.beginPath();
+        cx2.arc(b.x, b.y, b.r, 0, 6.2832);
+        cx2.fillStyle = `rgba(${Math.min(255, bc.r + 70)|0},${Math.min(255, bc.g + 66)|0},${Math.min(255, bc.b + 60)|0},0.30)`;
+        cx2.fill();
+      }
+    }
+    cx2.restore();
+
+    // --- steam when hot
+    if (brew && brew.temp > 55 && !reduceMotion) {
+      const surfaceY = surfaceAt(frac);
+      cx2.strokeStyle = rgb(col, 0.05 + (heatN - 0.5) * 0.10);
+      cx2.lineWidth = 12;
+      for (let i = 0; i < 3; i++) {
+        const ox = POT.cx + (i - 1) * 62;
+        cx2.beginPath();
+        for (let k = 0; k <= 10; k++) {
+          const p = k / 10;
+          const y = surfaceY - p * 130;
+          const x = ox + Math.sin(t * 1.3 + p * 3.4 + i * 2) * 20 * p;
+          k === 0 ? cx2.moveTo(x, y) : cx2.lineTo(x, y);
+        }
+        cx2.stroke();
+      }
+    }
+
+    // --- rim
+    cx2.beginPath();
+    cx2.ellipse(POT.cx, POT.top, POT.rw + 10, 20, 0, 0, 6.2832);
+    cx2.strokeStyle = "#4a3a2a";
+    cx2.lineWidth = 9;
+    cx2.stroke();
+    cx2.strokeStyle = brew && brew.added.length ? rgb(col, 0.30 + heatN * 0.35) : "#6b5236";
+    cx2.lineWidth = 2.5;
+    cx2.stroke();
+  }
+
+  // =============================================================
+  // Render
+  // =============================================================
+
+  const $ = id => document.getElementById(id);
+
+  function renderTop() {
+    $("s-day").textContent = S.day;
+    $("s-gold").textContent = S.gold;
+    $("s-rep").textContent = S.rep;
+  }
+
+  function chipRow(vec, max) {
+    const m = max || Math.max(...vec, 1);
+    return `<span class="chips">${vec.map((v, i) =>
+      `<span class="chip${v > 0 ? " on" : ""}" style="background:${ESSENCE[i].color};height:${3 + Math.round((v / m) * 9)}px" title="${ESSENCE[i].name} ${v}"></span>`
+    ).join("")}</span>`;
+  }
+
+  function renderRecipes() {
+    const host = $("recipes");
+    host.innerHTML = RECIPES.map(r => {
+      const open = S.rep >= r.rep;
+      return `<button class="recipe-row${open ? "" : " locked"}" data-recipe="${r.id}" ${open ? "" : "disabled"}>
+        ${chipRow(r.target)}
+        <span class="rname">${r.name}</span>
+        <span class="rprice">${open ? r.price + " ◈" : "standing " + r.rep}</span>
+      </button>`;
+    }).join("");
+  }
+
+  function renderStage() {
+    const idle = $("stage-idle"), st = $("stage-brew");
+    if (!brew) {
+      idle.hidden = false; st.hidden = true;
+      $("room").style.background =
+        "radial-gradient(60% 50% at 50% 42%, rgba(184,115,51,0.10), rgba(20,17,15,0) 70%)";
+      renderRecipes();
+      return;
+    }
+    idle.hidden = true; st.hidden = false;
+    const r = REC[brew.rid];
+    $("f-name").textContent = r.name;
+    $("f-sub").textContent = `${r.note} · potency ${r.pot} · band ${r.band[0]}–${r.band[1]}°`;
+
+    // temperature band overlay (gauge spans 0–110°)
+    const b = $("b-temp");
+    b.style.left = (r.band[0] / 110 * 100) + "%";
+    b.style.width = ((r.band[1] - r.band[0]) / 110 * 100) + "%";
+
+    renderHeatRail();
+    renderBalance();
+    updateGauges();
+  }
+
+  function renderHeatRail() {
+    $("heat").innerHTML = HEATS.map((h, i) =>
+      `<button data-heat="${i}" class="${brew && brew.heat === i ? "on" : ""}">${h.name}</button>`
+    ).join("");
+  }
+
+  function renderBalance() {
+    if (!brew) return;
+    const r = REC[brew.rid];
+    const totC = sum(brew.essence) || 1;
+    const totT = sum(r.target) || 1;
+    $("balance").innerHTML = ESSENCE.map((e, i) => {
+      const cur = brew.essence[i] / totC * 100;
+      const tgt = r.target[i] / totT * 100;
+      return `<div class="bal-row">
+        <span class="bname">${e.name}</span>
+        <div class="bal-track">
+          <div class="bal-fill" style="width:${cur.toFixed(1)}%;background:${e.color}"></div>
+          <div class="bal-target" style="left:calc(${tgt.toFixed(1)}% - 1px)" title="target ${tgt.toFixed(0)}%"></div>
+        </div>
+      </div>`;
+    }).join("");
+    balFills = $("balance").querySelectorAll(".bal-fill");
+  }
+  let balFills = [];
+
+  function updateGauges() {
+    if (!brew) return;
+    const r = REC[brew.rid];
+    $("f-temp").style.width = clamp(brew.temp / 110 * 100, 0, 100) + "%";
+    $("n-temp").style.left = clamp(brew.temp / 110 * 100, 0, 100) + "%";
+    $("g-temp").textContent = Math.round(brew.temp) + "°";
+    $("f-turb").style.width = clamp(brew.turbulence, 0, 100) + "%";
+    $("g-turb").textContent = Math.round(brew.turbulence) + "%";
+    $("f-inf").style.width = clamp(brew.infusion, 0, 100) + "%";
+    $("g-inf").textContent = brew.scorch > 0
+      ? `100% · scorching ${brew.scorch.toFixed(0)}`
+      : Math.round(brew.infusion) + "%";
+    $("boilwarn").className = "boil-warn" + (brew.boiling ? " on" : "");
+    $("btn-bottle").disabled = brew.added.length === 0;
+
+    // the whole room takes the brew's colour
+    const col = essenceColor(brew.essence);
+    const heatN = clamp(brew.temp / 105, 0, 1);
+    $("room").style.background =
+      `radial-gradient(60% 50% at 50% 42%, rgba(${col.r|0},${col.g|0},${col.b|0},${(0.05 + heatN * 0.11).toFixed(3)}), rgba(20,17,15,0) 70%)`;
+
+    // balance bars move as ingredients go in; cheap enough per frame
+    const totC = sum(brew.essence) || 1;
+    balFills.forEach((el, i) => { el.style.width = (brew.essence[i] / totC * 100).toFixed(1) + "%"; });
+  }
+
+  function renderOrders() {
+    const host = $("orders");
+    $("order-count").textContent = S.orders.length ? `${S.orders.length} waiting` : "";
+    if (!S.orders.length) {
+      host.innerHTML = `<p class="empty">Nobody at the door. Close shop to bring the day round.</p>`;
+      return;
+    }
+    host.innerHTML = S.orders.map(o => {
+      const r = REC[o.rid];
+      const matches = S.stock.filter(v => v.rid === o.rid && v.tier >= o.minTier);
+      const cls = matches.length ? "ready" : (o.days <= 1 ? "urgent" : "");
+      const picker = expandedOrder === o.id && matches.length
+        ? `<div class="picker">${matches
+            .slice()
+            .sort((a, b) => a.tier - b.tier)
+            .map(v => `<button data-deliver="${o.id}" data-vial="${v.uid}">
+                <span class="${"q" + v.tier}">${TIERS[v.tier].name}</span>
+                <span class="num">${Math.round(o.fee * TIERS[v.tier].mult)} ◈</span>
+              </button>`).join("")}</div>`
+        : "";
+      return `<div class="order ${cls}">
+        <div class="who">${o.who}<span style="color:var(--smoke);font-size:12px;font-style:italic"> — ${o.of}</span></div>
+        <div class="want"><b>${r.name}</b>, ${TIERS[o.minTier].name} or better</div>
+        <div class="terms">
+          <span class="fee">${o.fee} ◈ base</span>
+          <span class="days ${o.days <= 1 ? "short" : ""}">${o.days} day${o.days === 1 ? "" : "s"} left</span>
+        </div>
+        <div class="act">
+          <button data-order="${o.id}" ${matches.length ? "" : "disabled"}>${matches.length ? (expandedOrder === o.id ? "Close" : "Deliver") : "Nothing on the shelf fits"}</button>
+        </div>
+        ${picker}
+      </div>`;
+    }).join("");
+  }
+
+  function renderLarder() {
+    const host = $("larder");
+    $("larder-hint").textContent = brew ? `${brew.added.length}/${MAX_INGREDIENTS} in the pot` : "Set a formula first";
+    host.innerHTML = INGREDIENTS.map(i => {
+      const n = S.inv[i.id] || 0;
+      const can = !!brew && n > 0 && brew.added.length < MAX_INGREDIENTS;
+      return `<button class="jar" data-add="${i.id}" ${can ? "" : "disabled"} title="${i.blurb}">
+        <span>
+          <span class="jname">${i.name}</span><br>
+          <span class="jpot">potency ${i.pot}</span>
+        </span>
+        ${chipRow(i.ess, 5)}
+        <span class="jqty${n ? "" : " zero"}">${n}</span>
+      </button>`;
+    }).join("");
+  }
+
+  function renderShelf() {
+    const host = $("shelf");
+    $("shelf-count").textContent = S.stock.length ? `${S.stock.length} bottled` : "";
+    if (!S.stock.length) {
+      host.innerHTML = `<p class="empty">Empty. Brew something.</p>`;
+      return;
+    }
+    host.innerHTML = S.stock
+      .slice()
+      .sort((a, b) => b.tier - a.tier || a.rid.localeCompare(b.rid))
+      .map(v => `<div class="vial">
+        <span>
+          <span class="vname">${REC[v.rid].name}</span><br>
+          <span class="vq ${"q" + v.tier}">${TIERS[v.tier].name}</span>
+          <span class="num" style="font-size:10.5px;color:var(--smoke)"> ${v.score}</span>
+        </span>
+        <button data-sell="${v.uid}" title="Sell to a passing pedlar">${Math.max(1, Math.round(REC[v.rid].price * TIERS[v.tier].mult * 0.55))} ◈</button>
+      </div>`).join("");
+  }
+
+  function renderLedger() {
+    $("ledger").innerHTML = S.log.slice(-24).reverse().map(l =>
+      `<p class="${l.kind}"><span class="d">d${l.d}</span>${l.text}</p>`
+    ).join("");
+  }
+
+  function renderMarket() {
+    $("market-list").innerHTML = INGREDIENTS.map(i => {
+      const m = S.market[i.id];
+      if (!m) return "";
+      const afford1 = S.gold >= m.price && m.stock >= 1;
+      const afford5 = S.gold >= m.price * 5 && m.stock >= 5;
+      return `<div class="market-row">
+        <span>
+          <span class="mname">${i.name}</span><br>
+          <span class="mblurb">${i.blurb}</span>
+        </span>
+        ${chipRow(i.ess, 5)}
+        <span class="mprice${m.sale ? " sale" : ""}">${m.price} ◈</span>
+        <span class="mstock">${m.stock} left</span>
+        <span style="display:flex;gap:4px">
+          <button data-buy="${i.id}" data-qty="1" ${afford1 ? "" : "disabled"}>+1</button>
+          <button data-buy="${i.id}" data-qty="5" ${afford5 ? "" : "disabled"}>+5</button>
+        </span>
+      </div>`;
+    }).join("");
+  }
+
+  function showVerdict(r, v) {
+    $("v-recipe").textContent = r.name;
+    const t = v.tier;
+    $("v-tier").textContent = t.name;
+    $("v-tier").className = "tier q" + tierIndex(t);
+    $("v-score").textContent = `${Math.round(v.score)} / 100`;
+
+    const rows = [
+      ["Balance", v.essScore, `${Math.round(v.cos * 100)}% match`, false],
+      ["Potency", v.potFit, `${v.potency} of ${r.pot}`, false],
+      ["Infusion", v.infScore, `${Math.round(v.infScore * 100)}%`, false],
+    ];
+    if (v.pBoil > 0) rows.push(["Boiled over", v.pBoil / 30, `−${Math.round(v.pBoil)}`, true]);
+    if (v.pScorch > 1) rows.push(["Scorched", v.pScorch / 28, `−${Math.round(v.pScorch)}`, true]);
+    if (v.pDrift > 1) rows.push(["Off the band", v.pDrift / 14, `−${Math.round(v.pDrift)}`, true]);
+
+    $("v-breakdown").innerHTML = rows.map(([label, frac, val, neg]) =>
+      `<div class="bd-row">
+        <span class="bl">${label}</span>
+        <span class="bd-track"><span class="bd-fill${neg ? " neg" : ""}" style="width:${clamp(frac * 100, 0, 100).toFixed(0)}%"></span></span>
+        <span class="bv${neg ? " minus" : ""}">${val}</span>
+      </div>`).join("");
+
+    openModal("verdict-scrim");
+  }
+
+  function renderAll() {
+    renderTop(); renderOrders(); renderLarder(); renderShelf();
+    renderLedger(); renderStage(); renderMarket();
+  }
+
+  // =============================================================
+  // Modals
+  // =============================================================
+
+  let lastFocus = null;
+  function openModal(id) {
+    lastFocus = document.activeElement;
+    $(id).hidden = false;
+    const btn = $(id).querySelector("button");
+    if (btn) btn.focus();
+  }
+  function closeModal(id) {
+    $(id).hidden = true;
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+
+  // =============================================================
+  // Events
+  // =============================================================
+
+  document.addEventListener("click", e => {
+    const t = e.target.closest("button");
+    if (!t) return;
+
+    if (t.dataset.close) { closeModal(t.dataset.close); return; }
+    if (t.dataset.recipe) { startBrew(t.dataset.recipe); return; }
+    if (t.dataset.heat !== undefined) { setHeat(+t.dataset.heat); return; }
+    if (t.dataset.add) { addIngredient(t.dataset.add); return; }
+    if (t.dataset.buy) { buy(t.dataset.buy, +t.dataset.qty); return; }
+    if (t.dataset.sell) { sellVial(+t.dataset.sell); return; }
+    if (t.dataset.deliver) { deliver(+t.dataset.deliver, +t.dataset.vial); return; }
+    if (t.dataset.order) {
+      const id = +t.dataset.order;
+      expandedOrder = expandedOrder === id ? null : id;
+      renderOrders();
+      return;
+    }
+
+    switch (t.id) {
+      case "btn-stir": stir(); break;
+      case "btn-bottle": bottle(); break;
+      case "btn-dump": dump(); break;
+      case "btn-day": endDay(); break;
+      case "btn-market": renderMarket(); openModal("market-scrim"); break;
+      case "btn-help": openModal("help-scrim"); break;
+      case "btn-reset":
+        if (!armConfirm("btn-reset", "Click again to throw it all out")) break;
+        S = freshState();
+        brew = null;
+        rollMarket();
+        S.orders = [makeOrder(), makeOrder()];
+        pushLog("Opened the shop. The pot is cold.");
+        save();
+        closeModal("help-scrim");
+        renderAll();
+        break;
+    }
+  });
+
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") {
+      ["market-scrim", "verdict-scrim", "help-scrim"].forEach(id => { if (!$(id).hidden) closeModal(id); });
+      return;
+    }
+    // don't fight the modals or a focused control
+    const modalOpen = ["market-scrim", "verdict-scrim", "help-scrim"].some(id => !$(id).hidden);
+    if (modalOpen || !brew) return;
+
+    if (e.key >= "1" && e.key <= "5") { setHeat(+e.key - 1); e.preventDefault(); }
+    else if (e.code === "Space") { stir(); e.preventDefault(); }
+    else if (e.key === "b" || e.key === "B") { bottle(); e.preventDefault(); }
+  });
+
+  // =============================================================
+  // Boot
+  // =============================================================
+
+  S = load();
+  if (!S) {
+    S = freshState();
+    rollMarket();
+    S.orders = [makeOrder(), makeOrder()];
+    pushLog("Opened the shop. The pot is cold.");
+    save();
+  }
+  if (!S.market || !Object.keys(S.market).length) rollMarket();
+
+  renderAll();
+  requestAnimationFrame(frame);
+  window.addEventListener("beforeunload", save);
+})();
+</script>
