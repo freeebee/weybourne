@@ -1,0 +1,29 @@
+[
+ {
+  "change_id": "FLX-seed-7246",
+  "run_id": "seed7246",
+  "timestamp": "2026-01-01",
+  "database": "contacts",
+  "record_name": "Seed 7246",
+  "record_id": "",
+  "record_url": "",
+  "change_type": "fix_relation",
+  "property_changed": "",
+  "previous_value": "",
+  "new_value": "",
+  "previous_relation_ids": [],
+  "new_relation_ids": [],
+  "source": "",
+  "reason": "",
+  "confidence": "",
+  "created_by": "",
+  "category": "easy",
+  "execution_status": "Proposed",
+  "review_status": "Awaiting Review",
+  "value_kind": "",
+  "value_options": [],
+  "undo_result": "",
+  "parent_change_id": "",
+  "detail": ""
+ }
+]

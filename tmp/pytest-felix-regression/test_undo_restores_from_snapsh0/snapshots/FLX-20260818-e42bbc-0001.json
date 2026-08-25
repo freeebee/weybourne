@@ -1,0 +1,34 @@
+{
+ "record_id": "mc4",
+ "database": "contacts",
+ "before_properties": {
+  "Name": {
+   "type": "title",
+   "title": [
+    {
+     "plain_text": "  Allan  Fife "
+    }
+   ]
+  },
+  "Email": {
+   "type": "email",
+   "email": "allan@fife.com"
+  }
+ },
+ "before_icon": null,
+ "before_archived": false,
+ "planned": {
+  "properties": {
+   "Name": {
+    "title": [
+     {
+      "text": {
+       "content": "Allan Fife"
+      }
+     }
+    ]
+   }
+  }
+ },
+ "expect_prop": "Name"
+}

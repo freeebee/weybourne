@@ -1,0 +1,18 @@
+{
+ "run_id": "974040ebe77e",
+ "started": "2026-08-18T17:35:27",
+ "finished": "2026-08-18T17:35:27",
+ "status": "completed",
+ "dry_run": false,
+ "databases": [
+  "contacts"
+ ],
+ "counts": {
+  "applied": 2,
+  "failed": 0,
+  "merges": 1
+ },
+ "deferred": 0,
+ "error": "",
+ "stages": []
+}

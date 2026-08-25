@@ -1,0 +1,39 @@
+{
+ "kind": "merge",
+ "survivor": {
+  "id": "pb",
+  "name": "Poor Copy",
+  "properties": {
+   "Name": {
+    "type": "title",
+    "title": [
+     {
+      "plain_text": "Poor Copy"
+     }
+    ]
+   }
+  }
+ },
+ "loser": {
+  "id": "pa",
+  "name": "Rich Copy",
+  "properties": {
+   "Name": {
+    "type": "title",
+    "title": [
+     {
+      "plain_text": "Rich Copy"
+     }
+    ]
+   },
+   "Email": {
+    "type": "email",
+    "email": "rich@x.com"
+   }
+  },
+  "icon": null
+ },
+ "inbound": [],
+ "conflicts": [],
+ "pointer_block_id": "blk-pointer"
+}

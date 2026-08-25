@@ -1,0 +1,16 @@
+{
+ "pairs": {
+  "a|b": {
+   "fp_a": "fp1",
+   "fp_b": "fp2",
+   "result": {
+    "verdict": "unsure",
+    "confidence": "low",
+    "explanation": "no definitive online record either way",
+    "evidence": "",
+    "employer_check": ""
+   },
+   "at": "2026-08-19T00:05:30"
+  }
+ }
+}

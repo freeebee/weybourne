@@ -1,0 +1,11 @@
+{
+ "pairs": {
+  "a|b": {
+   "fp_a": "fp1",
+   "fp_b": "fp2",
+   "verdict": "distinct",
+   "reason": "",
+   "at": "2026-08-18T23:27:04"
+  }
+ }
+}

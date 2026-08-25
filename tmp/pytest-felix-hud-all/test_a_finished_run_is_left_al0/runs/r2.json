@@ -1,0 +1,12 @@
+{
+ "run_id": "r2",
+ "started": "x",
+ "finished": "y",
+ "status": "completed",
+ "dry_run": true,
+ "databases": [],
+ "counts": {},
+ "deferred": 0,
+ "error": "",
+ "stages": []
+}

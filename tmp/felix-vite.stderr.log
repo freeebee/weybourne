@@ -1,0 +1,124 @@
+[2m11:12:30 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:12:30 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/status[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:12:30 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/felix/status[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:12:30 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/felix/changes?review=Awaiting+Review&limit=100[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:12:30 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs?kind=whats-new-team[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:12:30 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs?kind=whats-new-inbox[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:12:30 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs?kind=outlook-refresh[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:12:30 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/felix/changes?review=Awaiting+Review&db=contacts&limit=100[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:12:30 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/felix/changes?review=Awaiting+Review&limit=100[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:12:31 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/felix/changes?review=Awaiting+Review&limit=100[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:12:31 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/felix/changes?review=Awaiting+Review&db=contacts&limit=100[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:13:34 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:13:34 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/status[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:13:34 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs?kind=whats-new-team[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:13:34 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs?kind=whats-new-inbox[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:13:34 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs?kind=outlook-refresh[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:15:59 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:15:59 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/status[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:15:59 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs?kind=whats-new-team[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:15:59 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs?kind=whats-new-inbox[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:15:59 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs?kind=outlook-refresh[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:18:57 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:18:57 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/status[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:18:57 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs?kind=whats-new-team[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:18:57 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs?kind=whats-new-inbox[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:18:57 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs?kind=outlook-refresh[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:20:00 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:20:00 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/status[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:20:00 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs?kind=whats-new-team[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:20:00 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs?kind=whats-new-inbox[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)
+[2m11:20:00 pm[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/jobs?kind=outlook-refresh[39m
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1194:18)
+    at afterConnectMultiple (node:net:1784:7)

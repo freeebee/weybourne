@@ -1,0 +1,51 @@
+{
+ "kind": "merge",
+ "survivor": {
+  "id": "pa",
+  "name": "Laure Goupil",
+  "properties": {
+   "Name": {
+    "type": "title",
+    "title": [
+     {
+      "plain_text": "Laure Goupil"
+     }
+    ]
+   },
+   "Email": {
+    "type": "email",
+    "email": "lgoupil@axeleo.com"
+   },
+   "Weybourne Comments": {
+    "type": "rich_text",
+    "rich_text": [
+     {
+      "plain_text": "IR at Axeleo"
+     }
+    ]
+   }
+  }
+ },
+ "loser": {
+  "id": "pb",
+  "name": "Laure Goupi",
+  "properties": {
+   "Name": {
+    "type": "title",
+    "title": [
+     {
+      "plain_text": "Laure Goupi"
+     }
+    ]
+   },
+   "Phone": {
+    "type": "phone_number",
+    "phone_number": "+33 1 23 45 67 89"
+   }
+  },
+  "icon": null
+ },
+ "inbound": [],
+ "conflicts": [],
+ "pointer_block_id": "blk-pointer"
+}

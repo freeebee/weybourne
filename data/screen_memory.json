@@ -1,0 +1,542 @@
+{
+ "screens": {
+  "horizon-ag": {
+   "at": "2026-08-13T16:18:56",
+   "label": "Horizon Capital AG",
+   "screen": {
+    "sleeve": "Unclear",
+    "overall_fit": "Unclear",
+    "criteria": [
+     {
+      "title": "Sleeve classification before anything else",
+      "preference": "An opportunity must map to Private Growth, Public Growth or Diversifiers, with Diversifier status determined by whether returns are driven by non-equity/non-credit common factors or are largely idiosyncratic.",
+      "rationale": "",
+      "finding": "The materials give a manager name (Horizon Capital AG) and the purpose of the contact (a personal coffee meeting). No fund, asset class, geography, structure or return driver is stated.",
+      "source": "Intro request ('Personal coffee meeting request'); Fund, Asset class and Geography all recorded as (unknown)",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the materials name only the manager and the meeting request, with no fund, asset class, geography or return driver stated, so no sleeve can be assigned; a one-line description of the vehicle being raised, its asset class and its target geography would settle it."
+     },
+     {
+      "title": "Repeatable, structural edge rather than a claim",
+      "preference": "The 'why them' must be concrete and repeatable - sourcing, information, operational or execution-at-scale edge - and quantifiable where claimed (countable relationships, meetings, coverage).",
+      "rationale": "",
+      "finding": "No description of investment process, sourcing model, team or claimed advantage appears anywhere in the materials.",
+      "source": "No source; nothing in the intro request addresses process or edge",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the materials contain no description of process, sourcing or claimed advantage of any kind; a deck or strategy summary setting out how the manager originates and wins deals would settle it."
+     },
+     {
+      "title": "Realised alpha or track record, not promises",
+      "preference": "Fees are justified only by documented historical alpha; for Private Growth, a track record with realisations and DPI rather than marks alone.",
+      "rationale": "",
+      "finding": "No performance history, vintage record, fund number or realisation data is provided.",
+      "source": "No source; no performance data in the materials",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because no return, vintage or realisation data has been provided at all; audited or GP-reported net returns by fund, with DPI, would settle it."
+     },
+     {
+      "title": "Return bar for the relevant sleeve",
+      "preference": "Private Growth expects equity-like returns, with a structural reason required where the payoff is credit-like; Diversifiers are held to explicit drawdown, equity-beta and liquidity objectives.",
+      "rationale": "",
+      "finding": "No target return, target size, payoff shape or risk objective is stated.",
+      "source": "No source; Key facts list is empty",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because no target return or payoff shape is stated, so the opportunity cannot be tested against either the equity-like Private Growth bar or the Diversifiers objectives; a target net return and target fund size would settle it."
+     },
+     {
+      "title": "Terms as a return and alignment lever",
+      "preference": "Quantified fee savings from first close or size breaks, key-person tightening, hard caps and side-letter protections.",
+      "rationale": "",
+      "finding": "No management fee, carry, hurdle, hard cap, key-person clause or close timetable is disclosed.",
+      "source": "No source; no terms in the materials",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because no economic or governance terms have been disclosed; a term sheet or LPA summary covering fee, carry, hurdle, hard cap and key-person provisions would settle it."
+     },
+     {
+      "title": "Capacity discipline and hard caps",
+      "preference": "Manager-imposed capacity limits, soft closes and hard caps are read as prioritising performance over asset gathering; scalability matters where the sleeve needs to stay meaningful.",
+      "rationale": "",
+      "finding": "No fund size, hard cap or capacity position is disclosed.",
+      "source": "No source; target size not stated",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because no target size or cap has been disclosed, so neither capacity discipline nor scalability can be assessed; the stated target size and hard cap, and prior fund sizes, would settle it."
+     },
+     {
+      "title": "Team, bench and succession",
+      "preference": "Evidence that the bench is real and scaled to fund size, that the practical drivers of origination and value creation are identified, and that succession is deliberate.",
+      "rationale": "",
+      "finding": "No individuals, team size, tenure or firm history are named in the materials.",
+      "source": "No source; no team information in the materials",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because not a single individual, team size or tenure figure appears in the materials; a team page with named partners, tenure and attribution of prior deals would settle it."
+     },
+     {
+      "title": "Do we need this exposure at all",
+      "preference": "An explicit 'do we need this fund' test, including overlap with existing managers, redundancy with correlated strategies, and a cap of 15-18 active managers in Public Growth.",
+      "rationale": "",
+      "finding": "With no strategy identified, overlap against the existing roster cannot be computed.",
+      "source": "No source; Likely sleeve recorded as Unclear",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the strategy is not identified, so overlap and redundancy against the existing manager roster cannot be computed; naming the strategy and its top exposures would settle it."
+     },
+     {
+      "title": "Live answers versus prior materials",
+      "preference": "Inconsistency or hedging between a manager's live answers and their deck or prior messaging is treated as a core diligence flag.",
+      "rationale": "",
+      "finding": "There are no prior materials and no recorded meeting, so there is no baseline to test a live answer against.",
+      "source": "Intro request; no deck or prior meeting note in the materials",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because no deck or prior meeting note exists to compare a live answer against, and the coffee meeting would itself be the first datapoint; requesting written materials in advance of the meeting would create the baseline."
+     },
+     {
+      "title": "Approach is a relationship contact, not an offer",
+      "preference": "Findings must be tied to the opportunity's specifics; diligence items must be realistically obtainable.",
+      "rationale": "",
+      "finding": "The approach is a request for a personal coffee meeting. No fund is being marketed in the materials, no raise is identified, and no facts were extracted.",
+      "source": "Summary line: 'Personal coffee meeting request'; Key facts: (none extracted)",
+      "verdict": "conditional",
+      "assessment": "A fit only if the meeting is treated as free-option relationship time rather than a screen, because there is no fund, no terms and no track record on the table, and the single most obvious risk here is that 'Horizon Capital AG' is not tied to any identified vehicle in the materials, so we cannot confirm which firm or which raise is being discussed before walking in."
+     }
+    ],
+    "facts": [
+     {
+      "label": "Strategy",
+      "value": "Not stated"
+     },
+     {
+      "label": "Target size",
+      "value": "Not stated"
+     },
+     {
+      "label": "Target net return",
+      "value": "Not stated"
+     },
+     {
+      "label": "Fees",
+      "value": "Not stated"
+     },
+     {
+      "label": "Positions / concentration",
+      "value": "Not stated"
+     }
+    ],
+    "not_covered": "Everything of substance: no fund, strategy, geography, team, track record, terms, size or structure is addressed anywhere in the materials.",
+    "fit_points": [],
+    "non_fit_points": [],
+    "open_questions": [
+     "Which entity is 'Horizon Capital AG', and is a fund actually being raised, or is this purely a relationship introduction?",
+     "What strategy, asset class and geography would the vehicle pursue, and does it sit in Private Growth, Public Growth or Diversifiers?",
+     "What is the target size, hard cap and target net return, and what is the current fundraising status?",
+     "What is the firm's attributable track record by fund, including realised DPI rather than marks alone?",
+     "Who are the named individuals driving origination and value creation, and what is their prior attribution?",
+     "What are the headline economics: management fee, carry, hurdle, key-person provisions and any first-close discount?",
+     "Has anyone at Weybourne met this manager before, and does the strategy overlap with an existing manager?"
+    ],
+    "summary": "There is nothing here to screen. The materials consist of a personal coffee meeting request from Horizon Capital AG, with no fund named, no asset class, no geography and no extracted facts, so every documented preference tested comes back unevidenced rather than pass or fail. The sleeve cannot be assigned, which means even the threshold question of which return bar applies (equity-like for Private Growth, or the drawdown, equity-beta and liquidity objectives for Diversifiers) is unanswerable. The deal-specific risk worth naming is that the approach is not tied to any identified vehicle: we do not know whether a raise exists, and walking into the meeting without that is the difference between a relationship coffee and a screen. Take the meeting on relationship terms if the time is cheap, but ask for a one-page strategy summary, target size and prior fund performance beforehand so the conversation starts from something testable."
+   }
+  },
+  "stakeboat": {
+   "at": "2026-08-18T17:44:10",
+   "label": "Stakeboat Capital",
+   "screen": {
+    "sleeve": "Private Growth",
+    "overall_fit": "Unclear",
+    "criteria": [
+     {
+      "title": "Materials sufficient to screen at all",
+      "preference": "Do not accept the manager's own framing at face value; evaluate the underlying engine, and only list diligence items that are realistically obtainable.",
+      "rationale": "",
+      "finding": "The entire record is an intermediary introduction email from Pangaea Alts naming Stakeboat Capital Fund III (mid-market private equity (PE), $250m target, India, healthcare / business-to-business (B2B) technology / manufacturing) alongside an unrelated second fund, plus meeting availability 24 Sept - 2 Oct in Singapore. There is no deck, no private placement memorandum, no track record page and no independent web research in the file.",
+      "source": "Intro email from Pangaea Alts (key facts list)",
+      "verdict": "conditional",
+      "assessment": "A fit only if the manager or intermediary provides a deck, prior-fund performance and terms ahead of the Singapore window, since at present there is no underlying engine to evaluate and no manager framing to test."
+     },
+     {
+      "title": "Terms as a return and alignment lever, with first-close discounts quantified",
+      "preference": "Quantify fee savings from first close and size breaks, and use side letters for key-person tightening, reputational carve-outs, tax protections and hard caps.",
+      "rationale": "",
+      "finding": "No management fee, carry, hurdle, general partner (GP) commitment, hard cap or close schedule is stated. The only timing signal is that the fund is being actively marketed into SuperReturn 2026, which implies a fundraise still open.",
+      "source": "Intro email; key facts (target size $250m, Fund III vintage, meeting 24 Sept - 2 Oct)",
+      "verdict": "conditional",
+      "assessment": "A fit only if an early-close or relationship discount is available and quantified against the standard fee load, and if India-specific tax and repatriation protections can be secured by side letter, none of which the materials address."
+     },
+     {
+      "title": "Repeatable, structural edge (\"why them?\")",
+      "preference": "Prioritise managers whose edge is concrete and repeatable: proprietary information, bilateral or systematic sourcing, in-house operating capability, or execution at scale.",
+      "rationale": "",
+      "finding": "The materials describe only the sector scope (healthcare, B2B technology, manufacturing) and the geography. Nothing is said about how deals are originated, whether the firm has an operating bench, or what it does that competing India mid-market managers do not.",
+      "source": "Intro email; key facts (mid-market PE, healthcare / B2B tech / manufacturing)",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the materials name a sector focus and nothing about the origination or value-creation engine; a deal-by-deal sourcing history for Funds I and II, showing which were bilateral versus intermediated, would settle it."
+     },
+     {
+      "title": "Equity-like return objective, net of the India-specific drag",
+      "preference": "Private Growth is a portfolio growth engine with default expectations of equity-like returns; a strategy must plausibly clear that bar.",
+      "rationale": "",
+      "finding": "No target gross or net return, no target multiple on invested capital (MOIC) or internal rate of return (IRR), and no statement of the currency in which returns are underwritten or whether any hedging is contemplated.",
+      "source": "Intro email; key facts (no return target stated)",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the materials state no return target at all, so the bar cannot be tested; the fund's target net United States dollar (USD) IRR and its assumed Indian rupee (INR) depreciation would settle it."
+     },
+     {
+      "title": "Realised distributions, not marks",
+      "preference": "Distributions to paid-in (DPI) and realisations matter; marks alone are insufficient, and low DPI or an unrealised record is a live monitorable.",
+      "rationale": "",
+      "finding": "The fund is described as \"Fund III vintage\". No performance, DPI, total value to paid-in (TVPI) or exit history for Funds I or II is given, and the vintage years of the prior funds are not stated.",
+      "source": "Intro email; key facts (Fund III vintage)",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because a third fund implies a prior record that the materials simply do not present; audited Fund I and Fund II performance with a realisation-by-realisation exit list, including holding periods and exit routes, would settle it."
+     },
+     {
+      "title": "Control, and loss of control in minority positions",
+      "preference": "Strong preference for control; minority positions and the resulting loss of control over exit timing are treated as a material downside channel.",
+      "rationale": "",
+      "finding": "The fund is labelled \"mid-market PE\" with no statement of whether it takes majority control, structured minority stakes or growth-equity minorities, and no statement of board rights, drag rights or exit consents.",
+      "source": "Intro email; key facts (mid-market PE)",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the materials do not say whether Stakeboat buys control or minority positions, a distinction that changes the underwrite entirely; the split of Fund II deals by control versus minority, with governance rights per deal, would settle it."
+     },
+     {
+      "title": "Portfolio construction and single-asset concentration in basis points",
+      "preference": "Prefer explicit portfolio-construction constraints, and translate concentration into basis points (bps) of portfolio exposure rather than qualitative statements.",
+      "rationale": "",
+      "finding": "Only the $250m target size is given. Target number of positions, maximum single-asset cap, expected average cheque size and any sector or sub-sector limits are absent.",
+      "source": "Intro email; key facts (target size $250m)",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because fund size alone does not imply a position count, so no bps exposure can be computed; the target number of portfolio companies and the single-asset cap in the limited partnership agreement would settle it."
+     },
+     {
+      "title": "Practical key people and succession, tested against the legal clause",
+      "preference": "Identify who truly drives sourcing, underwriting and value creation, test bench depth against fund size, and check the key-person clause protects against the real risk.",
+      "rationale": "",
+      "finding": "No principals are named, no team size is given, no carry distribution is described, and the key-person clause is not referenced.",
+      "source": "Intro email (no team detail)",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the materials name no individual at the firm, let alone the driver of origination; a team page with tenure, attribution of Fund I and II deals by partner, and the draft key-person language would settle it."
+     },
+     {
+      "title": "Exit liquidity in a single-country emerging market",
+      "preference": "In single-country emerging-market exposure, exit liquidity and strategic-sector constraints are treated as central considerations rather than assumed away.",
+      "rationale": "",
+      "finding": "The materials state only that the fund is India-focused. Nothing is said about exit routes (initial public offering on Indian exchanges, strategic sale, sponsor-to-sponsor), the historic exit mix of prior funds, or repatriation and withholding treatment.",
+      "source": "Intro email; key facts (India-focused)",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because geography is stated and exit mechanics are not; the realised exit route and time-to-exit for every Fund I and Fund II disposal, plus the fund's tax domicile and repatriation structure, would settle it."
+     }
+    ],
+    "facts": [
+     {
+      "label": "Strategy",
+      "value": "India mid-market private equity (healthcare, business-to-business (B2B) technology, manufacturing)"
+     },
+     {
+      "label": "Target size",
+      "value": "$250m target (hard cap not stated)"
+     },
+     {
+      "label": "Target net return",
+      "value": "Not stated"
+     },
+     {
+      "label": "Fees / terms",
+      "value": "Not stated"
+     },
+     {
+      "label": "Positions / concentration",
+      "value": "Not stated"
+     }
+    ],
+    "not_covered": "Everything beyond strategy label, geography, fund number and target size: no track record, team, terms, portfolio construction, control posture, exit history or tax structure.",
+    "fit_points": [],
+    "non_fit_points": [],
+    "open_questions": [
+     "What are audited Fund I and Fund II net returns, DPI and TVPI by vintage, and what did each realised exit actually return?",
+     "Does Stakeboat take control positions or minority stakes, and what governance and exit rights attach to each?",
+     "Who originates and underwrites, how many investment professionals are there, and does the key-person clause name the actual drivers?",
+     "What is the target net USD IRR and MOIC, and what INR depreciation assumption sits behind it?",
+     "How were prior-fund exits achieved (Indian public listing, strategic, sponsor-to-sponsor), and over what holding periods?",
+     "What are the fee, carry, hurdle and GP commitment, and is a first-close or relationship discount available given the fundraise is live into SuperReturn 2026?",
+     "How is the fund structured for Indian tax and repatriation, and what withholding drag reaches a Weybourne-level investor?",
+     "What is the target number of portfolio companies and the single-asset cap, so concentration can be expressed in bps of portfolio?",
+     "Is Omnivore Venture Fund III ($225m early-stage impact VC) wanted as a separate screen, or declined at the intermediary stage?"
+    ],
+    "summary": "This cannot be screened on what we hold. The file is a single intermediary introduction from Pangaea Alts giving four data points: India mid-market private equity (PE) across healthcare, business-to-business (B2B) technology and manufacturing; a $250m target; Fund III; and meeting availability 24 Sept - 2 Oct in Singapore. There is no deck, no prior-fund performance, no team detail, no terms and no independent research, so every preference that bears on the decision is unevidenced rather than passed or failed. Two points are worth making before any meeting is booked. First, the deal-specific risk that dominates and maps to no single preference line is that a single-country India fund must clear an equity-like USD return bar after rupee depreciation and Indian exit friction, and the materials state neither a return target nor a single realised exit from the two prior funds: a third fund with an undisclosed record is the thing to press on. Second, the most decision-changing unknown is whether Stakeboat buys control or takes minority growth stakes, since that determines whether exit timing sits with us or with a founder. The practical next step is to request the deck, audited Fund I and II performance with an exit-by-exit realisation schedule, and the term sheet, then decide whether the Singapore slot is worth taking. Omnivore Venture Fund III ($225m early-stage impact venture capital) arrived in the same email and is a separate strategy requiring its own screen."
+   }
+  },
+  "trivest": {
+   "at": "2026-08-19T09:33:14",
+   "label": "Trivest",
+   "screen": {
+    "sleeve": "Unclear",
+    "overall_fit": "Unclear",
+    "criteria": [
+     {
+      "title": "Sleeve classification before anything else",
+      "preference": "An opportunity must be mapped to a sleeve (Private Growth, Public Growth or Diversifiers), and a Diversifier only qualifies where returns are driven by non-equity/non-credit common factors or are largely idiosyncratic.",
+      "rationale": "",
+      "finding": "The materials state only that an internal recommendation on Trivest has been prepared and circulated for feedback. Asset class, geography and strategy are all absent.",
+      "source": "Intro email (\"Investment Recommendation document prepared\"; \"Limited details provided in email itself\")",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the email names the opportunity and nothing else, so the fund cannot be mapped to a coverage area, let alone tested against the Diversifiers classification lens; the recommendation document would settle it in one line."
+     },
+     {
+      "title": "Equity-like return bar for Private Growth",
+      "preference": "A Private Growth fund must plausibly clear equity-like return objectives, and where the payoff is credit-like or capped it must have a structural reason (government leverage, hybrid equity participation, niche capital gap, value on the buy) that still gets it there.",
+      "rationale": "",
+      "finding": "No target net return, gross return, payoff shape or structural feature is stated anywhere in the materials.",
+      "source": "",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the materials give no return target and no description of the payoff shape, so there is nothing to test the Private Growth return bar against; the target net MOIC and net IRR in the recommendation document would settle it."
+     },
+     {
+      "title": "Repeatable edge, not a table-stakes claim",
+      "preference": "The \"why them\" must be a concrete and repeatable sourcing, information, operational or execution-at-scale advantage; absent that, underwrite as commodity beta and demand commodity pricing or pass.",
+      "rationale": "",
+      "finding": "No strategy description, sourcing model, operating capability or claimed differentiator appears in the materials.",
+      "source": "",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the materials contain no description of how the manager sources or creates value, so there is no engine to evaluate behind the framing; the Strategy and Why attractive sections of the recommendation document would settle it."
+     },
+     {
+      "title": "Downside-first underwriting",
+      "preference": "Underwrite what has to happen to lose money, with explicit scenario sets where the strategy is special situations or complex credit, and concentration translated into basis points of portfolio exposure.",
+      "rationale": "",
+      "finding": "No scenario analysis, downside case, loss driver or sizing figure is present in the materials.",
+      "source": "",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the materials carry no downside case or proposed commitment size, so the concentration cannot be converted into basis points against internal limits; the Sizing section and any stress case in the recommendation document would settle it."
+     },
+     {
+      "title": "Real bench, deliberate succession, and a key-person clause that bites",
+      "preference": "Test whether the bench is scaled to fund size, whether succession is named and deliberate, and whether the legal key-person clause covers the people who actually drive origination, underwriting and value creation.",
+      "rationale": "",
+      "finding": "No named principals, team size, tenure or key-person terms appear in the materials.",
+      "source": "",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because no individual at the manager is named in the materials, so neither practical key-person dependence nor the adequacy of the legal clause can be assessed; the Team section and the LPA key-person provision would settle it."
+     },
+     {
+      "title": "Terms as a return and alignment lever",
+      "preference": "Quantify fee savings from first close or size breaks, evaluate the fee-structure choice as an underwriting lever, check the GP commit trend, and negotiate hard caps and side-letter protections where absent.",
+      "rationale": "",
+      "finding": "No management fee, carry, hurdle, GP commitment, fund size or hard cap is stated.",
+      "source": "",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the materials disclose no economics at all, so no fee saving can be quantified and no negotiation lever identified; the Key terms section of the recommendation document would settle it."
+     },
+     {
+      "title": "Control, cross-fund deals and continuation vehicles",
+      "preference": "Cross-fund deals, minority rollovers and continuation vehicles are treated as material loss-of-control and alignment risks; in secondaries, minority status is acceptable only where a fully aligned bloc holds verified majority control.",
+      "rationale": "",
+      "finding": "The materials do not say whether this is a primary commitment, a secondary, a continuation vehicle or a co-investment.",
+      "source": "",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the transaction type is not stated, so it is not even known whether the control framework applies; identifying whether this is a blind-pool primary or a single-asset secondary would settle it."
+     },
+     {
+      "title": "Track record with realisations, not marks",
+      "preference": "Distributions to paid-in capital (DPI) and realisations carry weight; marks and unrealised performance alone are insufficient, and low DPI is a monitorable rather than something to overlook.",
+      "rationale": "",
+      "finding": "No prior fund performance, vintage, DPI, total value to paid-in capital (TVPI) or realisation history is provided.",
+      "source": "",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because no performance data of any kind accompanies the email, so realised versus unrealised value cannot be separated; a net performance table by vintage would settle it."
+     },
+     {
+      "title": "Live answers tested against marketing materials",
+      "preference": "Flag any inconsistency or hedging between what a manager said in a meeting, what the deck claims, and the answer given when questioned directly, as a core diligence concern.",
+      "rationale": "",
+      "finding": "No meeting note, deck or manager statement is in the materials, so there is nothing to cross-check.",
+      "source": "",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because neither a meeting record nor the manager's own marketing materials were supplied, so the two cannot be set against each other; the meeting notes plus the deck would settle it."
+     },
+     {
+      "title": "Do we need this fund, and does it overlap what we already hold",
+      "preference": "Apply an explicit \"do we need this fund\" test, and analyse overlap with existing platforms at look-through level, translated into basis points, particularly where the relationship is already strong.",
+      "rationale": "",
+      "finding": "The materials do not indicate whether Weybourne has an existing relationship with this manager, holds prior vintages, or has look-through overlap with current holdings.",
+      "source": "",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the email establishes no relationship history or portfolio context, so neither the need test nor an overlap analysis can be run; our internal holdings record for this manager would settle it."
+     }
+    ],
+    "facts": [
+     {
+      "label": "Strategy",
+      "value": "Not stated"
+     },
+     {
+      "label": "Target size",
+      "value": "Not stated"
+     },
+     {
+      "label": "Target net return",
+      "value": "Not stated"
+     },
+     {
+      "label": "Fees",
+      "value": "Not stated"
+     },
+     {
+      "label": "Positions / concentration",
+      "value": "Not stated"
+     }
+    ],
+    "not_covered": "Everything of substance: the materials contain no strategy, geography, asset class, fund size, economics, team, track record or transaction type.",
+    "fit_points": [],
+    "non_fit_points": [],
+    "open_questions": [
+     "Can the Investment Recommendation document itself be circulated, since the email refers to it but it is not attached?",
+     "What is the asset class, strategy and geography, and therefore which sleeve and coverage area does this map to?",
+     "Is this a primary fund commitment, a secondary, a continuation vehicle or a co-investment?",
+     "What are the fund size, hard cap, management fee, carry, hurdle and GP commitment?",
+     "What is the prior-fund track record on a net basis by vintage, with DPI and realisation history rather than marks?",
+     "Who are the principals who actually drive origination and underwriting, and does the key-person clause name them?",
+     "Does Weybourne have an existing relationship with this manager or hold prior vintages, and what look-through overlap exists with current holdings?",
+     "What proposed commitment size is contemplated, so concentration can be expressed in basis points of portfolio exposure?"
+    ],
+    "summary": "No screening decision is possible on what was supplied. The materials consist of an internal email stating that an Investment Recommendation on Trivest has been prepared and shared for feedback, with the document itself not attached and no strategy, asset class, geography, fund size, economics, team or track record given. Every preference tested therefore resolves to unevidenced, and the sleeve cannot be assigned. The most obvious deal-specific risk sits in the process rather than the fund: a document already titled \\\"Investment Recommendation\\\" is circulating for feedback before the team has seen the facts that would support or contradict it, which anchors the discussion on a conclusion nobody can yet check. The name Trivest is not, on its own, evidence of anything about the strategy, and no assumption has been made about it here. Send the recommendation document and the manager's materials, and this can be screened properly against the Private Growth framework."
+   }
+  },
+  "dt": {
+   "at": "2026-08-21T18:14:30",
+   "label": "dT! Partners",
+   "screen": {
+    "sleeve": "Public Growth",
+    "overall_fit": "Unclear",
+    "criteria": [
+     {
+      "title": "Countable information edge for a geographic specialist",
+      "preference": "Specialist managers must demonstrate a verifiable, quantifiable information advantage (offices in named cities, counted management meetings, counted expert relationships), not generic claims of expertise.",
+      "rationale": "",
+      "finding": "The only edge described is a \"concentrated long/short approach with stock selection focus\". No office locations, team location, meeting counts, corporate-access statistics or other countable metric is given.",
+      "source": "Intro email key facts (Ensor Partners introduction of Nimit, dT! Partners)",
+      "verdict": "not-fit",
+      "assessment": "Not a fit because the edge as presented is \"stock selection focus\", which is a description of what every discretionary equity manager does and carries no countable metric of the kind P9.1 and P1.3 require."
+     },
+     {
+      "title": "Underperformance attributed to flows rather than process",
+      "preference": "Judge the underlying return engine rather than the manager's framing, and treat a softer or self-serving explanation as a diligence flag rather than a fact.",
+      "rationale": "",
+      "finding": "FY26 underperformance is attributed to Foreign Institutional Investor (FII) outflows and explicitly not to deterioration of the investment thesis; the follow-on point is a \"strong recovery in FY27\". No attribution data, gross/net exposure history or long-versus-short contribution is provided.",
+      "source": "Intro email key facts",
+      "verdict": "not-fit",
+      "assessment": "Not a fit because a long/short (L/S) manager whose losses are explained by market-wide foreign flows is describing beta and factor exposure it did not hedge, and the explanation is offered as an assertion with no long-book versus short-book attribution behind it."
+     },
+     {
+      "title": "Asia manager count and manager consolidation",
+      "preference": "Asia can support at most two managers, and only where approaches are materially different; overall, prefer deepening existing manager relationships to adding a marginal new one, within a 15-18 active manager ceiling.",
+      "rationale": "",
+      "finding": "This is a single-country India mandate. The approved Public Growth set already carries a thematic Asia manager with South East Asia weighting and a broad Emerging Market (EM) mandate covering India-region research (a 40-person team spanning Hong Kong, Mumbai and Sao Paulo).",
+      "source": "Intro email (India-focused); Public Growth preferences P7.4, P7.1, P1.8, P4.1 evidence lines",
+      "verdict": "conditional",
+      "assessment": "A fit only if it displaces one of the two existing Asia mandates rather than becoming a third, and if the overlap of its India book against the incumbent broad Emerging Market (EM) manager's India exposure is measured and shown to be low."
+     },
+     {
+      "title": "Realised alpha as the fee hurdle",
+      "preference": "Allocation rests on documented alpha that clears the fee level; alpha is the lead question and fees are only the hurdle it must clear.",
+      "rationale": "",
+      "finding": "No return series, no benchmark, no alpha figure and no fee schedule appear in the materials. FY26 and FY27 are referenced only in direction (\"underperformance\", \"strong recovery\"), with no numbers.",
+      "source": "Intro email key facts",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the materials contain no return, benchmark or fee figures at all; a monthly net return series since inception against the MSCI India index (or a stated benchmark), plus the management and performance fee terms, would settle it."
+     },
+     {
+      "title": "Track record length and through-cycle evidence",
+      "preference": "10-20+ years preferred; five years minimum for consideration, with offsetting factors such as prior track record elsewhere, and crisis behaviour assessed where a crisis fell inside the record.",
+      "rationale": "",
+      "finding": "The materials reference only two fiscal years, FY26 and FY27. No inception date, no prior-firm history for Nimit, and no team background is given.",
+      "source": "Intro email key facts",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the materials give no inception date or prior-firm record; the fund's launch date, an attributable track record for the portfolio manager before dT! Partners, and drawdown/recovery figures for the 2020 and 2022 episodes if they fall inside the record would settle it."
+     },
+     {
+      "title": "Concentration matched to monitoring and to liquidity terms",
+      "preference": "Concentrated portfolios require evidence of monitoring depth, and redemption terms must match the diversification and liquidity of the book.",
+      "rationale": "",
+      "finding": "The strategy is described as concentrated, but no position count, top-ten weight, single-name cap, market-cap distribution or redemption terms are stated.",
+      "source": "Intro email key facts",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the materials name concentration without quantifying it or stating redemption terms; the position count, top-five and top-ten weights, the market-cap breakdown of the long book, and the dealing frequency, notice period and any lock or gate would settle it."
+     },
+     {
+      "title": "Return target for Emerging Market equity long/short",
+      "preference": "Emerging Market (EM) equity long/short is expected to target 18-22% absolute net with 8-10% alpha over the relevant EM index, at 18-22% volatility.",
+      "rationale": "",
+      "finding": "No target return, target alpha, volatility target or net exposure range is stated.",
+      "source": "Intro email key facts",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the materials state no return or risk target; the fund's stated net return target, alpha target against its chosen India benchmark, realised volatility and net exposure range would settle it."
+     },
+     {
+      "title": "Local presence and language capability",
+      "preference": "Managers in a single non-English-speaking market must have investment staff physically located there with native language capability.",
+      "rationale": "",
+      "finding": "The manager is described only as \"India-focused\". Nothing in the materials states where the investment team sits or what languages it operates in.",
+      "source": "Intro email (manager description)",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the materials do not say where the team is based; the office locations, headcount by location and language capability of the investment staff would settle it."
+     },
+     {
+      "title": "Operational rating and service providers",
+      "preference": "Institutional administrator, Big 4 or equivalent auditor and independent prime brokerage, with the Operational Due Diligence (ODD) rating setting the maximum position size.",
+      "rationale": "",
+      "finding": "No administrator, auditor, prime broker, domicile, Assets Under Management (AUM) figure or ODD rating is named anywhere in the materials.",
+      "source": "Intro email key facts",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because the materials name no service providers or operational rating; the fund domicile, administrator, auditor, prime broker(s), current AUM and any existing Albourne ODD rating would settle it and would set the sizing ceiling before strategy merit is even reached."
+     },
+     {
+      "title": "Capacity discipline",
+      "preference": "Manager-imposed capacity limits and soft-closes are read as prioritising performance over asset gathering.",
+      "rationale": "",
+      "finding": "The approach came through a third-party business development introduction (Ensor Partners) for a meeting to discuss strategy and recent performance. No capacity statement, hard cap or soft-close is mentioned.",
+      "source": "Intro email (Ensor Partners introducing Nimit for a business development meeting)",
+      "verdict": "unevidenced",
+      "assessment": "Unevidenced because an actively-marketed introduction says nothing either way about capacity policy; the stated strategy capacity in dollars, current AUM against it, and whether any capacity limit has ever been enforced would settle it."
+     }
+    ],
+    "facts": [
+     {
+      "label": "Strategy",
+      "value": "India-focused equity long/short, concentrated, stock-selection led"
+     },
+     {
+      "label": "Target size",
+      "value": "Not stated"
+     },
+     {
+      "label": "Target net return",
+      "value": "Not stated"
+     },
+     {
+      "label": "Fees",
+      "value": "Not stated"
+     },
+     {
+      "label": "Positions / concentration",
+      "value": "\"Concentrated\"; position count not stated"
+     }
+    ],
+    "not_covered": "Terms, economics, structure, service providers, team, Assets Under Management (AUM) and any quantified performance history",
+    "fit_points": [],
+    "non_fit_points": [
+     "Not a fit because the edge as presented is \"stock selection focus\", which is a description of what every discretionary equity manager does and carries no countable metric of the kind P9.1 and P1.3 require.",
+     "Not a fit because a long/short (L/S) manager whose losses are explained by market-wide foreign flows is describing beta and factor exposure it did not hedge, and the explanation is offered as an assertion with no long-book versus short-book attribution behind it."
+    ],
+    "open_questions": [
+     "What is the monthly net return series since inception, split into long-book and short-book attribution, for FY26 and FY27 specifically?",
+     "If Foreign Institutional Investor (FII) outflows drove FY26 underperformance, what were gross and net exposure through that period, and what was the short book doing?",
+     "When did the fund launch, and is there an attributable track record for Nimit before dT! Partners?",
+     "How many positions, what are the top-five and top-ten weights, and what are the dealing terms (frequency, notice, lock, gate)?",
+     "What is the management and performance fee, the hurdle if any, and current Assets Under Management (AUM) against stated capacity?",
+     "Where does the investment team sit, how many people, and what is the countable corporate-access footprint in India (company meetings per year, channel checks, named coverage universe)?",
+     "Domicile, administrator, auditor, prime broker(s), and any existing Albourne Operational Due Diligence (ODD) rating?",
+     "What is the overlap between this India book and the India exposure already held through the incumbent broad Emerging Market (EM) mandate, and would this replace an existing Asia manager rather than add a third?"
+    ],
+    "summary": "Take the business development meeting, but treat this as a first conversation and not a screen that can be concluded. The materials are an introduction email with five bullet points: no returns, no fees, no terms, no team, no service providers, no Assets Under Management (AUM). Almost every binding Public Growth test therefore comes back unevidenced rather than passed or failed. Two things do stand out from what is there. First, the edge as described is \\\"concentrated long/short with stock selection focus\\\", which is the default description of a discretionary equity manager and carries none of the countable specialist metrics the framework requires of a single-country mandate. Second, FY26 underperformance is attributed to Foreign Institutional Investor (FII) outflows rather than the thesis, and a long/short manager explaining losses by market-wide foreign flows is describing unhedged beta and factor exposure; that attribution needs to be tested against long-book and short-book contribution data before it is accepted. Separately, a single-country India fund would be a third Asia mandate against a documented ceiling of two, so it has to earn its place by displacing an incumbent rather than sitting alongside them, and its India overlap with the existing broad Emerging Market (EM) manager needs measuring. The \\\"India valuation premium at a 20-year low\\\" point is an index-level entry argument and does not bear on whether this manager generates alpha."
+   }
+  }
+ }
+}

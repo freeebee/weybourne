@@ -1,0 +1,39 @@
+{
+ "kind": "planned",
+ "record_id": "mc5",
+ "database": "contacts",
+ "planned": {
+  "properties": {
+   "Employed By": {
+    "relation": []
+   }
+  }
+ },
+ "expect_prop": "Employed By",
+ "scanned_plain": [
+  "gone-page"
+ ],
+ "scanned_raw": {
+  "Name": {
+   "type": "title",
+   "title": [
+    {
+     "plain_text": "Mary Osei"
+    }
+   ]
+  },
+  "Email": {
+   "type": "email",
+   "email": "mary@reva.com"
+  },
+  "Employed By": {
+   "type": "relation",
+   "relation": [
+    {
+     "id": "gone-page"
+    }
+   ],
+   "has_more": false
+  }
+ }
+}

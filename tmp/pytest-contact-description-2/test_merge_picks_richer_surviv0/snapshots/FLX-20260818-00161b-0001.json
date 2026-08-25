@@ -1,0 +1,34 @@
+{
+ "kind": "planned",
+ "record_id": "mc4",
+ "database": "contacts",
+ "planned": {
+  "properties": {
+   "Name": {
+    "title": [
+     {
+      "text": {
+       "content": "Allan Fife"
+      }
+     }
+    ]
+   }
+  }
+ },
+ "expect_prop": "Name",
+ "scanned_plain": "  Allan  Fife ",
+ "scanned_raw": {
+  "Name": {
+   "type": "title",
+   "title": [
+    {
+     "plain_text": "  Allan  Fife "
+    }
+   ]
+  },
+  "Email": {
+   "type": "email",
+   "email": "allan@fife.com"
+  }
+ }
+}

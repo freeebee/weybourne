@@ -1,0 +1,12 @@
+{
+ "run_id": "r1",
+ "started": "2026-08-05T00:27:17",
+ "finished": "",
+ "status": "interrupted",
+ "dry_run": true,
+ "databases": [],
+ "counts": {},
+ "deferred": 0,
+ "error": "the run stopped before it finished — most often the server restarted while it was working",
+ "stages": []
+}

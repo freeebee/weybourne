@@ -1,0 +1,613 @@
+{
+ "window": {
+  "start": "2026-08-03",
+  "end": "2026-08-07"
+ },
+ "window_label": "3 – 7 August 2026",
+ "ref": "WB-WR-2026-W32",
+ "headline": "Managers came with numbers — few came with evidence",
+ "standfirst": "Thirty-nine engagements, twenty-five of them GP meetings, and one shape running through them: strong claimed records, thin verified attribution. Three China managers approached us in the same week, all for the same reason — US capital is retreating from that market. Two energy managers have cut risk rather than hedge it, and both are waiting on the same buyer.",
+ "stats": {
+  "engagements": 39,
+  "note_records": 43,
+  "duplicate_sets": 2,
+  "gp_meetings": 25,
+  "lp_meetings": 3,
+  "internal_meetings": 2,
+  "service_meetings": 2,
+  "declined": 8,
+  "new_fund_records": 13,
+  "funds_touched": 35,
+  "new_contacts": 28,
+  "firms_represented": 0
+ },
+ "urgent": {
+  "badge_label": "Closing",
+  "title": "Pemba's second close is the last one, and it may be $50m",
+  "paragraphs": [
+   "Pemba has completed a first close of **$800m**, combining the 1a and 1b closes. The second close will be materially smaller — a maximum of **$100m** and most likely **$50m** — which takes the fund to its hard cap.",
+   "The note gives no date for that close, only its size. If we want an allocation the decision is effectively now, and it is a decision about size as much as participation: that capacity is the whole remaining book, not our share of it."
+  ]
+ },
+ "moved": [
+  {
+   "id": "bcf538c4-7d1d-4965-8534-7720647aec74",
+   "url": "https://app.notion.com/p/IA-Partners-Fund-II-bcf538c47d1d496585347720647aec74",
+   "name": "IA Partners Fund II",
+   "status": "In diligence",
+   "focus": "JAPAN BUYOUT",
+   "why": "A peer LP rated the senior bench — managing directors and directors with their own track records — as materially stronger than REVA's. Our next steps are meeting the wider team and resolving why non-industrial deals and structured minorities sit alongside control transactions.",
+   "declined": false,
+   "why_evidenced": true
+  },
+  {
+   "id": "2af8387e-c92d-803a-994c-ca1eaeb2d820",
+   "url": "https://app.notion.com/p/REVA-Fund-I-2af8387ec92d803a994cca1eaeb2d820",
+   "name": "REVA Fund I",
+   "status": "Met",
+   "focus": "JAPAN BUYOUT",
+   "why": "A REVA call and a peer read landed in the same week. Axiom, a Fund I investor, is leaning towards sitting out Fund II because investment judgment stays with three founders now stretched across seven to eight companies.",
+   "declined": false,
+   "why_evidenced": true
+  },
+  {
+   "id": "2818387e-c92d-800b-a82f-fa03af320573",
+   "url": "https://app.notion.com/p/Trivest-Advisors-A-Share-LO-Fund-2818387ec92d800ba82ffa03af320573",
+   "name": "Trivest Advisors A-Share LO Fund",
+   "status": "In diligence",
+   "focus": "CHINA A-SHARE",
+   "why": "Three meetings in two days covered the CIO, the head of research and an industrial analyst. Diligence now turns on a single question: whether Liu Bo's small and mid-cap edge survives a larger book.",
+   "declined": false,
+   "why_evidenced": true
+  },
+  {
+   "id": "4af4fae7-1fa1-441b-9205-5f97b761e736",
+   "url": "https://app.notion.com/p/Rocada-Volatility-Fund-4af4fae71fa1441b92055f97b761e736",
+   "name": "Rocada Volatility Fund",
+   "status": "Not reviewed",
+   "focus": "SINGLE-STOCK VOL",
+   "why": "Two calls opened a new record. The convex payoff and managed-account suitability fit the diversifying bucket, but the audited standalone record starts 1 June and the manager is running it alone.",
+   "declined": false,
+   "why_evidenced": true
+  },
+  {
+   "id": "3b48387e-c92d-818b-a8c0-e583e356d31b",
+   "url": "https://app.notion.com/p/BAI-Capital-Fund-VI-3b48387ec92d818ba8c0e583e356d31b",
+   "name": "BAI Capital Fund VI",
+   "status": "Met",
+   "focus": "CHINA VENTURE",
+   "why": "First meeting held on Fund VI. The China-to-global positioning is differentiated, but the exit counts and the 1.5x mark are manager-reported. We are not prioritising the October second close.",
+   "declined": false,
+   "why_evidenced": true
+  },
+  {
+   "id": "3b38387e-c92d-8021-9ad9-fd6fa286cee3",
+   "url": "https://app.notion.com/p/Pollen-Street-Capital-Credit-Fund-IV-3b38387ec92d80219ad9fd6fa286cee3",
+   "name": "Pollen Street Capital Credit Fund IV",
+   "status": "Not met",
+   "focus": "UK ASSET-BACKED CREDIT",
+   "why": "New record opened after a lunch with Leah, who joined Pollen Street following fourteen years at CQS and knows Weybourne through GA. Follow-up material was promised and has not yet been reviewed.",
+   "declined": false,
+   "why_evidenced": true
+  },
+  {
+   "id": "3b38387e-c92d-8008-83a9-e1880ecce4d2",
+   "url": "https://app.notion.com/p/Pollen-Street-Capital-Fund-V-3b38387ec92d800883a9e1880ecce4d2",
+   "name": "Pollen Street Capital Fund V",
+   "status": "Not met",
+   "focus": "EUROPEAN FINANCIALS BUYOUT",
+   "why": "The second new record from the same introduction, covering the financial private equity side of a two-strategy house. Nothing seen yet beyond the meeting itself.",
+   "declined": false,
+   "why_evidenced": true
+  },
+  {
+   "id": "3b58387e-c92d-8002-9295-d635f9bed3be",
+   "url": "https://app.notion.com/p/Green-Investment-Partners-3b58387ec92d80029295d635f9bed3be",
+   "name": "Green Investment Partners",
+   "status": "Not met (Declined)",
+   "focus": "🌏 GLOBAL · 🇪🇺 EUROPE · 🇺🇸 US · 🏯 PAN-ASIA · GLOBAL EQUITIES - ACTIVE",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2638387e-c92d-81e7-b359-c30ccbf60c5c",
+   "url": "https://app.notion.com/p/Hound-Partners-Variable-Beta-2638387ec92d81e7b359c30ccbf60c5c",
+   "name": "Hound Partners Variable Beta",
+   "status": "Not met (Declined)",
+   "focus": "🌏 GLOBAL · HEDGE FUNDS - SINGLE STRATEGY",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2308387e-c92d-8109-a843-d9a935cfcede",
+   "url": "https://app.notion.com/p/KKR-APAC-Infrastructure-III-2308387ec92d8109a843d9a935cfcede",
+   "name": "KKR APAC Infrastructure III",
+   "status": "Not met (Declined)",
+   "focus": "🏯 PAN-ASIA · PRA - INFRASTRUCTURE",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "3b18387e-c92d-80e7-b522-f2f09203bb94",
+   "url": "https://app.notion.com/p/King-Fund-III-3b18387ec92d80e7b522f2f09203bb94",
+   "name": "King Fund III",
+   "status": "Not met (Declined)",
+   "focus": "🇺🇸 US · PC - SPECIALIST LENDING · OTHER",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2638387e-c92d-81a6-b886-c3d234e6d4c7",
+   "url": "https://app.notion.com/p/Pollen-Street-Capital-Fund-IV-2638387ec92d81a6b886c3d234e6d4c7",
+   "name": "Pollen Street Capital Fund IV",
+   "status": "Not met (Declined)",
+   "focus": "🇪🇺 EUROPE · PE - BUYOUT",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2638387e-c92d-81ec-b555-d64035cf889b",
+   "url": "https://app.notion.com/p/Samson-Rock-Capital-Event-Driven-Master-Fund-2638387ec92d81ecb555d64035cf889b",
+   "name": "Samson Rock Capital Event Driven Master Fund",
+   "status": "Met (Declined)",
+   "focus": "🇪🇺 EUROPE · HEDGE FUNDS - SINGLE STRATEGY",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "3b18387e-c92d-80b1-aecc-fc0f642509b5",
+   "url": "https://app.notion.com/p/Union-Real-Estate-Fund-V-3b18387ec92d80b1aeccfc0f642509b5",
+   "name": "Union Real Estate Fund V",
+   "status": "Not met (Declined)",
+   "focus": "NORDICS · PRA - DIVERSIFIED REAL ESTATE",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2638387e-c92d-81df-9428-fbb02127bfac",
+   "url": "https://app.notion.com/p/Voyager-Capital-2638387ec92d81df9428fbb02127bfac",
+   "name": "Voyager Capital",
+   "status": "Not met (Declined)",
+   "focus": "🇺🇸 US · PE - BUYOUT",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  }
+ ],
+ "declined": [],
+ "declined_names": [
+  "Green Investment Partners",
+  "Hound Partners Variable Beta",
+  "KKR APAC Infrastructure III",
+  "King Fund III",
+  "Pollen Street Capital Fund IV",
+  "Samson Rock Capital Event Driven Master Fund",
+  "Union Real Estate Fund V",
+  "Voyager Capital"
+ ],
+ "reads": [
+  {
+   "id": "tenstrata-attribution-unverified",
+   "title": "Tenstrata's headline 28% rests on a verbal claim, not a verified record",
+   "meta": "3 August · GP meeting · Europe SMID activist",
+   "wide": true,
+   "badge": {
+    "label": "Verify first",
+    "tone": "caution"
+   },
+   "paragraphs": [
+    "Chad Tappendorf and Fred Ingram presented Tenstrata, a pre-launch European small and mid-cap constructivist strategy, with a ticket of around **$50m** discussed. The headline is that the investments attributed to Chad and Amitabh at Coast Capital returned approximately **28% annualised** against roughly **22% net** for the firm overall, representing around 70% of assets but 110% of P&L. Every one of those figures was presented verbally.",
+    "What would evidence them is specific and obtainable: administrator or auditor verification of the Coast record attributable to the two of them, position-level attribution split between operational improvement and re-rating, a gross-to-net bridge, and two or three original underwriting papers set against realised outcomes. Management's own preliminary estimate was roughly half operational and earnings improvement, half takeover or re-rating, but formal attribution was not available in the room. GP capital was reported up **25.5%** to end July, unaudited.",
+    "Two separate records of the same day disagree on timing — one gives a Q4 2025 launch slipping to Q1 2026, the other Q4 2026 slipping to Q1 2027. Only the second is consistent with Fred Ingram's expected September 2026 start date. Separately, the claim that a 5% stake can requisition a UK general meeting is management's own, and the note says it should be legally verified."
+   ],
+   "quote": "The principal issue is not whether the strategy is intuitively attractive, but whether the historical evidence supports the claimed repeatability of returns.",
+   "note": {
+    "kind": "next",
+    "label": "Ask for",
+    "body": "Administrator-verified Coast attribution by position, a gross-to-net bridge, two or three original underwriting papers, and a liquidity analysis at stressed volumes — before any further high-level discussion of the opportunity set."
+   },
+   "sources": [
+    {
+     "label": "Tenstrata",
+     "url": "https://app.notion.com/p/Tenstrata-3b18387ec92d80d58b73da05ec8c90ea"
+    },
+    {
+     "label": "Meeting with Tenstrata at Queen Street",
+     "url": "https://app.notion.com/p/Meeting-with-Tenstrata-at-Queen-Street-3b18387ec92d8041a1c0d67f45f14e7e"
+    }
+   ]
+  },
+  {
+   "id": "trivest-liu-bo-scalability",
+   "title": "Three Trivest meetings, and only the analyst names the constraint on Liu Bo",
+   "meta": "3–4 August · 3 GP meetings · China A-share",
+   "wide": true,
+   "badge": {
+    "label": "In diligence",
+    "tone": "field"
+   },
+   "paragraphs": [
+    "We met the CIO, the head of research and an industrial analyst across two days. Huimin Wu was the most quantified: Liu Bo managed close to **RMB 30bn** at Fullgoal, stayed above the median in every quarter over six to seven years, and finished around the **7th percentile** of roughly 100 managers. Wu scored his judgement of long-term business quality at **70–80 out of 100** and his rotation, trading and portfolio construction closer to **90**.",
+    "Lu Sun, asked directly for a weakness, identified none — describing the differences from Trivest's other portfolios as stylistic, and noting that Liu Bo's results benefit meaningfully from the wider platform under a one-platform, three-products model. Yang Shuo, who works alongside him, named the constraint: Liu Bo's initially smaller book allowed him to hold small and mid-cap names, and those positions stop providing capacity as assets grow.",
+    "That is the fund-level question, and the performance record does not answer it. The build-out is real — pharmaceutical and manufacturing coverage added, two to three more analysts being recruited, a weekly Asia call Liu Bo now chairs — but it addresses research depth, not capacity. Note also that Wu's own write-up records the section on AI and quant competition as partially garbled, so we have no reliable read on his view there."
+   ],
+   "quote": "The central question is whether he can preserve his market sensitivity and flexibility while adapting portfolio construction to a larger capital base.",
+   "note": {
+    "kind": "watch",
+    "label": "Capacity",
+    "body": "Request current and projected AUM for the A-share strategy, the small and mid-cap weight over time, and position-level liquidity at stressed volumes."
+   },
+   "sources": [
+    {
+     "label": "Meeting with Trivest (CIO Huimin Wu)",
+     "url": "https://app.notion.com/p/Meeting-with-Trivest-CIO-Huimin-Wu-3b18387ec92d8065b078ca89d477269a"
+    },
+    {
+     "label": "Meeting with Trivest (Lu Sun, Head of Research)",
+     "url": "https://app.notion.com/p/Meeting-with-Trivest-Lu-Sun-Head-of-Research-3b28387ec92d800c980feb2dec96a72b"
+    },
+    {
+     "label": "Meeting with Trivest (Yang Shuo, Industrial Analyst)",
+     "url": "https://app.notion.com/p/Meeting-with-Trivest-Yang-Shuo-Industrial-Analyst-3b28387ec92d80029fe3e1fff75905d1"
+    }
+   ]
+  },
+  {
+   "id": "japan-ia-partners-reva",
+   "title": "A peer LP is leaning out of REVA Fund II, and towards IA Partners",
+   "meta": "6 August · LP meeting · Japan buyout",
+   "wide": false,
+   "badge": {
+    "label": "Peer view",
+    "tone": "caution"
+   },
+   "paragraphs": [
+    "Axiom, which backed REVA Fund I, is leaning towards sitting out Fund II. Sourcing proved broader than the Sumitomo network and the operating team was built faster than expected, but experienced investment judgment still sits with the three founding partners, spread across roughly seven to eight portfolio companies. Secondees from Sumitomo, Shoko Chukin Bank and Nihon M&A Center add manpower for specific projects, not senior cover when an investment deteriorates.",
+    "On IA Partners, where we are in diligence, Axiom was positive on the lead partner's grasp of Japanese industrials and rated the senior bench — managing directors and directors with their own investment track records — as materially stronger than REVA's. Their open question is also ours: why the portfolio includes non-industrial deals such as a secondhand clothing business, and why structured minority positions sit alongside control transactions.",
+    "This is a peer's read rather than our diligence, and Axiom has not reached commitment-level conviction either. Its usefulness is that it converges with the case for meeting IA's wider team before we form a view, and it puts a precise question to REVA about who underwrites while the founders are absorbed by earlier positions."
+   ],
+   "quote": "The key weakness is that experienced investment judgment remains concentrated in the three founding partners.",
+   "note": {
+    "kind": "next",
+    "label": "Meet the bench",
+    "body": "Schedule time with IA Partners' managing directors and directors separately from the lead partner, and ask REVA how investment judgment is distributed below the three founders."
+   },
+   "sources": [
+    {
+     "label": "Meeting with Axiom on Japan managers",
+     "url": "https://app.notion.com/p/Meeting-with-Axiom-on-Japan-managers-3b48387ec92d8085a612f4d60a98754d"
+    },
+    {
+     "label": "REVA call",
+     "url": "https://app.notion.com/p/REVA-call-3b18387ec92d80c28d17eebb2562f488"
+    }
+   ]
+  },
+  {
+   "id": "energy-china-single-variable",
+   "title": "Two energy managers, both de-risked, both waiting on the same buyer",
+   "meta": "3–4 August · 2 GP meetings · Oil and European gas",
+   "wide": false,
+   "badge": {
+    "label": "One variable",
+    "tone": "caution"
+   },
+   "paragraphs": [
+    "Frere Hall has moved portfolio VaR to roughly **1.0–1.2%** against the **2.0–2.3%** previously run, concentrated at the liquid front of the curve, and estimates China has removed about **three million barrels a day** of effective call on the global crude market. Taimur Hassan was explicit that the environment is poorly suited to the firm's fundamentals-based process. Last month returned approximately **+2.2%**, described as the first positive month for some time.",
+    "Nanook is down approximately **8%** year to date. It began the year bearish European gas, reduced ahead of the Iran escalation but not fully, then moved moderately long in March after Ras Laffan was damaged. The bullish leg failed for the same reason the bearish thesis had been right: China drew on strategic reserves rather than bid for cargoes, and Pakistan and others tolerated blackouts instead. Simon Hastings' conclusion was that the remaining bearish exposure should have been removed entirely rather than partially.",
+    "Both name the same trigger — a visible return of Chinese buying — and both have responded by holding less risk rather than by hedging. That is one unhedgeable variable sitting behind two separate books, and neither claims an edge in calling it. Nanook has also hired analyst Jack Hogan from Frere Hall Capital and agreed to onboard an oil trader at the end of 2026, with meaningful oil risk unlikely before mid-2027."
+   ],
+   "quote": "Nanook's edge may principally be its willingness not to trade",
+   "note": {
+    "kind": "risk",
+    "label": "Correlation",
+    "body": "Both positions now depend on the timing of Chinese crude and LNG buying. Size the pair rather than each book until that resolves."
+   },
+   "sources": [
+    {
+     "label": "Meeting with Frere Hall",
+     "url": "https://app.notion.com/p/Meeting-with-Frere-Hall-3b18387ec92d807e8319c67fc6b5ab05"
+    },
+    {
+     "label": "Meeting with Nanook",
+     "url": "https://app.notion.com/p/Meeting-with-Nanook-3b28387ec92d8023a700cf276a045b92"
+    }
+   ]
+  },
+  {
+   "id": "china-access-window",
+   "title": "Three China GPs came to us in one week, for the same reason",
+   "meta": "5–7 August · 3 GP meetings · China private",
+   "wide": false,
+   "badge": {
+    "label": "Access",
+    "tone": "brass"
+   },
+   "paragraphs": [
+    "Ascendent Capital, which has historically raised without active marketing, is now conducting roadshows as US LPs pull back from China. Neil Shen is looking to optimise HongShan's LP base against a more politically cautious US, where LPs remain roughly **50%** of the book — the stated reason for the approach to Weybourne. BAI Capital, backed by Bertelsmann since 2008, positions its European heritage as more neutral than US-backed capital in the eyes of Chinese technology companies.",
+    "Three independent notes in five days point at one structural fact. It is a genuine access opportunity, and it should also raise our bar, because the capital retreating is the capital that historically did the diligence work on these franchises. Being welcome is not the same as being early."
+   ],
+   "quote": "Having historically raised capital without active marketing, Ascendent is now conducting roadshows as US LPs pull back from China, potentially creating an attractive access opportunity for us",
+   "note": {
+    "kind": "watch",
+    "label": "Bar, not rush",
+    "body": "Our stated position remains a pause and a higher bar on new China private exposure. Widening access is a reason to be selective, not a reason to move."
+   },
+   "sources": [
+    {
+     "label": "Intro Meeting with Ascendent Capital",
+     "url": "https://app.notion.com/p/Intro-Meeting-with-Ascendent-Capital-3b58387ec92d80ca890ed7421b9b4097"
+    },
+    {
+     "label": "Call with HongShan (HSG)",
+     "url": "https://app.notion.com/p/Call-with-HongShan-HSG-3b38387ec92d817fa4e0f61799da3e2b"
+    },
+    {
+     "label": "Meeting with BAI Capital",
+     "url": "https://app.notion.com/p/Meeting-with-BAI-Capital-3b38387ec92d80919b36cea21c8bb44d"
+    }
+   ]
+  },
+  {
+   "id": "hongshan-buyout-edge",
+   "title": "Neil Shen's portfolio numbers are striking; his buyout rationale is not",
+   "meta": "5 August · GP meeting · China venture",
+   "wide": false,
+   "badge": {
+    "label": "Not convinced",
+    "tone": "caution"
+   },
+   "paragraphs": [
+    "Shen cited Moonshot moving from roughly **$3m** to roughly **$150m** of monthly revenue with over **$1bn** of ARR, Unitree approaching **$600m** of revenue this year with substantial profit ahead of a listing, and Genesis marking from a near-nominal entry to a **$4bn** round in progress. He was candid where candour cost him something: 2019 to 2021 was invested too quickly, and he does not yet know whether the Genesis founder, who has never run a company for any extended period, can scale commercially.",
+    "Two of the three reasons given for the split from Sequoia hold up — geopolitics, and the difficulty of defining a Chinese company when the founder sits in Singapore or Silicon Valley. The third, that he wanted to do buyouts and Sequoia thought it a bad business, is where our own note is blunt.",
+    "The call itself was a broadcast: he talked for the first thirty minutes and three questions were squeezed into the second half. Stakes retained, returns actually delivered, the persistence of shared back-office infrastructure, and how the stated line on avoiding controversy squares with the US scrutiny facing Xiying were all left unanswered. A venture fund is likely at the end of the year, probably around **$1.2bn** against **$1.6bn** last time, with growth and buyout strategies to follow."
+   ],
+   "quote": "Having heard Neil talk about buyouts, we don't see him as having a particular edge or insight here",
+   "note": {
+    "kind": "watch",
+    "label": "Ask again",
+    "body": "Structure the next conversation to get answers on realised returns by vintage, retained stakes and the buyout thesis, rather than another firm overview."
+   },
+   "sources": [
+    {
+     "label": "JS brief note on intro call with Neil Shen",
+     "url": "https://app.notion.com/p/JS-brief-note-on-intro-call-with-Neil-Shen-3b38387ec92d804eb528cddc83db68f8"
+    },
+    {
+     "label": "Call with HongShan (HSG)",
+     "url": "https://app.notion.com/p/Call-with-HongShan-HSG-3b38387ec92d817fa4e0f61799da3e2b"
+    }
+   ]
+  },
+  {
+   "id": "powerlaw-dpi-unanswered",
+   "title": "We asked Powerlaw what its first fund has actually distributed",
+   "meta": "5 August · GP meeting · Listed venture vehicle",
+   "wide": false,
+   "badge": {
+    "label": "Unanswered",
+    "tone": "critical"
+   },
+   "paragraphs": [
+    "The structure is genuinely differentiated: a NASDAQ-listed venture vehicle offering daily liquidity, a **2.5%** management fee and no carry, listed on **27 May** after a **$408m** raise against a $200m target. NAV is reported at **$701m** against portfolio cost of roughly **$250m**, with investors in at a $10 basis. That uplift is a last-round mark, not a realisation.",
+    "Shubham Yadav's own stated reason for investing was weak DPI across his existing venture exposure. Asked what DPI the first fund has distributed, no answer came. Nor did answers on entry discounts, on how often the flagship received a full allocation once the AI fund takes first call, or on whether the model layer is held at all.",
+    "Two structural tensions sit unresolved. The committee screens portfolio companies for staying private, yet SpaceX — the largest holding, cost roughly **$51m** against fair value around **$190m** — listed anyway, and the vehicle itself chose to list. And the shares trade below NAV, attributed partly to the fund tracking SpaceX's own trading, with no discount mechanism committed to."
+   ],
+   "quote": "A large number of substantive questions were left unanswered.",
+   "note": {
+    "kind": "risk",
+    "label": "Marks not cash",
+    "body": "The entire performance case is unrealised marks. Nothing should progress without fund-level DPI, loss ratios and realised proceeds."
+   },
+   "sources": [
+    {
+     "label": "Call with Powerlaw (Akkadian) — Powerlaw AI Fund",
+     "url": "https://app.notion.com/p/Call-with-Powerlaw-Akkadian-Powerlaw-AI-Fund-3b38387ec92d81709687f0215afd0924"
+    }
+   ]
+  },
+  {
+   "id": "bai-capital-platform-vs-fund",
+   "title": "BAI's 23 IPOs and 51 trade sales are platform counts, not fund returns",
+   "meta": "5 August · GP meeting · China growth venture",
+   "wide": false,
+   "badge": {
+    "label": "Introductory",
+    "tone": "caution"
+   },
+   "paragraphs": [
+    "Fund VI targets approximately **$875m** and had raised **$600m**, with roughly **$160m** deployed and the portfolio marked at **1.5x**. BAI reported 23 IPOs, 51 trade sales and at least one exit in every year since 2010. Those are platform-level counts across six funds and were not reconciled to fund-level gross or net returns, DPI, loss ratios or realised proceeds. The 1.5x mark was attributed to five- to tenfold revenue growth, without valuation dates, methodology or a realised component.",
+    "The strategy is coherent — enter at Series A after evidence of product-market fit, follow through B and C to **10–15%** ownership by IPO, around 20 core positions at **$20–30m** each — and the strategic-LP incubation model is genuinely differentiated, though it rests on two Latin American fintech examples whose repeatability, governance and economics were not discussed. Several portfolio-company names were unclear in the transcript and need reconciling against the deck.",
+    "One structural item to settle independently: the three-person investment committee is said to vote while outside mainland China, an arrangement supporting the offshore structure. That warrants our own tax and permanent-establishment review rather than an assurance that other institutional LPs have diligenced it."
+   ],
+   "quote": "the discussion was introductory and the key performance, valuation, team and structural claims remain to be verified",
+   "note": {
+    "kind": "next",
+    "label": "Before final",
+    "body": "If the China private pipeline reopens, request data-room access and fund-level performance ahead of the final close rather than the October second close."
+   },
+   "sources": [
+    {
+     "label": "Meeting with BAI Capital",
+     "url": "https://app.notion.com/p/Meeting-with-BAI-Capital-3b38387ec92d80919b36cea21c8bb44d"
+    }
+   ]
+  },
+  {
+   "id": "pollen-street-reopened",
+   "title": "A legacy decline reopens through a hire who already knows the house",
+   "meta": "3 August · GP meeting · UK and Europe credit and buyout",
+   "wide": false,
+   "badge": {
+    "label": "New records",
+    "tone": "positive"
+   },
+   "paragraphs": [
+    "Leah joined Pollen Street recently after fourteen years at CQS, where she knows Weybourne through GA. The firm is a two-strategy house — asset-backed private credit and financial private equity — and two fund records were opened this week at high quality: **Pollen Street Capital Credit Fund IV** and **Pollen Street Capital Fund V**.",
+    "The context worth carrying is that Pollen Street Capital Fund IV sits on our books as a legacy decline. A relationship rebuilt through someone who already knows us is the most plausible route back into a manager we previously passed on, and the current funds should be assessed on their own terms rather than on the earlier decision. Follow-up material was promised and has not yet been received or reviewed."
+   ],
+   "quote": null,
+   "note": {
+    "kind": "next",
+    "label": "Materials",
+    "body": "Chase the follow-up pack from Leah and decide whether either strategy warrants a first substantive meeting."
+   },
+   "sources": [
+    {
+     "label": "Meeting with Leah at Pollen Street",
+     "url": "https://app.notion.com/p/Meeting-with-Leah-at-Pollen-Street-3b18387ec92d803887fae2c9c24dff69"
+    }
+   ]
+  },
+  {
+   "id": "northwest-issuance-vs-alpha",
+   "title": "Northwest goes to IC with the alpha question still open",
+   "meta": "4 August · Internal · China convertibles",
+   "wide": false,
+   "badge": {
+    "label": "To IC",
+    "tone": "neutral"
+   },
+   "paragraphs": [
+    "Northwest runs onshore Chinese convertibles: more than twenty years of history, positive references from HS Group and from a Canadian family office that also invests with Trivest, and a highly diversified book with the largest position at roughly **2%**. The China Opportunities vehicle adds accordion-style leverage intended to rise with the opportunity set rather than sit at a fixed multiple.",
+    "The unresolved question is the one that matters. Recent Chinese convertible issuance has been strong, and we do not yet know how much of the performance is manager alpha and how much is a favourable issuance cycle. Alongside it sit secondary-market liquidity — Northwest cannot participate in primary issuance and must build and exit entirely in the secondary market — historical default rates, reset hit rates and gap risk, the maximum drawdown, and why the vehicle is registered with the CFTC as a commodity pool.",
+    "Sending it to IC with those items open is reasonable sequencing, provided IC is told plainly that they are open. The classification question — alternative, or a China equity sub-strategy — should not be settled before the alpha question is."
+   ],
+   "quote": "neither fish nor fowl",
+   "note": {
+    "kind": "watch",
+    "label": "Issuance test",
+    "body": "Request performance across periods of weaker issuance. That single series does more than any other to separate structural alpha from the cycle."
+   },
+   "sources": [
+    {
+     "label": "Internal discussion on Northwest",
+     "url": "https://app.notion.com/p/Internal-discussion-on-Northwest-3b28387ec92d80488547cc05a1936595"
+    }
+   ]
+  },
+  {
+   "id": "rocada-convexity-immature",
+   "title": "Rocada's payoff shape fits; the platform behind it does not yet",
+   "meta": "6 August · 2 GP calls · Single-stock long volatility",
+   "wide": false,
+   "badge": {
+    "label": "Early",
+    "tone": "neutral"
+   },
+   "paragraphs": [
+    "Single-stock long optionality across the US and Europe, with no short index leg and no naked short options. The funnel runs from roughly 1,000 liquid-option names through quantitative screens to 50–100 candidates, then to a **15–25 name** portfolio at about **25bp** of risk each, in one- to six-month options biased towards three to six. The standalone fund targets roughly **20–25%** upside against a **7–7.5%** drawdown, on a stated three-to-one win/loss skew.",
+    "Two facts bound what can be concluded. The audited standalone record starts on **1 June**, and the manager is running the strategy alone, with a fundamental analyst carrying forensic accounting experience the priority hire. The screens were built independently using AI tools, which is worth understanding for robustness and governance rather than noting in passing.",
+    "The strategy is operationally suited to a managed account — defined-risk trades, low margin usage, UBS as prime broker — which is our preferred format and lowers the cost of engaging early. The next step is the sample portfolio and position-level evidence that the claimed skew is what the book actually produced."
+   ],
+   "quote": "the standalone audited track record only began in June and the manager is currently operating solo",
+   "note": {
+    "kind": "next",
+    "label": "Sample book",
+    "body": "Review the sample portfolio and test sizing, monetisation and realised skew before any SMA discussion advances."
+   },
+   "sources": [
+    {
+     "label": "Meeting with Rocada",
+     "url": "https://app.notion.com/p/Meeting-with-Rocada-3b48387ec92d800fbd57eb94c6a8b553"
+    },
+    {
+     "label": "Initial call on Rocada Volatility strategy",
+     "url": "https://app.notion.com/p/Initial-call-on-Rocada-Volatility-strategy-3b48387ec92d800f81fad98092cbc54e"
+    }
+   ]
+  },
+  {
+   "id": "zams-risk-framing",
+   "title": "ZAMS puts a hard number on the loss it will take per trade",
+   "meta": "4 August · GP meeting · European power, gas and emissions",
+   "wide": false,
+   "badge": {
+    "label": "First look",
+    "tone": "field"
+   },
+   "paragraphs": [
+    "European power, gas and emissions relative value, all futures and cash-settled, with approximately **$330m** across managed accounts, a family office, a multi-strat and commingled structures. The risk framing was unusually explicit for a first meeting: no single trade loses more than **1%** of the portfolio, positions sized on expected Sharpe and scaled down as alpha depletes, several metrics monitored simultaneously, and daily risk reports to each investor.",
+    "Zolfika ran what he described as the most profitable pod at Bali, managing around **$100m** of annualised VaR before leaving in early 2024 — technically terminated over internal politics, having made **$35m** in the first two months of that year. Founder capital in the commingled structure is the alignment point he leads with, contrasted directly against multi-strat platforms where traders optimise for P&L metrics alone.",
+    "Two things connect this to the rest of the week. ZAMS named Nanook unprompted as a well-structured comparable, and both cite Citadel as the scale participant in the same market. And ZAMS came through 2025's weather flip and geopolitical shock essentially flat while Nanook is down 8% this year — the same market, different risk architecture. Open to SMA conversations."
+   ],
+   "quote": "no single trade loses more than 1% of portfolio",
+   "note": {
+    "kind": "good",
+    "label": "Comparable",
+    "body": "Run ZAMS and Nanook side by side against the same 2025 and 2026 shocks. We now hold two independent views of one market."
+   },
+   "sources": [
+    {
+     "label": "Initial meeting with ZAMS",
+     "url": "https://app.notion.com/p/Initial-meeting-with-ZAMS-3b28387ec92d80c19c7dfee09335fd14"
+    },
+    {
+     "label": "Meeting with Nanook",
+     "url": "https://app.notion.com/p/Meeting-with-Nanook-3b28387ec92d8023a700cf276a045b92"
+    }
+   ]
+  },
+  {
+   "id": "dockside-ops-build",
+   "title": "Dockside's headcount has gone from five to thirteen since underwriting",
+   "meta": "5 August · Service provider · Fortnightly catch-up",
+   "wide": false,
+   "badge": {
+    "label": "Holding well",
+    "tone": "positive"
+   },
+   "paragraphs": [
+    "The Dockside Diversified Fund came through July's market degrossing event without margin issues. Headcount now stands at **13** against **5** at the time of underwriting, with David joining as Head of Operations from Lombard Odier in New York alongside two others in the operations team.",
+    "A build-out at that pace is usually a good sign and occasionally a warning; either way it is a material change from the firm we underwrote and should be recorded as such rather than absorbed into the fortnightly rhythm. Michelle is to provide commentary on the Penso book to Aliya."
+   ],
+   "quote": "Dockside Diversified Fund held up very well in the market degrossing event in July.",
+   "note": null,
+   "sources": [
+    {
+     "label": "Call with Dockside",
+     "url": "https://app.notion.com/p/Call-with-Dockside-3b38387ec92d80f9bde9deb10a583018"
+    }
+   ]
+  },
+  {
+   "id": "internal-tooling-duplication",
+   "title": "The week produced 43 records for 39 engagements, and we discussed why",
+   "meta": "4 August · Internal · Infrastructure",
+   "wide": false,
+   "badge": {
+    "label": "Housekeeping",
+    "tone": "neutral"
+   },
+   "paragraphs": [
+    "Simon, Alex and Paul settled on a direction for the team's AI-built dashboards and internal apps: an Azure Static Web App with GitHub deployment and a managed backend, most likely Azure SQL. Paul pushed back explicitly on SQL Express for a group environment because of patching, maintenance and scalability. Ed Ford's farming dashboard — Azure-hosted with SQL behind it, handling something in the region of a billion data points at low cost — is the reference case.",
+    "The part that bears on this desk is the email problem. Several of us receive the same pitch emails and cannot see each other's replies. Chen Jinghan's prototype writes the triage outcome straight to Notion, so the next person to receive the same approach sees the prior interaction without opening anyone else's mailbox. Alex is sending the Microsoft Graph connection details to replace the current routing through Claude.",
+    "This week generated 43 note records across 39 engagements, including two duplicate sets — Frere Hall and Tenstrata each written up twice, with the Tenstrata pair disagreeing on the launch date. The tooling question is not purely administrative."
+   ],
+   "quote": "Multiple team members often receive similar pitch emails but cannot see each other's replies, creating duplication and inconsistency.",
+   "note": {
+    "kind": "next",
+    "label": "Offsite demo",
+    "body": "The portfolio dashboard and the email triage prototype both demo at next week's FI offsite; the static web app pilot follows Paul's discussion with Alex and Adam."
+   },
+   "sources": [
+    {
+     "label": "Internal app hosting / infrastructure discussion",
+     "url": "https://app.notion.com/p/Internal-app-hosting-infrastructure-discussion-ba454f9967a046c38f83910010f417df"
+    }
+   ]
+  }
+ ],
+ "generated_at": "2026-08-13T13:12:04.862770+00:00",
+ "provenance": {
+  "model": "claude-opus-4-8",
+  "prompt_version": "2026-08-a"
+ }
+}

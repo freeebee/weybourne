@@ -1,0 +1,65 @@
+{
+ "kind": "merge",
+ "survivor": {
+  "id": "pa",
+  "name": "Laure Goupil",
+  "properties": {
+   "Name": {
+    "type": "title",
+    "title": [
+     {
+      "plain_text": "Laure Goupil"
+     }
+    ]
+   },
+   "Title": {
+    "type": "rich_text",
+    "rich_text": [
+     {
+      "plain_text": "IR"
+     }
+    ]
+   },
+   "City": {
+    "type": "rich_text",
+    "rich_text": [
+     {
+      "plain_text": "Paris"
+     }
+    ]
+   }
+  }
+ },
+ "loser": {
+  "id": "pb",
+  "name": "Laure Goupi",
+  "properties": {
+   "Name": {
+    "type": "title",
+    "title": [
+     {
+      "plain_text": "Laure Goupi"
+     }
+    ]
+   },
+   "City": {
+    "type": "rich_text",
+    "rich_text": [
+     {
+      "plain_text": "Lyon"
+     }
+    ]
+   }
+  },
+  "icon": null
+ },
+ "inbound": [],
+ "conflicts": [
+  {
+   "property": "City",
+   "survivor": "Paris",
+   "loser": "Lyon"
+  }
+ ],
+ "pointer_block_id": "blk-pointer"
+}

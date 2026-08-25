@@ -1,0 +1,31 @@
+[
+ {
+  "change_id": "FLX-1",
+  "run_id": "r",
+  "timestamp": "",
+  "database": "contacts",
+  "record_name": "Laure Goupil",
+  "record_id": "p1",
+  "record_url": "",
+  "change_type": "create_company",
+  "property_changed": "Employed By",
+  "previous_value": "",
+  "new_value": "Axeleo Capital",
+  "previous_relation_ids": [],
+  "new_relation_ids": [
+   "new-1"
+  ],
+  "source": "",
+  "reason": "",
+  "confidence": "",
+  "created_by": "",
+  "category": "",
+  "execution_status": "Applied",
+  "review_status": "Awaiting Review",
+  "value_kind": "",
+  "value_options": [],
+  "undo_result": "",
+  "parent_change_id": "",
+  "detail": ""
+ }
+]

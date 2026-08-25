@@ -1,0 +1,17 @@
+{
+ "kind": "merge",
+ "survivor": {
+  "id": "mc3",
+  "name": "",
+  "properties": {}
+ },
+ "loser": {
+  "id": "mc2",
+  "name": "",
+  "properties": {},
+  "icon": null
+ },
+ "inbound": [],
+ "conflicts": [],
+ "pointer_block_id": "mock-block"
+}

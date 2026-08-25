@@ -1,0 +1,1007 @@
+{
+ "window": {
+  "start": "2026-08-17",
+  "end": "2026-08-21"
+ },
+ "window_label": "17 – 21 August 2026",
+ "ref": "WB-WR-2026-W34",
+ "headline": "Return-chasing admitted, and distributions recalled",
+ "standfirst": "Thirty engagements, eighteen of them with GPs, and the week's most useful material came from managers describing their own conduct. MY.Alpha's PM conceded he added risk to offset weakness elsewhere, and Bain's second real estate fund set out a plan to recall distributions of up to 20% of commitments. Elsewhere two event-driven managers read the same merger-arbitrage spread environment in opposite directions.",
+ "stats": {
+  "engagements": 30,
+  "note_records": 39,
+  "duplicate_sets": 0,
+  "gp_meetings": 18,
+  "lp_meetings": 0,
+  "internal_meetings": 0,
+  "service_meetings": 1,
+  "declined": 42,
+  "new_fund_records": 12,
+  "funds_touched": 241,
+  "new_contacts": 39,
+  "firms_represented": 0
+ },
+ "urgent": {
+  "badge_label": "Close calendar",
+  "title": "Three closes fall between late September and 1 December",
+  "paragraphs": [
+   "Hillpointe Workforce Housing Partnership VI targets its next close on 25 September at a $750m fund size, and Grafine Capital II expects its next close at the end of September. Both arrived unsolicited this week, neither has been diligenced, and both offered a call.",
+   "Khosla's Fund 10 first close is 1 December. Nicole Fraenkel said new LPs can enter at around $20m but will be deprioritised for allocation, so the data room review and the churn request need to run now rather than in November."
+  ]
+ },
+ "moved": [
+  {
+   "id": "2308387e-c92d-812a-8d2f-d3bec15f1d99",
+   "url": "https://app.notion.com/p/MY-Alpha-Asian-Opportunities-Fund-2308387ec92d812a8d2fd3bec15f1d99",
+   "name": "MY.Alpha Asian Opportunities Fund",
+   "status": "Invested",
+   "focus": "PAN-ASIA EQUITY",
+   "why": "New gross limits, VaR monitoring and mandatory hedging follow the July drawdown. The PM acknowledged he had added risk partly to make up for weak performance elsewhere.",
+   "declined": false,
+   "why_evidenced": true
+  },
+  {
+   "id": "2638387e-c92d-81f8-a3f2-dcc31a5b8b58",
+   "url": "https://app.notion.com/p/Bain-Capital-Real-Estate-Fund-II-2638387ec92d81f8a3f2dcc31a5b8b58",
+   "name": "Bain Capital Real Estate Fund II",
+   "status": "Invested",
+   "focus": "US REAL ESTATE",
+   "why": "Q2 letter reports a net IRR of -4%, net MoM of 0.89 and 87.4% drawn, with a stated plan to recall distributions of up to 20% of fund commitments.",
+   "declined": false,
+   "why_evidenced": true
+  },
+  {
+   "id": "2638387e-c92d-8121-ba6c-e7fae2571f8b",
+   "url": "https://app.notion.com/p/Sand-Grove-Opportunities-Fund-and-SMA-2638387ec92d8121ba6ce7fae2571f8b",
+   "name": "Sand Grove Opportunities Fund and SMA",
+   "status": "Invested",
+   "focus": "EVENT DRIVEN",
+   "why": "Expects 9.6% by year-end as the book built through the June spread widening harvests, against a record number of deals announced. The pari passu SMA with a Canadian pension plan is about to go live.",
+   "declined": false,
+   "why_evidenced": true
+  },
+  {
+   "id": "2498387e-c92d-8077-b3ef-d791543156b4",
+   "url": "https://app.notion.com/p/Farallon-Healthcare-Partners-2498387ec92d8077b3efd791543156b4",
+   "name": "Farallon Healthcare Partners",
+   "status": "Invested",
+   "focus": "HEALTHCARE L/S",
+   "why": "A short squeeze hit the largest short position, described as explainable by fundamentals but poorly executed. Short-side concentration had already been coming down in the preceding weeks.",
+   "declined": false,
+   "why_evidenced": true
+  },
+  {
+   "id": "2638387e-c92d-81e5-9ecf-e86d416d8794",
+   "url": "https://app.notion.com/p/Tees-River-Uranium-Fund-2638387ec92d81e59ecfe86d416d8794",
+   "name": "Tees River Uranium Fund",
+   "status": "Invested",
+   "focus": "URANIUM",
+   "why": "Peninsula sold off on a slower-than-hoped ramp and sits at roughly 6.5% of the book; Tees River is holding rather than exiting. BNF added about $24m to the Uranium fund this month.",
+   "declined": false,
+   "why_evidenced": true
+  },
+  {
+   "id": "23f8387e-c92d-8022-8f7b-c3dda3504142",
+   "url": "https://app.notion.com/p/Kopernik-Global-All-Cap-Equity-Fund-23f8387ec92d80228f7bc3dda3504142",
+   "name": "Kopernik Global All-Cap Equity Fund",
+   "status": "Invested",
+   "focus": "GLOBAL VALUE",
+   "why": "Cash cut from around 24% three months ago to 13-14%, deployed into the late-June sell-off. Holdings rose from roughly 125 to about 140, with the guideline lifted to 150.",
+   "declined": false,
+   "why_evidenced": true
+  },
+  {
+   "id": "2638387e-c92d-815a-a329-ee669e0964c2",
+   "url": "https://app.notion.com/p/venBio-Global-Strategic-Equity-Fund-V-2638387ec92d815aa329ee669e0964c2",
+   "name": "venBio Global Strategic Equity Fund V",
+   "status": "Invested",
+   "focus": "LIFE SCIENCES VC",
+   "why": "Fund V reported on track to deliver on expectations, and Fund VI is planned for an autumn launch targeting $500m. That puts a re-up decision inside this year.",
+   "declined": false,
+   "why_evidenced": true
+  },
+  {
+   "id": "2638387e-c92d-8135-bd83-e523bda8f883",
+   "url": "https://app.notion.com/p/Aecus-Europe-Equity-2638387ec92d8135bd83e523bda8f883",
+   "name": "Aecus Europe Equity",
+   "status": "Invested",
+   "focus": "EUROPE EQUITY",
+   "why": "A $160m Nomura mandate landed this week with a $35-40m Spanish LP mandate in prospect, against no new positions or exits since the last call.",
+   "declined": false,
+   "why_evidenced": true
+  },
+  {
+   "id": "2638387e-c92d-813b-8fbb-c87db591452a",
+   "url": "https://app.notion.com/p/CET-Clean-Strategy-2638387ec92d813b8fbbc87db591452a",
+   "name": "CET Clean Strategy",
+   "status": "Invested",
+   "focus": "CLEAN ENERGY",
+   "why": "The PM added to his personal investment following weaker performance in July, while flagging pockets of froth related to AI expansion.",
+   "declined": false,
+   "why_evidenced": true
+  },
+  {
+   "id": "3988387e-c92d-8000-a508-e481e632d53f",
+   "url": "https://app.notion.com/p/1911-Growth-Fund-US-Life-Settlements-3988387ec92d8000a508e481e632d53f",
+   "name": "1911 Growth Fund — US Life Settlements",
+   "status": "Not met (Declined)",
+   "focus": "🇺🇸 US · PD - NICHE NON-CORRELATED",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2638387e-c92d-8199-b6d3-d910d9be8fe7",
+   "url": "https://app.notion.com/p/AGP-Ventures-2638387ec92d8199b6d3d910d9be8fe7",
+   "name": "AGP Ventures",
+   "status": "Not met (Declined)",
+   "focus": "🇪🇺 EUROPE · PE - BUYOUT",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2e68387e-c92d-8061-9819-e6d618996b04",
+   "url": "https://app.notion.com/p/Aero-Capital-Solutions-Fund-V-2e68387ec92d80619819e6d618996b04",
+   "name": "Aero Capital Solutions Fund V",
+   "status": "Not met (Declined)",
+   "focus": "OTHER · PC - LEGACY",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2638387e-c92d-8148-ae9e-fb75fbce6515",
+   "url": "https://app.notion.com/p/Altamont-Capital-Partners-IV-2638387ec92d8148ae9efb75fbce6515",
+   "name": "Altamont Capital Partners IV",
+   "status": "Met (Declined)",
+   "focus": "🇺🇸 US · PE - BUYOUT",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2638387e-c92d-81dd-b900-ed1f2b19c201",
+   "url": "https://app.notion.com/p/Anacap-Financial-Partners-Private-Equity-2638387ec92d81ddb900ed1f2b19c201",
+   "name": "Anacap Financial Partners - Private Equity",
+   "status": "Not met (Declined)",
+   "focus": "🇪🇺 EUROPE · PE - BUYOUT",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "3968387e-c92d-80e5-9060-e193ca282c70",
+   "url": "https://app.notion.com/p/Analog-Century-Long-Short-3968387ec92d80e59060e193ca282c70",
+   "name": "Analog Century Long Short",
+   "status": "Not met (Declined)",
+   "focus": "🌏 GLOBAL · HEDGE FUNDS - SINGLE STRATEGY",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2638387e-c92d-81c9-a833-d8c401907208",
+   "url": "https://app.notion.com/p/Angeles-Equity-Partners-Fund-II-2638387ec92d81c9a833d8c401907208",
+   "name": "Angeles Equity Partners Fund II",
+   "status": "Not met (Declined)",
+   "focus": "🇺🇸 US · PE - BUYOUT",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2a38387e-c92d-800a-86ac-f69f7c000179",
+   "url": "https://app.notion.com/p/Apollo-Sports-Capital-2a38387ec92d800a86acf69f7c000179",
+   "name": "Apollo Sports Capital",
+   "status": "Not met (Declined)",
+   "focus": "🌏 GLOBAL · PD - NICHE NON-CORRELATED",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2638387e-c92d-81fb-8c12-c9cee80d7d79",
+   "url": "https://app.notion.com/p/Arcano-Opportunity-Real-Estate-Fund-II-2638387ec92d81fb8c12c9cee80d7d79",
+   "name": "Arcano Opportunity Real Estate Fund II",
+   "status": "Not met (Declined)",
+   "focus": "🇪🇺 EUROPE · PRA - LEGACY",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2638387e-c92d-818b-b001-c8d56ab972eb",
+   "url": "https://app.notion.com/p/Aurelian-Global-Resources-2638387ec92d818bb001c8d56ab972eb",
+   "name": "Aurelian Global Resources",
+   "status": "Met (Declined)",
+   "focus": "OTHER · HEDGE FUNDS - SINGLE STRATEGY",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "30f8387e-c92d-803b-a83b-f71573a670f5",
+   "url": "https://app.notion.com/p/Belveron-Partners-Fund-VIII-30f8387ec92d803ba83bf71573a670f5",
+   "name": "Belveron Partners Fund VIII",
+   "status": "Not met (Declined)",
+   "focus": "🇺🇸 US · PRA - SPECIALIST RE",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "3c18387e-c92d-8071-b6ad-ef856e300c07",
+   "url": "https://app.notion.com/p/Broad-Run-3c18387ec92d8071b6adef856e300c07",
+   "name": "Broad Run",
+   "status": "Not met (Declined)",
+   "focus": "🇺🇸 US · GLOBAL EQUITIES - ACTIVE",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "35e8387e-c92d-80be-91b3-c61e85b88c9d",
+   "url": "https://app.notion.com/p/Cheviot-PE-Solutions-Fund-I-35e8387ec92d80be91b3c61e85b88c9d",
+   "name": "Cheviot PE Solutions Fund I",
+   "status": "Met (Declined)",
+   "focus": "🇦🇺 AUSTRALIA · PE - CO-INVESTMENTS · PE - SPECIALIST SECONDARIES",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2638387e-c92d-81d5-9f2d-ef73c62d644a",
+   "url": "https://app.notion.com/p/Cordiant-Digital-Infrastructure-Fund-II-2638387ec92d81d59f2def73c62d644a",
+   "name": "Cordiant Digital Infrastructure Fund II",
+   "status": "Not met (Declined)",
+   "focus": "OTHER · PRA - LEGACY",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "30f8387e-c92d-8044-affe-f7ab5163a33e",
+   "url": "https://app.notion.com/p/Derby-Lane-Real-Estate-Credit-Fund-I-30f8387ec92d8044affef7ab5163a33e",
+   "name": "Derby Lane Real Estate Credit Fund I",
+   "status": "Not met (Declined)",
+   "focus": "🇺🇸 US · PC - SPECIALIST LENDING",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "3618387e-c92d-8064-bab5-f068047bd2c0",
+   "url": "https://app.notion.com/p/E3-Life-Capital-Fund-I-3618387ec92d8064bab5f068047bd2c0",
+   "name": "E3 Life Capital Fund I",
+   "status": "Not met (Declined)",
+   "focus": "🇬🇧 UK · PE - CO-INVESTMENTS",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2638387e-c92d-81c3-b825-c4aa463a1125",
+   "url": "https://app.notion.com/p/Feoh-Investments-2638387ec92d81c3b825c4aa463a1125",
+   "name": "Feoh Investments",
+   "status": "Not met (Declined)",
+   "focus": "🇪🇺 EUROPE · HEDGE FUNDS - SINGLE STRATEGY",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "3c28387e-c92d-802e-ae30-c78b3bf28b53",
+   "url": "https://app.notion.com/p/Floating-Capital-3c28387ec92d802eae30c78b3bf28b53",
+   "name": "Floating Capital",
+   "status": "Not met (Declined)",
+   "focus": "🌏 GLOBAL · HEDGE FUNDS - SINGLE STRATEGY",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "3938387e-c92d-8098-aaa4-eb6e5b4eaa8a",
+   "url": "https://app.notion.com/p/Fortress-Credit-Opportunities-Fund-VII-3938387ec92d8098aaa4eb6e5b4eaa8a",
+   "name": "Fortress Credit Opportunities Fund VII",
+   "status": "Not met (Declined)",
+   "focus": "🇺🇸 US · 🇪🇺 EUROPE · PC - OPPORTUNISTIC CREDIT",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2638387e-c92d-8113-8c7c-f8ee1092a115",
+   "url": "https://app.notion.com/p/Frentz-O-Donnell-Asia-Partners-2638387ec92d81138c7cf8ee1092a115",
+   "name": "Frentz O'Donnell Asia Partners",
+   "status": "Not met (Declined)",
+   "focus": "OTHER · GLOBAL EQUITIES - ACTIVE",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "3b58387e-c92d-8002-9295-d635f9bed3be",
+   "url": "https://app.notion.com/p/Green-Investment-Partners-3b58387ec92d80029295d635f9bed3be",
+   "name": "Green Investment Partners",
+   "status": "Not met (Declined)",
+   "focus": "🌏 GLOBAL · 🇪🇺 EUROPE · 🇺🇸 US · 🏯 PAN-ASIA · GLOBAL EQUITIES - ACTIVE",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2c68387e-c92d-80da-9ab6-f2048ac65424",
+   "url": "https://app.notion.com/p/Greenlane-Capital-2c68387ec92d80da9ab6f2048ac65424",
+   "name": "Greenlane Capital",
+   "status": "Met (Declined)",
+   "focus": "🇨🇳 CHINA · GLOBAL EQUITIES - ACTIVE",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2b88387e-c92d-8028-b1df-f7091958e8cc",
+   "url": "https://app.notion.com/p/HIG-European-Realty-Partners-III-Annex-Fund-2b88387ec92d8028b1dff7091958e8cc",
+   "name": "HIG European Realty Partners III Annex Fund",
+   "status": "Not met (Declined)",
+   "focus": "🇪🇺 EUROPE · PRA - DIVERSIFIED REAL ESTATE",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "27b8387e-c92d-80e7-9c66-fb6ae7f949c5",
+   "url": "https://app.notion.com/p/Hadley-Harbor-V-27b8387ec92d80e79c66fb6ae7f949c5",
+   "name": "Hadley Harbor V",
+   "status": "Not met (Declined)",
+   "focus": "🌏 GLOBAL · PE - BUYOUT",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2638387e-c92d-81b7-a403-f142ed209e97",
+   "url": "https://app.notion.com/p/Heitman-Asia-Pacific-Property-Investors-II-2638387ec92d81b7a403f142ed209e97",
+   "name": "Heitman Asia-Pacific Property Investors II",
+   "status": "Not met (Declined)",
+   "focus": "OTHER · PRA - LEGACY",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "36c8387e-c92d-80c9-8c86-f279ec8ed8b0",
+   "url": "https://app.notion.com/p/Horizon-Global-36c8387ec92d80c98c86f279ec8ed8b0",
+   "name": "Horizon Global",
+   "status": "Met (Declined)",
+   "focus": "🌏 GLOBAL · HEDGE FUNDS - SINGLE STRATEGY",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "3c08387e-c92d-807e-a918-d88f1fcfe4f4",
+   "url": "https://app.notion.com/p/ICG-Strategic-Equity-V-3c08387ec92d807ea918d88f1fcfe4f4",
+   "name": "ICG Strategic Equity V",
+   "status": "Not met (Declined)",
+   "focus": "🇺🇸 US · PE - BUYOUT",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "3c08387e-c92d-8058-a9b3-e7e8ca1626ac",
+   "url": "https://app.notion.com/p/Intermediate-Capital-Group-ICG-Europe-Mid-Market-3c08387ec92d8058a9b3e7e8ca1626ac",
+   "name": "Intermediate Capital Group ICG Europe Mid-Market",
+   "status": "Not met (Declined)",
+   "focus": "🇪🇺 EUROPE · PC - SPECIALIST LENDING",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "32b8387e-c92d-80c7-b5db-e051b0436d5e",
+   "url": "https://app.notion.com/p/JP-Morgan-Strategic-Solutions-Credit-Fund-JPM-SS-CF-32b8387ec92d80c7b5dbe051b0436d5e",
+   "name": "JP Morgan Strategic Solutions Credit Fund (JPM SS CF)",
+   "status": "Not met (Declined)",
+   "focus": "🇺🇸 US · PC - SPECIALIST LENDING",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "3c08387e-c92d-8004-a194-ecc91012513f",
+   "url": "https://app.notion.com/p/Jolt-Capital-Fund-V-3c08387ec92d8004a194ecc91012513f",
+   "name": "Jolt Capital Fund V",
+   "status": "Not met (Declined)",
+   "focus": "🇪🇺 EUROPE · PE - BUYOUT",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "3698387e-c92d-808d-a03a-daf1b2298cb2",
+   "url": "https://app.notion.com/p/Loh-Gronager-Partners-3698387ec92d808da03adaf1b2298cb2",
+   "name": "Loh-Gronager Partners",
+   "status": "Not met (Declined)",
+   "focus": "🌏 GLOBAL · GLOBAL EQUITIES - ACTIVE",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2638387e-c92d-81cb-bfc9-fd281ebf2322",
+   "url": "https://app.notion.com/p/Longpoint-Realty-Fund-II-2638387ec92d81cbbfc9fd281ebf2322",
+   "name": "Longpoint Realty Fund II",
+   "status": "Not met (Declined)",
+   "focus": "US INDUSTRIAL RE",
+   "why": "Summer LP update reports Fund II net DPI at 0.45x against a 0.16x benchmark median as at 31 March, with Fund IV at roughly $725m toward a $1bn objective.",
+   "declined": true,
+   "why_evidenced": true
+  },
+  {
+   "id": "36e8387e-c92d-807e-87af-cb1e569210ea",
+   "url": "https://app.notion.com/p/MAP-Partners-Tactical-Alpha-Fund-36e8387ec92d807e87afcb1e569210ea",
+   "name": "MAP Partners Tactical Alpha Fund",
+   "status": "Not met (Declined)",
+   "focus": "🌏 GLOBAL · HEDGE FUNDS - MULTI-STRATEGY",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "31b8387e-c92d-8036-ab07-fc3b93af7b54",
+   "url": "https://app.notion.com/p/Metropolitan-US-Lower-Mid-Market-Private-Credit-Fund-IX-31b8387ec92d8036ab07fc3b93af7b54",
+   "name": "Metropolitan US Lower-Mid-Market Private Credit Fund IX",
+   "status": "Not met (Declined)",
+   "focus": "🇺🇸 US · PC - DIRECT LENDING",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "3488387e-c92d-80cb-81b9-f130df8f47e0",
+   "url": "https://app.notion.com/p/OIC-Infrastructure-3488387ec92d80cb81b9f130df8f47e0",
+   "name": "OIC Infrastructure",
+   "status": "Not met (Declined)",
+   "focus": "🇺🇸 US · PRA - INFRASTRUCTURE",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "642d71e0-8100-4416-a162-1aa8608f6a90",
+   "url": "https://app.notion.com/p/Perceptive-Capital-Solutions-II-PCS-II-642d71e081004416a1621aa8608f6a90",
+   "name": "Perceptive Capital Solutions II (PCS II)",
+   "status": "Not met (Declined)",
+   "focus": "🇺🇸 US · 🇨🇦 CANADA · 🇪🇺 EUROPE · OTHER",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2638387e-c92d-8190-a209-fa9dde048380",
+   "url": "https://app.notion.com/p/Perceptive-Discovery-Fund-2638387ec92d8190a209fa9dde048380",
+   "name": "Perceptive Discovery Fund",
+   "status": "Not met (Declined)",
+   "focus": "OTHER · PE - BUYOUT",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "3c08387e-c92d-80b1-b4c9-d1d6819b49e3",
+   "url": "https://app.notion.com/p/Power-Sustainable-ENergy-Infrastructure-Fund-II-PSEIP-3c08387ec92d80b1b4c9d1d6819b49e3",
+   "name": "Power Sustainable ENergy Infrastructure Fund II (PSEIP)",
+   "status": "Not met (Declined)",
+   "focus": "🇨🇦 CANADA · PRA - INFRASTRUCTURE",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2c48387e-c92d-80a6-8363-c5134d62ff16",
+   "url": "https://app.notion.com/p/Reinova-Partners-Fund-I-2c48387ec92d80a68363c5134d62ff16",
+   "name": "Reinova Partners Fund I",
+   "status": "Not met (Declined)",
+   "focus": "🇪🇺 EUROPE · 🇺🇸 US · PRA - INFRASTRUCTURE",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2c08387e-c92d-80ca-8c1b-fba9a88ff6fd",
+   "url": "https://app.notion.com/p/Sanaka-Growth-Capital-Fund-II-Indian-PE-2c08387ec92d80ca8c1bfba9a88ff6fd",
+   "name": "Sanaka Growth Capital Fund II (Indian PE)",
+   "status": "Not met (Declined)",
+   "focus": "🇮🇳 INDIA · PE - BUYOUT",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "3618387e-c92d-8076-a6d8-e8f2cc654358",
+   "url": "https://app.notion.com/p/Sosteneo-Clean-Energy-Infrastructure-Fund-II-3618387ec92d8076a6d8e8f2cc654358",
+   "name": "Sosteneo Clean Energy Infrastructure Fund II",
+   "status": "Not met (Declined)",
+   "focus": "🇪🇺 EUROPE · PRA - INFRASTRUCTURE",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  },
+  {
+   "id": "2638387e-c92d-8112-b3fe-edf0a1353a02",
+   "url": "https://app.notion.com/p/Volt-Global-Master-Fund-2638387ec92d8112b3feedf0a1353a02",
+   "name": "Volt Global Master Fund",
+   "status": "Not met (Declined)",
+   "focus": "OTHER · GLOBAL EQUITIES - ACTIVE",
+   "why": "Recorded as declined in Notion. No reason for the decline appears in this week's notes.",
+   "declined": true,
+   "why_evidenced": false
+  }
+ ],
+ "declined": [],
+ "declined_names": [
+  "1911 Growth Fund — US Life Settlements",
+  "AGP Ventures",
+  "Aero Capital Solutions Fund V",
+  "Altamont Capital Partners IV",
+  "Anacap Financial Partners - Private Equity",
+  "Analog Century Long Short",
+  "Angeles Equity Partners Fund II",
+  "Apollo Sports Capital",
+  "Arcano Opportunity Real Estate Fund II",
+  "Aurelian Global Resources",
+  "Belveron Partners Fund VIII",
+  "Broad Run",
+  "Cheviot PE Solutions Fund I",
+  "Cordiant Digital Infrastructure Fund II",
+  "Derby Lane Real Estate Credit Fund I",
+  "E3 Life Capital Fund I",
+  "Feoh Investments",
+  "Floating Capital",
+  "Fortress Credit Opportunities Fund VII",
+  "Frentz O'Donnell Asia Partners",
+  "Green Investment Partners",
+  "Greenlane Capital",
+  "HIG European Realty Partners III Annex Fund",
+  "Hadley Harbor V",
+  "Heitman Asia-Pacific Property Investors II",
+  "Horizon Global",
+  "ICG Strategic Equity V",
+  "Intermediate Capital Group ICG Europe Mid-Market",
+  "JP Morgan Strategic Solutions Credit Fund (JPM SS CF)",
+  "Jolt Capital Fund V",
+  "Loh-Gronager Partners",
+  "Longpoint Realty Fund II",
+  "MAP Partners Tactical Alpha Fund",
+  "Metropolitan US Lower-Mid-Market Private Credit Fund IX",
+  "OIC Infrastructure",
+  "Perceptive Capital Solutions II (PCS II)",
+  "Perceptive Discovery Fund",
+  "Power Sustainable ENergy Infrastructure Fund II (PSEIP)",
+  "Reinova Partners Fund I",
+  "Sanaka Growth Capital Fund II (Indian PE)",
+  "Sosteneo Clean Energy Infrastructure Fund II",
+  "Volt Global Master Fund"
+ ],
+ "reads": [
+  {
+   "id": "my-alpha-risk-admission",
+   "title": "MY.Alpha's PM conceded he added risk to cover weakness elsewhere",
+   "meta": "19 August · GP meeting · Pan-Asia equity",
+   "wide": true,
+   "badge": {
+    "label": "Risk culture",
+    "tone": "critical"
+   },
+   "paragraphs": [
+    "The July drawdown appears to have been a genuinely humbling experience, surprisingly so. The team had identified AI crowding as a key risk and still allowed exposure and concentration to build as the market became increasingly AI-driven. The risk assessment was correct and did not bind.",
+    "**The admission matters more than the drawdown.** Masa said he added risk partly to make up for weak performance elsewhere, which means return-chasing entered portfolio construction at the moment the fund was behind. The new gross limits, VaR monitoring and mandatory hedging are sensible, but they belong to the same category of control that the prior framework already represented.",
+    "The test is not whether the controls exist. It is whether they hold the next time relative performance comes under pressure."
+   ],
+   "quote": "he added risk partly to make up for weak performance elsewhere",
+   "note": {
+    "kind": "watch",
+    "label": "Monitor",
+    "body": "Track whether the new gross limits and mandatory hedging actually constrain sizing the next time the fund falls behind."
+   },
+   "sources": [
+    {
+     "label": "Meeting with MY.Alpha",
+     "url": "https://app.notion.com/p/Meeting-with-MY-Alpha-3c18387ec92d80e99009dfbbc2ca2042"
+    }
+   ]
+  },
+  {
+   "id": "bain-re-ii-distribution-recall",
+   "title": "Bain's second real estate fund plans to recall up to 20% of commitments",
+   "meta": "19 August · Q2 letters · US real estate",
+   "wide": true,
+   "badge": {
+    "label": "Cash recall",
+    "tone": "caution"
+   },
+   "paragraphs": [
+    "Fund II reports a net IRR of -4% and net MoM of 0.89, with 87.4% of commitments drawn. Against that, the manager plans to use its ability to recall distributions of up to 20% of fund commitments. Capital already treated as returned may come back.",
+    "The portfolio commentary is mixed rather than deteriorating. Self-storage improved most, life sciences was essentially flat, and industrial infill and digital real estate declined modestly despite strong operational progress, partly on mark-to-market adjustments and base effects from recent large exits. **The recall provision, not the marks, is the item for the pacing model.**",
+    "Fund III's letter is steadier: TVPI stable at 1.05x, industrial infill still the largest strategy ahead of media and content and life sciences, continued investment in luxury boutique hotels, and no change to private golf clubs, private aviation or the European data centre platforms."
+   ],
+   "quote": "Plan to utilize their ability to recall distributions up to 20% of Fund commitments",
+   "note": {
+    "kind": "next",
+    "label": "Pacing",
+    "body": "Fold a potential recall of up to 20% of Fund II commitments into the liquidity and commitment pacing schedule."
+   },
+   "sources": [
+    {
+     "label": "Bain RE Fund II Q2 2026 Letter",
+     "url": "https://app.notion.com/p/Bain-RE-Fund-II-Q2-2026-Letter-3c18387ec92d808a9ffac50b55101cbd"
+    },
+    {
+     "label": "Bain RE Fund III Q2 2026 Letter",
+     "url": "https://app.notion.com/p/Bain-RE-Fund-III-Q2-2026-Letter-3c18387ec92d801da14cc751ce6a8298"
+    }
+   ]
+  },
+  {
+   "id": "merger-arb-spread-divergence",
+   "title": "Two event-driven managers read the same spread environment in opposite directions",
+   "meta": "17 August · GP meetings · Event-driven",
+   "wide": false,
+   "badge": {
+    "label": "Cross-read",
+    "tone": "brass"
+   },
+   "paragraphs": [
+    "Beryl has cut merger arbitrage to around 16% long, from 165% long at the end of 2024, because spreads have compressed to roughly 5% against a 7%-plus hurdle. Sand Grove, met the same day, reported a record number of deals announced and expects 9.6% by year-end as the book built through the June spread blow-outs harvests.",
+    "Both can be true. Sand Grove built into a June dislocation that Beryl's hurdle would have screened out, and holds seven or eight names with what it describes as good optionality. **But the divergence is the question, not the answer.** If spreads are near 5%, either Sand Grove is being paid for something other than spread, or it is taking deals Beryl would decline.",
+    "The follow-ups are already framed: whether selectivity has loosened, and how hard and soft catalysts are defined, specifically whether more pre-announced deals are entering the book."
+   ],
+   "quote": "Question to raise on whether they have been less selective",
+   "note": {
+    "kind": "next",
+    "label": "For the call",
+    "body": "Ask Sand Grove for the hard-versus-soft catalyst definition and the share of the book sitting in pre-announced deals."
+   },
+   "sources": [
+    {
+     "label": "Sand Grove Lunch",
+     "url": "https://app.notion.com/p/Sand-Grove-Lunch-3bf8387ec92d80a9b56ee7eded6c370d"
+    },
+    {
+     "label": "Intro call with Beryl",
+     "url": "https://app.notion.com/p/Intro-call-with-Beryl-3bf8387ec92d80c9992ff6c4b519a7fd"
+    }
+   ]
+  },
+  {
+   "id": "beryl-unanswered-questions",
+   "title": "Beryl's edge is one person, and two questions about it went unanswered",
+   "meta": "17 August · GP meeting · Event-driven equities",
+   "wide": false,
+   "badge": {
+    "label": "Intro call",
+    "tone": "field"
+   },
+   "paragraphs": [
+    "Beryl runs approximately $750m, split between roughly $600m in the fund and $150m in SMAs, with six people in total and an investment team of two. Michael described the firm's role as letting David drive. That is coherent, but it places the entire diligence burden on characterising one person's judgment.",
+    "**Two things were asserted and not evidenced.** The IR could not list a category of special situation the firm will not invest in, or say which categories sit outside David's circle of competence, and could not quantify historical attribution between option premium and equity gains. That second gap matters now that Beryl often writes 20% out-of-the-money puts across special situations and government arbitrage.",
+    "The concentration record is specific: Core Scientific was a 25% cash equity position and the AI data centre theme reached roughly 50% of the portfolio in Q1 2025. New limits cap single positions at 5% delta-adjusted and any theme at 20%. The AI data centre theme currently sits at around 18%, close to the cap on the day it was introduced to us."
+   ],
+   "quote": "Michael could not quantify historical attribution from option premium versus equity gains",
+   "note": {
+    "kind": "next",
+    "label": "Ask David",
+    "body": "Quarterly letters and exposure reports requested. Put attribution and circle of competence to David directly in LA, not to IR."
+   },
+   "sources": [
+    {
+     "label": "Intro call with Beryl",
+     "url": "https://app.notion.com/p/Intro-call-with-Beryl-3bf8387ec92d80c9992ff6c4b519a7fd"
+    }
+   ]
+  },
+  {
+   "id": "farallon-short-squeeze",
+   "title": "Farallon was already cutting short concentration when the squeeze arrived",
+   "meta": "21 August · GP meeting · Healthcare long/short",
+   "wide": false,
+   "badge": {
+    "label": "Short book",
+    "tone": "caution"
+   },
+   "paragraphs": [
+    "A short squeeze hit the largest short position. The manager's own characterisation is that the move was explainable by fundamentals but poorly executed, which places the failure in sizing and implementation rather than in the thesis.",
+    "They had been reducing concentration on the short side over the preceding weeks, acknowledging the underlying risks of a concentrated short book. **That sequencing is the part worth recording**: the de-risking preceded the event rather than following it. The long book performed strongly over the month and outperformed the market."
+   ],
+   "quote": "Explainable by fundamentals, but poorly executed",
+   "note": {
+    "kind": "watch",
+    "label": "Concentration",
+    "body": "Ask for short-side concentration before and after the squeeze so the reduction can be measured rather than accepted."
+   },
+   "sources": [
+    {
+     "label": "Farallon Healthcare - (S) Moderna Update",
+     "url": "https://app.notion.com/p/Farallon-Healthcare-S-Moderna-Update-3c38387ec92d80f2a386f01576dc2782"
+    }
+   ]
+  },
+  {
+   "id": "ia-partners-entry-multiples",
+   "title": "IA's returns came off 4x and 5x entries, and no Fund I mistake could be named",
+   "meta": "18 and 21 August · GP meetings · Japan buyout",
+   "wide": false,
+   "badge": {
+    "label": "Fund II DD",
+    "tone": "brass"
+   },
+   "paragraphs": [
+    "Two case studies, both attractive. Diasalt was acquired off a distressed corporate parent at around 4x EBITDA, where a roughly 50% price increase drove the EBITDA target about two years ahead of plan before an opportunistic sale. Nagai Transline was a seven-year relationship-led take-private at roughly 5.0-5.3x EBITDA with about 40% of equity value in cash, underwriting to around 2x even in a downside case.",
+    "**The playbook looks repeatable; the entry conditions may not be.** Seller distress and low multiples did a great deal of the work in both cases, and when asked directly, Sato could not identify a specific Fund I underwriting mistake.",
+    "The same caution applies to the Susumu update earlier in the week. IA holds a 33.7% minority stake with blocking and consent rights and now expects a dual-track exit around late 2028 or 2029 at 9-10x EBITDA against a roughly 5x entry. Its lesson learned, that it was too optimistic on EV adoption and about six months slow to diversify the customer base, is the GP's own self-assessment rather than an independently verified view."
+   ],
+   "quote": "Sato could not identify a specific Fund I underwriting mistake when asked directly",
+   "note": {
+    "kind": "risk",
+    "label": "Attribution",
+    "body": "Test in Fund II diligence whether returns reflect repeatable skill or unusually favourable entry circumstances."
+   },
+   "sources": [
+    {
+     "label": "Meeting with IA Partners (Diasalt, Nagai Transline)",
+     "url": "https://app.notion.com/p/Meeting-with-IA-Partners-Diasalt-Nagai-Trans-Liine-3c38387ec92d80ba8bc7d64d18181afe"
+    },
+    {
+     "label": "Meeting with IA (Masao Takahashi)",
+     "url": "https://app.notion.com/p/Meeting-with-IA-Masao-Takahashi-3c08387ec92d806ea20be6d4826e7116"
+    }
+   ]
+  },
+  {
+   "id": "khosla-seed-not-available",
+   "title": "Khosla will not sell Seed alone, which is the vehicle we wanted",
+   "meta": "19 August · GP meeting · Venture",
+   "wide": false,
+   "badge": {
+    "label": "Access terms",
+    "tone": "field"
+   },
+   "paragraphs": [
+    "Fund 10 splits across Seed at $500-700m, Main at $3-4bn and Opportunity at $1.25-1.5bn. Seed-only participation is not available because the Seed vehicle is too small; the permitted combinations are Opportunity only, Main plus Opportunity, or all three. Our venture programme is early-stage focused, so the live question is whether a $3-4bn Main fund can serve that purpose.",
+    "**The performance case is asserted, not evidenced.** Nicole put the most recent Main fund at roughly 230% IRR and the prior vintage at roughly 80%, with data room numbers likely a quarter behind, and said all original IC members remain intact. Khosla holds a formal three-year churn list and tenure data but shares it only with LPs serious in diligence. That document is what would evidence the continuity claim.",
+    "Terms shape sizing as much as conviction does: new LPs may enter at around $20m but are deprioritised for allocation, existing LPs are expected at $30-40m, and first close is 1 December."
+   ],
+   "quote": "new LPs can start at around $20m, but they will be deprioritised for allocation relative to existing LPs",
+   "note": {
+    "kind": "next",
+    "label": "Evidence",
+    "body": "Review the data room, then request the three-year churn list and full tenure data before underwriting the IC continuity claim."
+   },
+   "sources": [
+    {
+     "label": "Call with Nicole Fraenkel (Capital Formation - Khosla)",
+     "url": "https://app.notion.com/p/Call-with-Nicole-Fraenkel-Capital-Formation-Khosla-3c18387ec92d80b0bf09e7d5b99f3b62"
+    }
+   ]
+  },
+  {
+   "id": "tees-river-peninsula-hold",
+   "title": "Tees River holds Peninsula through a slow ramp and lifts rare earths to 22%",
+   "meta": "17 August · GP meeting · Uranium and critical resources",
+   "wide": false,
+   "badge": {
+    "label": "Monthly call",
+    "tone": "field"
+   },
+   "paragraphs": [
+    "Peninsula disappointed the market on a slower-than-hoped ramp-up and sold off heavily. The position is roughly back to entry price with profits taken earlier and sits at about 6.5% of the book as at end-July. Tees River will not exit immediately and will reassess over the next two to six months. End-July gross exposure was around 115%, led by Paladin, physical uranium, NextGen, Energy Fuels, UEC and ASPI.",
+    "Rare earths are now roughly 22% of Critical Resources, with Neocorp, Lynas and Energy Fuels named, while the lithium holdings are unchanged. BNF added about $36m this month, split roughly $12m into Critical Resources and $24m into Uranium.",
+    "**The QLE swap sits in the private isotopes fund rather than our exposure**, but it is worth noting. The residual convertible exposure was converted into about 9.5m ASPI shares at an effective $4.71, into a stock whose summer liquidity has fallen to 1-1.5m shares per day. The plan is an orderly sell-down as the price improves, against a seven-year fund horizon."
+   ],
+   "quote": "viewing the sell-off as overdone and consistent with the slow ramp-up pattern across uranium producers",
+   "note": {
+    "kind": "watch",
+    "label": "Peninsula",
+    "body": "A two-to-six month reassessment window is open. Ask which ramp-up milestones will be used to judge it."
+   },
+   "sources": [
+    {
+     "label": "Monthly meeting with Tees River - Aug 26",
+     "url": "https://app.notion.com/p/Monthly-meeting-with-Tees-River-Aug-26-3bf8387ec92d804bb30aefd01e4e1910"
+    }
+   ]
+  },
+  {
+   "id": "kopernik-breadth-without-factors",
+   "title": "Kopernik put cash to work and widened to 140 names, still without factor tools",
+   "meta": "20 August · GP meeting · Global value",
+   "wide": false,
+   "badge": {
+    "label": "Monthly call",
+    "tone": "field"
+   },
+   "paragraphs": [
+    "Cash fell from around 24% three months ago to 13-14%, deployed largely around the late-June sell-off: existing platinum holdings where model weights had risen, and South Korean companies that had run up, been trimmed and then pulled back. Holdings rose from roughly 125 to about 140, with guidelines increased to 150. The portfolio now sits around 1% away from the model.",
+    "**Breadth increased; the risk framework did not.** Kopernik does not use factor tools, arguing that roughly 70% of holdings sit outside the index and that any useful framework would need to be specific by region, sector and macro regime. Control is liquidity-led: ownership levels, free float, ADV, a 3% band around arrival price, and traders involved from the earliest pipeline stage. They agreed to raise the factor question with Dave and Alisa again.",
+    "Additions include Trip.com, DiDi Global, Mosaic and Gulf Keystone, with Canadian natural gas built through Tourmaline and Birchcliff, the latter at about 60% of model weight. China and Hong Kong is around 9%, closer to 5% excluding Hong Kong companies with no China revenue. Accenture was fully worked and passed on risk-adjusted valuation."
+   ],
+   "quote": "an active manager's dream",
+   "note": {
+    "kind": "watch",
+    "label": "Factor risk",
+    "body": "They agreed to revisit factor analysis with Dave and Alisa. Hold them to it at the next monthly call."
+   },
+   "sources": [
+    {
+     "label": "Kopernik Monthly Call - August 2026",
+     "url": "https://app.notion.com/p/Kopernik-Monthly-Call-August-2026-3c28387ec92d800aab42ed2245bc6e01"
+    }
+   ]
+  },
+  {
+   "id": "longpoint-passed-manager-compounding",
+   "title": "A manager we passed on reports Fund I at 1.95x net and Fund IV at $725m",
+   "meta": "18 August · LP update · US industrial real estate",
+   "wide": false,
+   "badge": {
+    "label": "Passed manager",
+    "tone": "neutral"
+   },
+   "paragraphs": [
+    "All figures are manager-reported and as at 31 March. Fund I is fully realised at 1.95x net TVPI and 40% net IRR. Fund II's net DPI stands at 0.45x against a benchmark median of 0.16x, and Fund III's at 0.11x against 0.06x. Fund IV has closed approximately $725m toward a $1bn objective, with eleven investments totalling $258.4m closed year to date and eight more totalling $413.1m in closing, awarded or advanced diligence.",
+    "**Our Fund II record is a decline, and this note gives no reason for it.** That is worth stating plainly rather than reconstructing after the fact. What the update does supply is a reason to look again: the final close is not expected until the first half of 2027, so there is time to test whether the original judgment still holds."
+   ],
+   "quote": "placing it in the top 1% of its 2018 vintage by net IRR",
+   "note": {
+    "kind": "next",
+    "label": "Revisit",
+    "body": "Decide whether the Fund II pass should be re-examined against Fund IV ahead of the H1 2027 final close."
+   },
+   "sources": [
+    {
+     "label": "Longpoint Investor Update - Summer 2026",
+     "url": "https://app.notion.com/p/Email-Longpoint-Investor-Update-Summer-2026-5613e2f600c74b8eb7e795cad0aa5b24"
+    }
+   ]
+  },
+  {
+   "id": "shoten-valuation-flexibility",
+   "title": "Shoten names its thesis-breaker but anchors valuation on relative multiples",
+   "meta": "17 August · GP meeting · Global equities",
+   "wide": false,
+   "badge": {
+    "label": "Case studies",
+    "tone": "field"
+   },
+   "paragraphs": [
+    "The Lowe's work is thorough. The original thesis was that Marvin Ellison could replicate Home Depot's small and medium pro playbook on a near-identical store footprint, lifting operating margins from around 8-9% to 12-13%. The current case pairs obscured operational progress with a housing recovery view. The named KPI is pro sales growth, where Lowe's has outcomped Home Depot for five years, and the named thesis-breaker is a capital-intensive push into mega pro customers. Naming a falsifier is good discipline.",
+    "**The exposure is valuation method, not thesis quality.** Valuations are frequently framed on a relative lens, the portfolio runs from around 12-13x to 37x earnings, and positions can be entered with limited to no margin of safety. A broad re-rating within one of their sub-sectors would hit the names together.",
+    "The rail case has the same shape: earnings 15-20% below mid-cycle, multiples derated from around 22x to 17-18x, volumes already growing 5-6% year to date, and merger optionality underwritten with independent counsel so approval is upside rather than the reason to own the position. An on-site visit is being coordinated, with Claudio attending in person."
+   ],
+   "quote": "their view is that it is sometimes worth paying for the quality",
+   "note": {
+    "kind": "watch",
+    "label": "Valuation",
+    "body": "At the on-site, press on absolute rather than relative valuation floors, and what they would refuse to pay."
+   },
+   "sources": [
+    {
+     "label": "Meeting with Shoten - Case Studies",
+     "url": "https://app.notion.com/p/Meeting-with-Shoten-Case-Studies-3bf8387ec92d8029a0a6ef49b2491b56"
+    }
+   ]
+  },
+  {
+   "id": "venbio-fund-vi-autumn",
+   "title": "venBio brings a re-up decision forward: Fund VI launches in the autumn",
+   "meta": "19 August · GP meeting · Life sciences venture",
+   "wide": false,
+   "badge": {
+    "label": "Re-up ahead",
+    "tone": "neutral"
+   },
+   "paragraphs": [
+    "Fund V is reported on track to deliver on expectations. Fund VI is planned for launch in the autumn targeting a $500m raise, which places a re-up decision inside this year rather than next.",
+    "The update was brief and carried no portfolio detail. **A target size and a launch date are not an underwriting.** Fund V position and mark detail should be requested before the raise opens, while there is no allocation clock running."
+   ],
+   "quote": "on track to deliver on expectations",
+   "note": {
+    "kind": "next",
+    "label": "Before launch",
+    "body": "Request Fund V portfolio and valuation detail ahead of the Fund VI launch."
+   },
+   "sources": [
+    {
+     "label": "venBio - Call with Aaron Royston",
+     "url": "https://app.notion.com/p/venBio-Call-with-Aaron-Royston-3c18387ec92d809c9fe1dd377d93fb60"
+    }
+   ]
+  },
+  {
+   "id": "jpm-alternatives-sourcing",
+   "title": "JPM is most useful as a search resource for the healthcare gap we cannot fill",
+   "meta": "17 August · Service provider · Platform",
+   "wide": false,
+   "badge": {
+    "label": "Service provider",
+    "tone": "caution"
+   },
+   "paragraphs": [
+    "The note opens with its own verdict, and John citing relationships to MB, SJD and Jake and Noah is part of the reason. The useful output is narrow and specific: early Fund 1-3 healthcare controlled-buyout specialists, which we have been unable to identify despite market mapping, and China robotics or AI, where our blocker is tax and permanent-establishment risk rather than access.",
+    "**One claim needs testing before it enters any model.** JPM suggested that allocating 20-40% of the target NAV build to evergreen private markets could reduce early J-curve drag by roughly 50-70%. That is a rule of thumb offered without workings. Mark Hempstead is to send the pacing and cash-flow analysis, and it should be run against our own schedule now that target commitments are around $75m and above, with some above $100m."
+   ],
+   "quote": "Proceed with caution",
+   "note": {
+    "kind": "next",
+    "label": "Follow-up",
+    "body": "Chase the J-curve pacing model, and route the China structuring question to JPM's Hong Kong team."
+   },
+   "sources": [
+    {
+     "label": "JPM Alternatives intro",
+     "url": "https://app.notion.com/p/JPM-Alternatives-intro-3bf8387ec92d808f9befe809f2f006f1"
+    }
+   ]
+  },
+  {
+   "id": "aecus-flows-ahead-of-positioning",
+   "title": "Aecus took a $160m mandate in a week with no change to the portfolio",
+   "meta": "20 August · GP meeting · European equities",
+   "wide": false,
+   "badge": {
+    "label": "Mandate win",
+    "tone": "positive"
+   },
+   "paragraphs": [
+    "A large $160m mandate for Nomura landed this week, with a $35-40m Spanish LP mandate expected to take weeks to months. Over the same period there were no new positions and no exits.",
+    "Earnings season was positive across most companies, with only a handful in transition downgrading estimates. The value bucket trades at 16x against a 26x historical average on their figures, and they value through the cycle explicitly to mitigate AI demand peaks. **Inflows running ahead of positioning changes is not a problem yet**, but it is the point at which capacity becomes the right question."
+   ],
+   "quote": "No new positions or exits since last call",
+   "note": {
+    "kind": "watch",
+    "label": "Capacity",
+    "body": "Ask for stated strategy capacity and current AUM before the next mandate lands."
+   },
+   "sources": [
+    {
+     "label": "Aecus Monthly Call - August 2026",
+     "url": "https://app.notion.com/p/Aecus-Monthly-Call-August-2026-3c28387ec92d80749399cd65dbd6b9e3"
+    }
+   ]
+  },
+  {
+   "id": "flagship-single-revaluation",
+   "title": "A very positive quarter that rests entirely on one revaluation",
+   "meta": "21 August · Q2 report · Life sciences venture",
+   "wide": false,
+   "badge": {
+    "label": "Single mark",
+    "tone": "caution"
+   },
+   "paragraphs": [
+    "The Q2 report describes a very positive quarter driven entirely by the revaluation of one position. That is a mark, not a realisation, and the report as received names neither the position nor the event behind the revaluation.",
+    "**Ask what priced it.** A financing round with a new outside lead is evidence; an internal model change is not. Until that is established, the quarter should not be read as portfolio-wide progress."
+   ],
+   "quote": "driven entirely by the revaluation of 1 position",
+   "note": {
+    "kind": "next",
+    "label": "Evidence",
+    "body": "Request the revaluation basis for the single position driving the quarter."
+   },
+   "sources": [
+    {
+     "label": "Flagship Pioneer Fund II - Q2 2026 Report",
+     "url": "https://app.notion.com/p/Flagship-Pioneer-Fund-II-Q2-2026-Report-3c38387ec92d80e98954f73d9c246e02"
+    }
+   ]
+  }
+ ],
+ "generated_at": "2026-08-24T01:07:22.405794+00:00",
+ "provenance": {
+  "model": "claude-opus-4-8",
+  "prompt_version": "2026-08-a"
+ }
+}

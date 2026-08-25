@@ -1,0 +1,59 @@
+{
+ "run_id": "e42bbc73168f",
+ "started": "2026-08-18T17:33:44",
+ "finished": "2026-08-18T17:33:44",
+ "status": "done",
+ "dry_run": true,
+ "databases": [
+  "contacts",
+  "companies",
+  "funds",
+  "notes"
+ ],
+ "counts": {
+  "applied": 0,
+  "planned": 2,
+  "failed": 0,
+  "skipped": 0,
+  "recommendations": 0,
+  "proposed": 3,
+  "merges": 0,
+  "relations_repaired": 0,
+  "missing_filled": 0,
+  "formatting_fixed": 0,
+  "icons_added": 0,
+  "high": 0,
+  "medium": 0,
+  "deferred": 0,
+  "undone": 0
+ },
+ "deferred": 0,
+ "error": "",
+ "stages": [
+  {
+   "label": "Preflight",
+   "detail": "confirming live database schemas",
+   "duration_s": 0.0
+  },
+  {
+   "label": "Scanning",
+   "detail": "contacts + companies + funds + notes",
+   "duration_s": 0.0
+  },
+  {
+   "label": "Detecting issues",
+   "detail": "duplicates, gaps, broken links, formatting",
+   "duration_s": 0.0
+  },
+  {
+   "label": "Queuing for review",
+   "detail": "2 easy fix(es), 2 fill(s), 1 merge(s) awaiting your okay",
+   "duration_s": 0.2
+  },
+  {
+   "label": "Done",
+   "detail": "3 change(s) awaiting your okay, 0 recommendation(s), 0 undone",
+   "duration_s": 0.0
+  }
+ ]
+}

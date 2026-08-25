@@ -1,0 +1,12 @@
+{
+ "run_id": "run1",
+ "started": "2026-08-03T09:00:00",
+ "finished": "",
+ "status": "done",
+ "dry_run": false,
+ "databases": [],
+ "counts": {},
+ "deferred": 0,
+ "error": "",
+ "stages": []
+}

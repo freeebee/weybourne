@@ -1,0 +1,12 @@
+{
+ "pairs": {
+  "a|b": {
+   "fp_a": "fp1",
+   "fp_b": "fp2",
+   "result": {
+    "verdict": "unsure"
+   },
+   "at": "2026-08-19T00:09:26"
+  }
+ }
+}

@@ -1,0 +1,76 @@
+{
+ "window": {
+  "start": "2026-08-10",
+  "end": "2026-08-14"
+ },
+ "window_label": "10 – 14 August 2026",
+ "ref": "WB-WR-2026-W33",
+ "headline": "Five funds touched, not one engagement logged",
+ "standfirst": "No notes were supplied for this window, and the engagement count is zero. What follows is therefore not a review of meetings — it is a review of the record itself, built only on the fund and pipeline facts we were given. Every judgment below is about a gap in the file, and each should be closed before it stops being recoverable.",
+ "stats": {
+  "engagements": 0,
+  "note_records": 0,
+  "duplicate_sets": 0,
+  "gp_meetings": 0,
+  "lp_meetings": 0,
+  "internal_meetings": 0,
+  "service_meetings": 0,
+  "declined": 1,
+  "new_fund_records": 1,
+  "funds_touched": 5,
+  "new_contacts": 2,
+  "firms_represented": 0
+ },
+ "urgent": null,
+ "moved": [
+  {
+   "id": "51eefca2-3c5c-4733-893e-2299b0580770",
+   "url": "https://app.notion.com/p/Zachert-Private-Equity-Industrial-Platform-51eefca23c5c4733893e2299b0580770",
+   "name": "Zachert Private Equity (Industrial Platform)",
+   "status": "Not met (Declined)",
+   "focus": "US/EUROPE BUYOUT",
+   "why": "Created and declined inside the same week, with no meeting recorded against it. The reason for standing down is not in the file."
+  },
+  {
+   "id": "3b58387e-c92d-80c3-bd3a-c2f945f45710",
+   "url": "https://app.notion.com/p/Copper-Sky-Ventures-II-3b58387ec92d80c3bd3ac2f945f45710",
+   "name": "Copper Sky Ventures II",
+   "status": "Not reviewed",
+   "focus": "US VENTURE",
+   "why": "Touched again this week and still carried at Not reviewed. Movement in the record without movement in the assessment."
+  },
+  {
+   "id": "3978387e-c92d-8058-83e3-cb465004b4e0",
+   "url": "https://app.notion.com/p/ION-Active-Extension-Fund-3978387ec92d805883e3cb465004b4e0",
+   "name": "ION Active Extension Fund",
+   "status": "Invested",
+   "focus": "GLOBAL EQUITIES",
+   "why": "Invested, rated high. Registered as touched with no accompanying note or engagement."
+  },
+  {
+   "id": "2498387e-c92d-8077-b3ef-d791543156b4",
+   "url": "https://app.notion.com/p/Farallon-Healthcare-Partners-2498387ec92d8077b3efd791543156b4",
+   "name": "Farallon Healthcare Partners",
+   "status": "Invested",
+   "focus": "HEALTHCARE HEDGE",
+   "why": "Invested, rated high. Registered as touched with no accompanying note or engagement."
+  },
+  {
+   "id": "2308387e-c92d-812a-8d2f-d3bec15f1d99",
+   "url": "https://app.notion.com/p/MY-Alpha-Asian-Opportunities-Fund-2308387ec92d812a8d2fd3bec15f1d99",
+   "name": "MY.Alpha Asian Opportunities Fund",
+   "status": "Invested",
+   "focus": "PAN-ASIA EQUITIES",
+   "why": "Invested, rated high. Registered as touched with no accompanying note or engagement."
+  }
+ ],
+ "declined_names": [
+  "Zachert Private Equity (Industrial Platform)"
+ ],
+ "reads": [],
+ "generated_at": "2026-08-10T11:39:00.294869+00:00",
+ "provenance": {
+  "model": "claude-opus-4-8",
+  "prompt_version": "2026-08-a"
+ }
+}

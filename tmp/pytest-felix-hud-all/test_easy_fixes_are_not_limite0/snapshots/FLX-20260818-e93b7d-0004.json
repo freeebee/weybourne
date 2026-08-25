@@ -1,0 +1,32 @@
+{
+ "kind": "proposal",
+ "record_id": "mc4",
+ "database": "contacts",
+ "planned": {
+  "properties": {
+   "Employed By": {
+    "relation": [
+     {
+      "id": "mco3"
+     }
+    ]
+   }
+  }
+ },
+ "expect_prop": "Employed By",
+ "scanned_plain": null,
+ "scanned_raw": {
+  "Name": {
+   "type": "title",
+   "title": [
+    {
+     "plain_text": "  Allan  Fife "
+    }
+   ]
+  },
+  "Email": {
+   "type": "email",
+   "email": "allan@fife.com"
+  }
+ }
+}
